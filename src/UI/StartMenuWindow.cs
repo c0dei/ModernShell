@@ -692,6 +692,12 @@ public sealed class StartMenuWindow : Window
             items.Add(new("", "管理者として実行", () => Launch(app, asAdmin: true)));
             items.Add(new("", "ファイルの場所を開く", () => { HideMenu(); app.OpenFileLocation(); }));
         }
+        // Windows 11 と同じく、Windows 標準の右クリックメニューは「その他のオプションを確認」の中に出す
+        items.Add(MenuItemSpec.Separator);
+        items.Add(new MenuItemSpec("\uE712", "その他のオプションを確認", () => { })
+        {
+            Children = () => ShellContextMenu.For(app.ShellPath, Handle),
+        });
         return items;
     }
 

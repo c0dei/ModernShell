@@ -854,6 +854,15 @@ public sealed class TaskbarController : IDisposable
     /// <summary>メニュー内のアプリ名を右クリックしたとき（Windows と同じ: 開く / 管理者として実行 / スタート・タスクバーのピン留め）。</summary>
     private IEnumerable<MenuItemSpec> AppItemMenu(AppEntry app)
     {
+        // Windows 標準の右クリックメニューをそのまま使う（取れなかったときだけ自前の項目）
+        var shell = ShellContextMenu.For(app.ShellPath, OwnerHandle);
+        return shell.Count > 0 ? shell : ManualAppMenu(app);
+    }
+
+    private IntPtr OwnerHandle => _surfaces.FirstOrDefault()?.Handle ?? IntPtr.Zero;
+
+    private IEnumerable<MenuItemSpec> ManualAppMenu(AppEntry app)
+    {
         yield return new MenuItemSpec("\uE8A7", "開く", () => app.Launch());
         if (app.ExePath != null) yield return new MenuItemSpec("\uE7EF", "管理者として実行", () => app.Launch(asAdmin: true));
         bool onStart = _settings.PinnedStart.Contains(app.Id, StringComparer.OrdinalIgnoreCase);
@@ -871,8 +880,14 @@ public sealed class TaskbarController : IDisposable
     }
 
     /// <summary>ジャンプリストの項目を右クリックしたとき。</summary>
-    private static IEnumerable<MenuItemSpec> JumpItemMenu(string path, bool isTask)
+    private IEnumerable<MenuItemSpec> JumpItemMenu(string path, bool isTask)
     {
+        // 最近使ったファイルは Windows 標準の右クリックメニュー（エクスプローラーと同じ）
+        if (!isTask && System.IO.File.Exists(path))
+        {
+            var shell = ShellContextMenu.For(path, OwnerHandle);
+            if (shell.Count > 0) { foreach (var m in shell) yield return m; yield break; }
+        }
         yield return new MenuItemSpec("\uE8A7", "開く", () => OpenPath(path));
         if (!isTask && System.IO.File.Exists(path))
         {

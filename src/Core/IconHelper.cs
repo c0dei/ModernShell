@@ -62,7 +62,7 @@ internal static class IconHelper
         }
     }
 
-    private static BitmapSource? FromHBitmap(IntPtr hbm)
+    internal static BitmapSource? FromHBitmap(IntPtr hbm)
     {
         if (Win32.GetObject(hbm, Marshal.SizeOf<Win32.DIBSECTION>(), out var ds) == 0) return null;
         var bm = ds.dsBm;

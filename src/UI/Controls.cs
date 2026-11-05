@@ -173,6 +173,11 @@ public sealed record MenuItemSpec(string Glyph, string Text, Action Action, bool
     public ImageSource? Icon { get; init; }
     /// <summary>この項目を右クリックしたときに出すメニュー（Windows のジャンプリストと同じ）。</summary>
     public Func<IEnumerable<MenuItemSpec>>? SubMenu { get; init; }
+    /// <summary>クリックで開く子メニュー（「送る」など）。指定すると Action の代わりに子メニューを開く。</summary>
+    public Func<IEnumerable<MenuItemSpec>>? Children { get; init; }
+    public bool Enabled { get; init; } = true;
+    /// <summary>既定の動作（Windows のメニューで太字の項目）。</summary>
+    public bool IsDefault { get; init; }
 }
 
 /// <summary>標準 ContextMenu の代わりのモダンなポップアップメニュー。</summary>
@@ -202,6 +207,7 @@ public static class Flyout
         var t = Theme.Current;
         var panel = new StackPanel { Margin = new Thickness(4) };
         var popup = FluentSurface.Create(panel, target, placement);
+        popup.Tag = parent;
 
         foreach (var spec in items)
         {
@@ -223,15 +229,33 @@ public static class Flyout
             FrameworkElement g = spec.Icon != null ? UiKit.Icon(spec.Icon, 16) : UiKit.Glyph(spec.Glyph, 14);
             g.HorizontalAlignment = HorizontalAlignment.Left;
             row.Children.Add(g);
-            var l = UiKit.Label(spec.Text, 14);
+            var l = UiKit.Label(spec.Text, 14, null, spec.IsDefault ? FontWeights.SemiBold : FontWeights.Normal);
             Grid.SetColumn(l, 1);
             row.Children.Add(l);
-            var tile = new Tile { Child = row, MinWidth = 220, Margin = new Thickness(0, 1, 0, 1) };
-            var action = spec.Action;
-            tile.Click += _ =>
+            if (spec.Children != null)
             {
-                popup.IsOpen = false;
-                if (parent != null) parent.IsOpen = false; // サブメニューで選んだら親メニューも閉じる
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                var chevron = UiKit.Glyph("\uE76C", 10, t.TextSecondary);
+                chevron.HorizontalAlignment = HorizontalAlignment.Right;
+                chevron.Margin = new Thickness(16, 0, 0, 0);
+                Grid.SetColumn(chevron, 2);
+                row.Children.Add(chevron);
+            }
+            var tile = new Tile { Child = row, MinWidth = 220, Margin = new Thickness(0, 1, 0, 1), IsEnabled = spec.Enabled, Opacity = spec.Enabled ? 1 : 0.4 };
+            var action = spec.Action;
+            if (spec.Children is { } children)
+            {
+                tile.Click += x =>
+                {
+                    popup.StaysOpen = true;
+                    var child = Show(x, children(), PlacementMode.Right, popup);
+                    child.Closed += (_, _) => { if (popup.IsOpen) popup.StaysOpen = false; };
+                };
+            }
+            else tile.Click += _ =>
+            {
+                // 選んだら、子メニューから親メニューまで全部閉じる
+                for (var p = popup; p != null; p = p.Tag as Popup) p.IsOpen = false;
                 action();
             };
             if (spec.SubMenu is { } sub)
