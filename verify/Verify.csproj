@@ -14,12 +14,14 @@
   <ItemGroup>
     <Compile Include="../src/**/*.cs" />
     <PackageDownload Include="Microsoft.WindowsDesktop.App.Ref" Version="[8.0.11]" />
+    <PackageDownload Include="ManagedShell" Version="[0.0.374]" />
   </ItemGroup>
   <Target Name="AddDesktopRefs" BeforeTargets="ResolveAssemblyReferences">
     <ItemGroup>
       <!-- NETCore.App 側の WindowsBase ファサードを外して本物を使う -->
       <Reference Remove="@(Reference)" Condition="'%(Filename)' == 'WindowsBase'" />
       <Reference Include="$(NuGetPackageRoot)microsoft.windowsdesktop.app.ref/8.0.11/ref/net8.0/*.dll" />
+      <Reference Include="$(NuGetPackageRoot)managedshell/0.0.374/lib/net6.0-windows7.0/*.dll" />
     </ItemGroup>
   </Target>
 </Project>

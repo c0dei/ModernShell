@@ -22,7 +22,9 @@ public sealed class StartMenuWindow : Window
 {
     private enum Page { Pinned, AllApps, Search }
 
-    private const double MenuWidth = 640, MenuHeight = 720;
+    private const double MainWidth = 640, WidgetWidth = 330, MenuHeight = 720;
+    private double MenuWidth => WidgetPanel.AnyEnabled(_settings) ? MainWidth + WidgetWidth : MainWidth;
+    private WidgetPanel? _widgets;
 
     private readonly Settings _settings;
     private readonly AppCatalog _catalog;
@@ -40,6 +42,7 @@ public sealed class StartMenuWindow : Window
     /// <summary>タスクバー側の配置情報（物理ピクセルの矩形と中央寄せかどうか）。App から供給。</summary>
     public Func<(Win32.RECT bar, bool top, bool center)?>? AnchorProvider { get; set; }
     public event Action? OpenSettingsRequested;
+    public event Action? ExitRequested;
 
     public StartMenuWindow(Settings settings, AppCatalog catalog)
     {
@@ -47,8 +50,10 @@ public sealed class StartMenuWindow : Window
         _catalog = catalog;
 
         Title = "ModernShell Start";
-        WindowStyle = WindowStyle.None;
-        ResizeMode = ResizeMode.NoResize;
+        // 公式の背景効果 (Mica/Acrylic) は枠付きウィンドウでしか描かれないので SingleBorderWindow にし、
+        // WindowChrome で枠とタイトルバーを見えなくする（WindowStyle=None だと不透明になる）
+        WindowStyle = WindowStyle.SingleBorderWindow;
+        ResizeMode = ResizeMode.CanResize;
         ShowInTaskbar = false;
         Topmost = true;
         Width = MenuWidth;
@@ -62,11 +67,15 @@ public sealed class StartMenuWindow : Window
             ResizeBorderThickness = new Thickness(0),
             GlassFrameThickness = new Thickness(-1),
             UseAeroCaptionButtons = false,
+            CornerRadius = new CornerRadius(0),
+            NonClientFrameEdges = NonClientFrameEdges.None,
         });
 
         Deactivated += (_, _) => HideMenu();
         PreviewKeyDown += OnPreviewKeyDown;
         Theme.Changed += () => Dispatcher.BeginInvoke(Rebuild);
+        // ウィジェットの表示切替などを反映（開いている最中は閉じたときに反映される）
+        _settings.Changed += () => Dispatcher.BeginInvoke(() => { if (!IsVisible) Rebuild(); });
         _catalog.Changed += () => Dispatcher.BeginInvoke(() => { if (IsVisible && _page != Page.Search) ShowPage(_page); });
 
         // 不可視のままハンドルを作っておく（TaskbarCreated 等のブロードキャストを受け取るため）
@@ -98,6 +107,7 @@ public sealed class StartMenuWindow : Window
         PositionMenu();
         Foregrounder.Force(Handle);
         Activate();
+        _widgets?.Open();
         _search.Focus();
         _search.CaretIndex = _search.Text.Length;
         UiKit.FadeSlideIn(_root, AnchorProvider?.Invoke()?.top == true ? -24 : 24);
@@ -108,6 +118,7 @@ public sealed class StartMenuWindow : Window
         if (!IsVisible) return;
         if (_openFlyout?.IsOpen == true) return; // 右クリックメニュー表示中は閉じない
         _hiddenAt = DateTime.Now;
+        _widgets?.Close();
         Hide();
     }
 
@@ -141,13 +152,31 @@ public sealed class StartMenuWindow : Window
     private void Rebuild()
     {
         var t = Theme.Current;
-        Backdrop.Apply(this, _settings.Backdrop, t, alwaysInactive: false);
+        Backdrop.Apply(this, _settings.Backdrop, _settings.BackdropEngine, t, alwaysInactive: false);
         Foreground = t.Text;
 
+        Width = MenuWidth;
+        // 外枠: [メイン列 | ウィジェット列] の下にフッター
         _root = new Grid();
-        _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(64) });
+        _root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(MainWidth) });
+        _root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var main = new Grid();
+        main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        main.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        _root.Children.Add(main);
+
+        _widgets?.Close();
+        _widgets = null;
+        if (WidgetPanel.AnyEnabled(_settings))
+        {
+            _widgets = new WidgetPanel(_settings) { Margin = new Thickness(4, 28, 24, 12) };
+            _widgets.LaunchedSomething += HideMenu;
+            Grid.SetColumn(_widgets, 1);
+            _root.Children.Add(_widgets);
+        }
 
         // 検索欄
         _search = new TextBox
@@ -182,14 +211,15 @@ public sealed class StartMenuWindow : Window
             BorderThickness = new Thickness(1),
             Child = searchGrid,
         };
-        _root.Children.Add(searchBox);
+        main.Children.Add(searchBox);
 
         _content = new ContentControl { Margin = new Thickness(20, 4, 20, 0), Focusable = false };
         Grid.SetRow(_content, 1);
-        _root.Children.Add(_content);
+        main.Children.Add(_content);
 
         var footer = BuildFooter(t);
-        Grid.SetRow(footer, 2);
+        Grid.SetRow(footer, 1);
+        Grid.SetColumnSpan(footer, 2);
         _root.Children.Add(footer);
 
         Content = _root;
@@ -241,6 +271,8 @@ public sealed class StartMenuWindow : Window
             MenuItemSpec.Separator,
             new MenuItemSpec("", "再起動", () => { HideMenu(); SystemActions.Restart(); }),
             new MenuItemSpec("", "シャットダウン", () => { HideMenu(); SystemActions.Shutdown(); }),
+            MenuItemSpec.Separator,
+            new MenuItemSpec("\uE8BB", "ModernShell を終了（純正に戻す）", () => { HideMenu(); ExitRequested?.Invoke(); }),
         }, PlacementMode.Top);
         Grid.SetColumn(power, 2);
         g.Children.Add(power);

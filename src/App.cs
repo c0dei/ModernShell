@@ -1,5 +1,7 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
@@ -16,7 +18,8 @@ namespace ModernShell;
 /// エントリポイント。
 /// 安定性のための原則:
 ///  1. explorer.exe へ DLL/コードを注入しない（Windhawk / ExplorerPatcher 型のクラッシュを避ける）
-///  2. ModernShell 側が落ちても explorer は無傷。純正タスクバーは終了時/次回起動時/--restore で必ず戻す
+///  2. ModernShell 側が落ちても explorer は無傷。純正タスクバーは
+///     終了時 / ウォッチドッグ（強制終了時）/ 次回起動時 / Ctrl+Alt+Shift+F12 / --restore のどれかで必ず戻る
 ///  3. 例外はログに記録して握りつぶし、常駐を継続する
 /// </summary>
 public static class Program
@@ -26,16 +29,17 @@ public static class Program
 
     private static Settings _settings = null!;
     private static AppCatalog _catalog = null!;
-    private static WindowTracker _tracker = null!;
+    private static ShellHost? _shell;
     private static InputHooks _hooks = null!;
     private static StartMenuWindow _start = null!;
     private static TaskbarController? _taskbar;
     private static SettingsWindow? _settingsWindow;
     private static Forms.NotifyIcon? _tray;
     private static Timer? _startButtonWatcher;
-    private static DispatcherTimer? _enforceTimer;
     private static string _themeKey = "";
     private static bool _customTaskbarApplied;
+
+    private const int HotkeyEmergencyId = 0x4D53;
 
     [STAThread]
     public static int Main(string[] args)
@@ -44,6 +48,13 @@ public static class Program
         {
             // 緊急用: 強制終了等で純正タスクバーが隠れたままになったときに実行
             NativeTaskbar.Restore();
+            return 0;
+        }
+
+        int wd = Array.FindIndex(args, a => a.Equals("--watchdog", StringComparison.OrdinalIgnoreCase));
+        if (wd >= 0 && wd + 1 < args.Length && int.TryParse(args[wd + 1], out int parentPid))
+        {
+            RunWatchdog(parentPid);
             return 0;
         }
 
@@ -57,6 +68,7 @@ public static class Program
 
         // 前回クラッシュで隠れたままの純正タスクバーがあれば戻しておく
         NativeTaskbar.Restore();
+        StartWatchdog();
 
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
         {
@@ -84,20 +96,21 @@ public static class Program
         _themeKey = ThemeKey();
 
         _catalog = new AppCatalog();
-        _tracker = new WindowTracker(app.Dispatcher);
         _hooks = new InputHooks(app.Dispatcher) { InterceptWinKey = () => _settings.ReplaceStartMenu };
 
         _start = new StartMenuWindow(_settings, _catalog) { AnchorProvider = StartAnchor };
         _start.OpenSettingsRequested += ShowSettings;
-        _tracker.Ignore(_start.Handle);
+        _start.ExitRequested += Exit;
         HwndSource.FromHwnd(_start.Handle)!.AddHook(BroadcastHook);
+        // 緊急用ホットキー: Ctrl+Alt+Shift+F12 で純正タスクバーに戻して終了
+        if (!RegisterHotKey(_start.Handle, HotkeyEmergencyId, 0x0001 | 0x0002 | 0x0004 | 0x4000 /*ALT|CTRL|SHIFT|NOREPEAT*/, 0x7B /*F12*/))
+            Log.Info("emergency hotkey registration failed");
 
         _hooks.StartRequested += () => _start.Toggle();
         _hooks.Install();
 
         _ = _catalog.LoadAsync().ContinueWith(_ => app.Dispatcher.BeginInvoke(() => { _catalog.Watch(); _catalog.NotifyChanged(); }));
 
-        _tracker.Start();
         ApplyTaskbarMode();
 
         // 純正スタートボタン位置の監視（純正タスクバー使用時のみ意味がある）
@@ -137,22 +150,33 @@ public static class Program
 
         if (_settings.UseCustomTaskbar)
         {
-            NativeTaskbar.Hide();
-            _taskbar = new TaskbarController(_settings, _catalog, _tracker, Application.Current.Dispatcher);
+            try
+            {
+                _shell = new ShellHost(_settings);
+            }
+            catch (Exception ex)
+            {
+                // シェル機能が起動できない環境では純正タスクバーのまま続行する
+                Log.Error("shell host", ex);
+                _shell?.Dispose();
+                _shell = null;
+                _customTaskbarApplied = false;
+                NativeTaskbar.Restore();
+                return;
+            }
+            _taskbar = new TaskbarController(_settings, _catalog, _shell, Application.Current.Dispatcher);
             _taskbar.StartClicked += () => _start.Toggle();
             _taskbar.SearchClicked += () => _start.ShowMenu("");
             _taskbar.OpenSettingsRequested += ShowSettings;
             _taskbar.ExitRequested += Exit;
             _taskbar.Start();
-            _enforceTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => NativeTaskbar.EnforceHidden(), Application.Current.Dispatcher);
-            _enforceTimer.Start();
         }
         else
         {
-            _enforceTimer?.Stop();
             _taskbar?.Dispose();
             _taskbar = null;
-            NativeTaskbar.Restore();
+            _shell?.Dispose();
+            _shell = null;
         }
     }
 
@@ -184,13 +208,15 @@ public static class Program
         if (_taskbarCreatedMsg == 0) _taskbarCreatedMsg = Win32.RegisterWindowMessage("TaskbarCreated");
         if (msg == _taskbarCreatedMsg)
         {
-            Log.Info("explorer restarted (TaskbarCreated)");
-            if (_settings.UseCustomTaskbar)
-            {
-                NativeTaskbar.Hide();
-                _taskbar?.Reapply();
-            }
-            if (_tray != null) { _tray.Visible = false; _tray.Visible = true; }
+            // 純正タスクバーの再隠しは ManagedShell が監視して行う。こちらは作業領域の予約だけやり直す
+            Log.Info("TaskbarCreated");
+            _taskbar?.Reapply();
+        }
+        else if (msg == 0x0312 /*WM_HOTKEY*/ && (int)wParam == HotkeyEmergencyId)
+        {
+            Log.Info("emergency hotkey");
+            Exit();
+            handled = true;
         }
         return IntPtr.Zero;
     }
@@ -232,13 +258,46 @@ public static class Program
 
     private static void Exit() => Application.Current.Shutdown();
 
+    [DllImport("user32.dll")] private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint modifiers, uint vk);
+    [DllImport("user32.dll")] private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    /// <summary>
+    /// 自分自身を「--watchdog 親PID」で起動しておく。本体が強制終了・クラッシュしても、
+    /// ウォッチドッグが純正タスクバーとトレイアイコンを explorer に戻す。
+    /// </summary>
+    private static void StartWatchdog()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(Environment.ProcessPath!, $"--watchdog {Environment.ProcessId}")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+        }
+        catch (Exception ex) { Log.Error("watchdog start", ex); }
+    }
+
+    private static void RunWatchdog(int parentPid)
+    {
+        try
+        {
+            using var parent = Process.GetProcessById(parentPid);
+            parent.WaitForExit();
+        }
+        catch { /* 既に終了している */ }
+        // 正常終了なら記録は消えているので何もしない。記録が残っていれば元に戻す
+        if (NativeTaskbar.Restore()) Log.Info("watchdog restored native taskbar");
+    }
+
     private static void Cleanup()
     {
         Log.Info("exit");
+        try { UnregisterHotKey(_start.Handle, HotkeyEmergencyId); } catch { }
         try { _hooks?.Dispose(); } catch { }
-        try { _tracker?.Dispose(); } catch { }
         try { _startButtonWatcher?.Dispose(); } catch { }
         try { _taskbar?.Dispose(); } catch { }
+        try { _shell?.Dispose(); } catch { }
         try { if (_tray != null) { _tray.Visible = false; _tray.Dispose(); } } catch { }
         NativeTaskbar.Restore();
     }

@@ -13,8 +13,6 @@ namespace ModernShell.Core;
 /// </summary>
 public static class NativeTaskbar
 {
-    private static bool _hidden;
-    private static int _originalState = -1;
     private static readonly object Gate = new();
 
     public static IEnumerable<IntPtr> TrayWindows()
@@ -26,54 +24,43 @@ public static class NativeTaskbar
             yield return h;
     }
 
-    /// <summary>純正タスクバーを自動的に隠す設定にしてから非表示にする（作業領域を解放するため）。</summary>
-    public static void Hide()
+    /// <summary>
+    /// 純正タスクバーを隠す直前に呼ぶ。元の「自動的に隠す」状態をファイルに記録しておき、
+    /// ModernShell が強制終了されてもウォッチドッグ / 次回起動 / --restore で戻せるようにする。
+    /// ※ ManagedShell が自前の Shell_TrayWnd を作る前に呼ぶこと（FindWindow が explorer のものを返すうちに）。
+    /// </summary>
+    public static void RememberOriginalState()
     {
         lock (Gate)
         {
+            if (LoadPersisted() >= 0) return; // 前回分が残っていればそれが本来の状態
             var main = Win32.FindWindow("Shell_TrayWnd", null);
             if (main == IntPtr.Zero) return;
             var abd = Win32.APPBARDATA.Create(main);
-            if (_originalState < 0)
-            {
-                _originalState = (int)Win32.SHAppBarMessage(Win32.ABM_GETSTATE, ref abd);
-                Persist(_originalState);
-            }
-            abd.lParam = (IntPtr)Win32.ABS_AUTOHIDE;
-            Win32.SHAppBarMessage(Win32.ABM_SETSTATE, ref abd);
-            foreach (var h in TrayWindows()) Win32.ShowWindow(h, Win32.SW_HIDE);
-            _hidden = true;
+            Persist((int)Win32.SHAppBarMessage(Win32.ABM_GETSTATE, ref abd));
         }
     }
 
-    /// <summary>explorer が勝手に再表示した場合に再度隠す（タイマーから呼ぶ）。</summary>
-    public static void EnforceHidden()
-    {
-        if (!_hidden) return;
-        foreach (var h in TrayWindows())
-            if (Win32.IsWindowVisible(h)) Win32.ShowWindow(h, Win32.SW_HIDE);
-    }
-
-    public static void Restore()
+    /// <summary>記録があれば純正タスクバーを元の状態に戻して表示する。記録がなければ何もしない。</summary>
+    public static bool Restore()
     {
         lock (Gate)
         {
-            int state = _originalState >= 0 ? _originalState : LoadPersisted();
-            if (!_hidden && state < 0) return;
+            int state = LoadPersisted();
+            if (state < 0) return false;
             var main = Win32.FindWindow("Shell_TrayWnd", null);
             if (main != IntPtr.Zero)
             {
-                if (state >= 0)
-                {
-                    var abd = Win32.APPBARDATA.Create(main);
-                    abd.lParam = (IntPtr)state;
-                    Win32.SHAppBarMessage(Win32.ABM_SETSTATE, ref abd);
-                }
+                var abd = Win32.APPBARDATA.Create(main);
+                abd.lParam = (IntPtr)state;
+                Win32.SHAppBarMessage(Win32.ABM_SETSTATE, ref abd);
                 foreach (var h in TrayWindows()) Win32.ShowWindow(h, Win32.SW_SHOWNOACTIVATE);
             }
-            _hidden = false;
-            _originalState = -1;
+            // トレイを預かっていた場合に備え、アプリにアイコンを explorer へ登録し直させる
+            Win32.PostMessage((IntPtr)0xFFFF /*HWND_BROADCAST*/, Win32.RegisterWindowMessage("TaskbarCreated"), IntPtr.Zero, IntPtr.Zero);
             Persist(-1);
+            Log.Info("native taskbar restored");
+            return true;
         }
     }
 

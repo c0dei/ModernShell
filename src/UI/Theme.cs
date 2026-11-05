@@ -118,7 +118,23 @@ public static class Backdrop
     private static readonly bool Is22H2 = Environment.OSVersion.Version.Build >= 22621;
     private static readonly bool IsWin11 = Environment.OSVersion.Version.Build >= 22000;
 
-    public static void Apply(Window w, BackdropKind kind, Theme t, bool alwaysInactive)
+    /// <summary>公式の背景効果 (DWMWA_SYSTEMBACKDROP_TYPE) を使うかどうか。</summary>
+    public static bool UsesSystemBackdrop(BackdropKind kind, BackdropEngine engine, bool alwaysInactive) =>
+        kind != BackdropKind.Solid && Is22H2 && engine switch
+        {
+            BackdropEngine.SystemBackdrop => true,
+            BackdropEngine.AccentBlur => false,
+            _ => !alwaysInactive,
+        };
+
+    /// <summary>
+    /// 背景効果を適用する。
+    /// 公式 API の背景効果はタイトルバー枠を持つウィンドウでしか描かれないため、
+    /// それを使うウィンドウは WindowStyle=SingleBorderWindow + WindowChrome(CaptionHeight=0) にしておくこと
+    /// （WindowStyle=None だと真っ黒/不透明になる）。
+    /// ※ Windows の「設定 → 個人用設定 → 色 → 透明効果」がオフだと、どの方式でも不透明になる。
+    /// </summary>
+    public static void Apply(Window w, BackdropKind kind, BackdropEngine engine, Theme t, bool alwaysInactive)
     {
         var hwnd = new WindowInteropHelper(w).EnsureHandle();
         var src = HwndSource.FromHwnd(hwnd);
@@ -131,30 +147,37 @@ public static class Backdrop
             Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, ref corner, sizeof(int));
         }
 
+        bool system = UsesSystemBackdrop(kind, engine, alwaysInactive);
+        if (Is22H2 && !system)
+        {
+            int none = Win32.DWMSBT_NONE;
+            Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_SYSTEMBACKDROP_TYPE, ref none, sizeof(int));
+        }
+
         if (kind == BackdropKind.Solid)
         {
             SetAccent(hwnd, AccentState.Disabled, 0);
-            if (Is22H2) { int none = Win32.DWMSBT_NONE; Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_SYSTEMBACKDROP_TYPE, ref none, sizeof(int)); }
             w.Background = t.SolidBackground;
             if (src?.CompositionTarget != null) src.CompositionTarget.BackgroundColor = t.SolidColor;
             return;
         }
 
-        // DWM に描かせるため WPF 側の背景は完全透過にする
+        // DWM に描かせるため WPF 側の背景は完全透過にし、クライアント領域全体にフレームを広げる
         w.Background = Brushes.Transparent;
         if (src?.CompositionTarget != null) src.CompositionTarget.BackgroundColor = Colors.Transparent;
         var m = new Win32.MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
         Win32.DwmExtendFrameIntoClientArea(hwnd, ref m);
 
-        if (Is22H2 && !alwaysInactive)
+        if (system)
         {
+            SetAccent(hwnd, AccentState.Disabled, 0);
             int type = kind == BackdropKind.Mica ? Win32.DWMSBT_MAINWINDOW : Win32.DWMSBT_TRANSIENTWINDOW;
             Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_SYSTEMBACKDROP_TYPE, ref type, sizeof(int));
         }
         else
         {
             // Mica 指定時は濃いめのティントで近い見た目にする
-            byte alpha = kind == BackdropKind.Mica ? (byte)0xE0 : (byte)0xB0;
+            byte alpha = kind == BackdropKind.Mica ? (byte)0xD8 : (byte)0x99;
             var c = t.SolidColor;
             uint abgr = ((uint)alpha << 24) | ((uint)c.B << 16) | ((uint)c.G << 8) | c.R;
             SetAccent(hwnd, AccentState.AcrylicBlurBehind, abgr);

@@ -21,7 +21,7 @@ public sealed class BarSurface : Window
 
     public IntPtr Handle => new WindowInteropHelper(this).Handle;
 
-    public BarSurface(Anchor placement, double heightDip, BackdropKind backdrop)
+    public BarSurface(Anchor placement, double heightDip, Settings settings)
     {
         Placement = placement;
         Title = "ModernShell Taskbar";
@@ -52,9 +52,26 @@ public sealed class BarSurface : Window
         long ex = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE);
         // TOOLWINDOW: Alt+Tab に出さない / NOACTIVATE: クリックしても前面ウィンドウを奪わない（最小化トグル判定に必須）
         Win32.SetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE, (IntPtr)(ex | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_NOACTIVATE));
-        Backdrop.Apply(this, backdrop, Theme.Current, alwaysInactive: true);
+        Backdrop.Apply(this, settings.Backdrop, settings.BackdropEngine, Theme.Current, alwaysInactive: true);
+        HwndSource.FromHwnd(hwnd)!.AddHook(WndProc);
 
         SizeChanged += (_, _) => ContentSizeChanged?.Invoke();
+    }
+
+    private const int WM_MOUSEACTIVATE = 0x0021, MA_NOACTIVATE = 3;
+
+    /// <summary>
+    /// クリックされてもアクティブにならないようにする。タスクバーがアクティブ化を奪うと
+    /// 「前面のウィンドウをクリック → 最小化」の判定が崩れるため（WS_EX_NOACTIVATE だけでは WPF が奪うことがある）。
+    /// </summary>
+    private static IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_MOUSEACTIVATE)
+        {
+            handled = true;
+            return (IntPtr)MA_NOACTIVATE;
+        }
+        return IntPtr.Zero;
     }
 
     public double Scale => Win32.GetDpiForWindow(Handle) is var d and > 0 ? d / 96.0 : 1.0;

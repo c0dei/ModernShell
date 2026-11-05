@@ -10,8 +10,9 @@ public enum ThemeMode { System, Light, Dark }
 public enum BackdropKind { Mica, Acrylic, Solid }
 public enum TaskbarAlignment { Center, Left }
 public enum TaskbarEdge { Bottom, Top }
-/// <summary>Grouped: スタート＋アプリを 1 かたまり（中央/左寄せ） / Split: 左=スタート・中央=アプリ・右=トレイ の 3 分割</summary>
-public enum TaskbarLayout { Grouped, Split }
+/// <summary>スタート・検索・タスクビューの位置。WithApps: アプリと一緒（中央 or 左） / LeftEdge: 常に左端（3 分割）</summary>
+public enum StartButtonPosition { WithApps, LeftEdge }
+public enum BackdropEngine { Auto, SystemBackdrop, AccentBlur }
 /// <summary>Band: 画面端に密着した帯 / Floating: 画面端から浮いた島（アイランド、Mac のドック風）</summary>
 public enum TaskbarStyle { Band, Floating }
 
@@ -32,7 +33,11 @@ public sealed class Settings
     public TaskbarAlignment TaskbarAlignment { get; set; } = TaskbarAlignment.Center;
     public TaskbarEdge TaskbarEdge { get; set; } = TaskbarEdge.Bottom;
     public int TaskbarHeight { get; set; } = 48;
-    public TaskbarLayout TaskbarLayout { get; set; } = TaskbarLayout.Grouped;
+    public StartButtonPosition StartButtonPosition { get; set; } = StartButtonPosition.WithApps;
+    public bool ShowSearchButton { get; set; } = true;
+    public bool ShowTaskViewButton { get; set; } = true;
+    /// <summary>タスクバーに常に表示するトレイアイコン（ManagedShell の NotifyIcon.Identifier）。それ以外は「^」の中。</summary>
+    public List<string> PinnedTrayIcons { get; set; } = new();
     public TaskbarStyle TaskbarStyle { get; set; } = TaskbarStyle.Band;
     /// <summary>アイランド型のとき画面端からの余白 (DIP)。</summary>
     public int IslandMargin { get; set; } = 8;
@@ -49,6 +54,19 @@ public sealed class Settings
     /// <summary>空ならシステムのアクセントカラー。#RRGGBB 形式。</summary>
     public string AccentColor { get; set; } = "";
     public double CornerRadius { get; set; } = 8;
+    /// <summary>背景効果の描画方式。Auto: Win11 22H2 以降は公式 API、それ以外は Acrylic ぼかし。</summary>
+    public BackdropEngine BackdropEngine { get; set; } = BackdropEngine.Auto;
+
+    // --- ウィジェット（スタートメニュー右側） ---
+    public bool ShowWidgets { get; set; } = true;
+    public bool WidgetClock { get; set; } = true;
+    public bool WidgetWeather { get; set; } = true;
+    public bool WidgetSystem { get; set; } = true;
+    public bool WidgetFolders { get; set; } = true;
+    public bool WidgetRecent { get; set; } = true;
+    public bool WidgetNotes { get; set; } = false;
+    /// <summary>天気の地点（都市名。Open-Meteo のジオコーディングで検索）。</summary>
+    public string WeatherCity { get; set; } = "Tokyo";
 
     // --- 一般 ---
     public bool RunAtStartup { get; set; } = false;
@@ -82,7 +100,15 @@ public sealed class Settings
         return s;
     }
 
+    /// <summary>保存して Changed を発火（UI が作り直される）。</summary>
     public void Save()
+    {
+        SaveQuiet();
+        Changed?.Invoke();
+    }
+
+    /// <summary>保存のみ（UI を作り直さない。トレイのピン留めなど細かい変更用）。</summary>
+    public void SaveQuiet()
     {
         try
         {
@@ -92,8 +118,9 @@ public sealed class Settings
             File.Move(tmp, FilePath, overwrite: true);
         }
         catch (Exception ex) { Log.Error("settings save", ex); }
-        Changed?.Invoke();
     }
+
+    public static IReadOnlyList<string> DefaultPinnedStart => Defaults.PinnedStart;
 
     private static class Defaults
     {

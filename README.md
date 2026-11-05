@@ -8,7 +8,7 @@ Start11 のような **モダンなスタートメニュー / タスクバー置
 > ModernShell は **別プロセスで自前の UI を描画し、公開 API だけで純正 UI を「横取り・非表示」にする** ため、
 > ModernShell が落ちても explorer は落ちません。
 
-## 機能 (v0.1)
+## 機能 (v0.2)
 
 ### スタートメニュー
 - Win キー単押し / 純正スタートボタンのクリックを横取りして独自スタートを表示（Win+E などの組み合わせはそのまま）
@@ -18,7 +18,10 @@ Start11 のような **モダンなスタートメニュー / タスクバー置
 - インクリメンタル検索（前方一致・単語先頭・部分一致・頭文字、ひらがな/カタカナ・全角/半角を同一視）
   ↑↓ で選択、Enter で起動、Ctrl+Shift+Enter で管理者として起動、コマンド実行 / Web 検索
 - 管理者として実行、ファイルの場所を開く
-- 電源メニュー（ロック / スリープ / サインアウト / 再起動 / シャットダウン）
+- 電源メニュー（ロック / スリープ / サインアウト / 再起動 / シャットダウン / ModernShell の終了）
+- **ウィジェット**（右側の列。個別にオン/オフ）: 時計とカレンダー、天気（Open-Meteo）、システム（CPU/メモリ/ディスク）、
+  フォルダー、最近使ったファイル、メモ
+- 背景効果: Windows 11 22H2 以降は公式の Mica/Acrylic、それ以外や透けない場合は Acrylic ぼかし（設定で切替）
 
 ### タスクバー（任意・既定 OFF）
 - 純正タスクバーを隠し、AppBar として独自タスクバーを表示（作業領域も正しく確保）
@@ -31,6 +34,9 @@ Start11 のような **モダンなスタートメニュー / タスクバー置
 
   アイランドは島ごとに別ウィンドウなので、島それぞれに Acrylic と角丸が付き、島の間のデスクトップはそのままクリックできる。
   ホバー時のアイコン拡大（オフ可）、画面端からの余白を調整可能
+- スタート・検索・タスクビューの位置を「アプリと一緒（中央/左）」か「左端」から選択、検索・タスクビューは個別に非表示可
+- **通知領域（トレイアイコン）**: アプリのトレイアイコンを表示。「^」で隠れたアイコン、そこから常時表示するアイコンを選択
+- クリックで最小化 ⇔ 復元（シェルフックで正確にアクティブ状態を追跡）、点滅（通知）表示
 - 中央 / 左寄せ、上 / 下、高さ変更
 - システムアイコン: ネットワーク接続状態、バッテリー残量（ノート PC のみ・充電中表示）
 - ピン留め＋実行中ウィンドウ、同一アプリのグループ化（複数ウィンドウは一覧ポップアップ）
@@ -39,6 +45,8 @@ Start11 のような **モダンなスタートメニュー / タスクバー置
 - 時計（クリックで通知センター）、クイック設定ボタン、デスクトップの表示
 
 ### 安全装置
+- **Ctrl + Alt + Shift + F12** でいつでも終了して純正タスクバーに戻る
+- **ウォッチドッグ**: 本体が強制終了・クラッシュしても、見張り役のプロセスが純正タスクバーとトレイアイコンを戻す
 - 終了時・例外時・次回起動時に純正タスクバーを自動で元に戻す
 - 万一隠れたままになったら `ModernShell.exe --restore`
 - explorer が再起動しても (`TaskbarCreated`) 状態を再適用
@@ -85,7 +93,9 @@ src/
     Hooks.cs              WH_KEYBOARD_LL / WH_MOUSE_LL（Win キー・スタートボタン横取り）
     NativeTaskbar.cs      純正タスクバーの非表示/復元、UIA でスタートボタン位置取得
     AppCatalog.cs         shell:AppsFolder 列挙（デスクトップ + ストアアプリ）、起動
-    WindowTracker.cs      SetWinEventHook(OUTOFCONTEXT) でトップレベルウィンドウ追跡
+    ShellHost.cs          ManagedShell（トレイ・タスク一覧・純正タスクバー非表示）の起動と後始末
+    WidgetData.cs         ウィジェット用データ（天気・CPU/メモリ・フォルダー・最近使ったファイル・メモ）
+    WindowHelpers.cs      前面化・ピン留めと実行中ウィンドウの照合
     IconHelper.cs         IShellItemImageFactory でアルファ付き高解像度アイコン
     SystemActions.cs      電源操作、Win+A/N/D 等の送出、スタートアップ登録
     Settings.cs           JSON 設定、ログ
@@ -94,7 +104,8 @@ src/
     TaskbarController.cs  タスクバー全体（レイアウト組み立て・アプリボタン・時計/システムアイコン）
     AppBarReservation.cs  作業領域の予約だけを行う不可視 AppBar
     BarSurface.cs         見た目 1 枚分（帯なら 1 枚、アイランドなら島ごとに 1 枚）
-    SettingsWindow.cs     設定画面
+    SettingsWindow.cs     設定画面（Fluent デザイン、トグルスイッチ）
+    WidgetPanel.cs        スタートメニューのウィジェット列
     Theme.cs              配色・Mica/Acrylic 適用
     Controls.cs           Tile（フラットボタン）、Flyout（モダンなコンテキストメニュー）
 verify/Verify.csproj      Linux 上でのコンパイル検証用（Windows では不要）
@@ -107,17 +118,16 @@ verify/Verify.csproj      Linux 上でのコンパイル検証用（Windows で�
 | Win キーで独自スタート | 低レベルキーボードフック + マスクキー送出（AutoHotkey と同じ手法） | explorer 内の関数をフック |
 | 純正スタートボタンのクリック | UIA で位置取得 + 低レベルマウスフック | XAML ツリー改変 |
 | タスクバー置き換え | 純正を `ShowWindow(SW_HIDE)` + 自前 AppBar | explorer 内の描画を改変 |
-| ウィンドウ一覧 | `SetWinEventHook(WINEVENT_OUTOFCONTEXT)` | explorer 内部状態を参照 |
+| ウィンドウ一覧 | シェルフック（ManagedShell の TasksService） | explorer 内部状態を参照 |
+| トレイアイコン | 自前の `Shell_TrayWnd` でアイコン登録を受け取る（ManagedShell の TrayService、RetroBar と同じ） | explorer 内の通知領域を改変 |
 
 低レベルフック (`WH_*_LL`) は DLL 注入を伴わず、自プロセスのメッセージループで呼ばれます。
 コールバックは軽量にして重い処理は Dispatcher に回しています（遅いと OS にフックを外されるため）。
 
 ## 既知の制限 / ロードマップ
 
-- [ ] **通知領域（システムトレイ）アイコン**: 独自タスクバーではまだ表示されません。
-      純正タスクバーを使う既定モードなら問題ありません。
-      実装案: `Shell_TrayWnd` クラスの隠しウィンドウを自前で持ち `Shell_NotifyIcon` の WM_COPYDATA を受ける
-      （RetroBar / Cairo Shell 方式）。explorer と競合するため慎重に設計が必要
+- [x] 通知領域（トレイアイコン）— v0.2 で ManagedShell により対応
+- [ ] トレイアイコンのドラッグ並べ替え、通知バルーンの表示
 - [ ] 音量アイコンの実際の音量・ミュート反映（Core Audio）
 - [ ] アイランドの自動非表示（作業領域を確保しないモード）
 - [ ] マルチモニター（現在はプライマリのみ）
@@ -142,3 +152,7 @@ verify/Verify.csproj      Linux 上でのコンパイル検証用（Windows で�
 6. アイランド型で島の角丸・Acrylic が島ごとに正しく描かれるか、島の幅がアプリの増減に追従するか
 
 問題があれば `%AppData%\ModernShell\modernshell.log` を確認してください。
+
+## ライセンス表記
+
+通知領域とタスク一覧に [ManagedShell](https://github.com/cairoshell/ManagedShell)（Apache-2.0）を使用しています。詳細は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。

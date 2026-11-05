@@ -12,10 +12,16 @@
     <AssemblyName>ModernShell</AssemblyName>
     <StartupObject>ModernShell.Program</StartupObject>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <!-- Linux/macOS からのクロスビルドも可能にする -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- WinForms 用の高 DPI 警告。DPI は app.manifest (PerMonitorV2) で WPF と共通に設定している -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- 通知領域（トレイ）とタスク一覧。RetroBar / Cairo Shell と同じ、explorer に注入しない方式のライブラリ (Apache-2.0) -->
+    <PackageReference Include="ManagedShell" Version="0.0.374" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Remove="verify/**" />
   </ItemGroup>
