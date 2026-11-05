@@ -333,6 +333,7 @@ public sealed class TaskbarController : IDisposable
             Child = UiKit.Glyph(IsTop ? "" : "", 12), ToolTip = "隠れているインジケーターを表示",
         };
         _overflowButton.Click += ShowOverflow;
+        MakeOverflowDropTarget(_overflowButton); // 「^」の上に落としてもしまえる
         p.Children.Add(_overflowButton);
 
         _trayIcons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
@@ -391,6 +392,8 @@ public sealed class TaskbarController : IDisposable
         {
             // 上へ引き出すと「^」の一覧が開き、そこへ落とせばしまえる（Windows と同じ）
             DragOut = el => { if (el.Tag is ManagedShell.WindowsTray.NotifyIcon ni) StartTrayDrag(ni, el); },
+            // 横に動かして「^」の上に来たときも、しまう操作へ切り替える
+            LeaveWhen = e => _overflowButton is { IsVisible: true } b && IsOver(b, e),
         };
         foreach (var icon in pinned)
         {
@@ -492,10 +495,17 @@ public sealed class TaskbarController : IDisposable
         _overflowButton.Visibility = Visibility.Visible;
         if (_overflowPopup?.IsOpen != true) ShowOverflow(_overflowButton);
         if (_overflowPopup != null) _overflowPopup.StaysOpen = true; // ドラッグ中に閉じないように
+        _overflowButton.IsHitTestVisible = true; // 「^」自体にも落とせるように（開閉トグルのための無効化を解除）
         try { DragDrop.DoDragDrop(source, new DataObject("ModernShell.TrayIcon", icon), DragDropEffects.Move); }
         catch (Exception ex) { Log.Error("tray drag", ex); }
         if (_overflowPopup?.IsOpen == true) _overflowPopup.StaysOpen = _trayEditMode;
         ClearTrayDropLine();
+    }
+
+    private static bool IsOver(FrameworkElement el, MouseEventArgs e)
+    {
+        var p = e.GetPosition(el);
+        return p.X >= 0 && p.Y >= 0 && p.X < el.ActualWidth && p.Y < el.ActualHeight;
     }
 
     private static ManagedShell.WindowsTray.NotifyIcon? DraggedIcon(DragEventArgs e) =>
@@ -513,7 +523,13 @@ public sealed class TaskbarController : IDisposable
             ShowTrayDropLine(TrayInsertIndex(e));
             e.Handled = true;
         };
-        trayGroup.DragLeave += (_, _) => ClearTrayDropLine();
+        // 子要素の間を移るときにも DragLeave が来るので、本当にトレイ部分の外に出たときだけ隙間を閉じる
+        trayGroup.DragLeave += (_, e) =>
+        {
+            var p = e.GetPosition(trayGroup);
+            if (p.X >= 0 && p.Y >= 0 && p.X < trayGroup.ActualWidth && p.Y < trayGroup.ActualHeight) return;
+            ClearTrayDropLine();
+        };
         trayGroup.Drop += (_, e) =>
         {
             ClearTrayDropLine();
@@ -529,12 +545,12 @@ public sealed class TaskbarController : IDisposable
         };
     }
 
-    /// <summary>カーソル位置が、常に表示しているアイコンの何番目の前にあたるか。</summary>
+    /// <summary>カーソル位置が、常に表示しているアイコンの何番目の前にあたるか（隙間は数えない）。</summary>
     private int TrayInsertIndex(DragEventArgs e)
     {
         if (_trayIcons == null) return 0;
         int i = 0;
-        foreach (FrameworkElement el in _trayIcons.Children)
+        foreach (var el in _trayIcons.Children.OfType<FrameworkElement>().Where(x => x.Tag is ManagedShell.WindowsTray.NotifyIcon))
         {
             if (e.GetPosition(el).X < el.ActualWidth / 2) return i;
             i++;
@@ -542,22 +558,55 @@ public sealed class TaskbarController : IDisposable
         return i;
     }
 
+    // ドロップ位置に開く隙間。位置が変わったら古い隙間は縮めて消し、新しい隙間を広げる（隣のアイコンがぬるっとよける）
+    private Border? _dropGap;
+    private int _dropGapIndex = -1;
+
     private void ShowTrayDropLine(int index)
     {
-        if (_trayIcons == null) return;
-        var tiles = _trayIcons.Children.OfType<Tile>().ToList();
-        for (int i = 0; i < tiles.Count; i++)
+        if (_trayIcons == null || index == _dropGapIndex) return;
+        _dropGapIndex = index;
+        CollapseGap(_dropGap);
+        double pitch = (Compact ? 26 : 32) + 2;
+        var gap = new Border
         {
-            bool before = i == index, after = index == tiles.Count && i == tiles.Count - 1;
-            tiles[i].BorderBrush = before || after ? Theme.Current.AccentBrush : Brushes.Transparent;
-            tiles[i].BorderThickness = before ? new Thickness(3, 0, 0, 0) : after ? new Thickness(0, 0, 3, 0) : new Thickness(1);
+            Width = 0, Height = Math.Min(36, TileH) - 8, CornerRadius = new CornerRadius(4), Margin = new Thickness(1, 0, 1, 0),
+            BorderBrush = Theme.Current.AccentBrush, BorderThickness = new Thickness(1), Background = Theme.Current.Hover, IsHitTestVisible = false,
+        };
+        // 隙間を除いたアイコンの index 番目の直前に入れる
+        int child = 0, seen = 0;
+        for (; child < _trayIcons.Children.Count; child++)
+        {
+            if (_trayIcons.Children[child] is FrameworkElement { Tag: ManagedShell.WindowsTray.NotifyIcon })
+            {
+                if (seen == index) break;
+                seen++;
+            }
         }
+        _trayIcons.Children.Insert(child, gap);
+        gap.BeginAnimation(FrameworkElement.WidthProperty, new DoubleAnimation(0, pitch - 2, TimeSpan.FromMilliseconds(160)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+        _dropGap = gap;
+    }
+
+    private void CollapseGap(Border? gap)
+    {
+        if (gap == null || _trayIcons == null) return;
+        var a = new DoubleAnimation(gap.ActualWidth, 0, TimeSpan.FromMilliseconds(140)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        a.Completed += (_, _) => _trayIcons?.Children.Remove(gap);
+        gap.BeginAnimation(FrameworkElement.WidthProperty, a);
     }
 
     private void ClearTrayDropLine()
     {
-        if (_trayIcons == null) return;
-        foreach (var t in _trayIcons.Children.OfType<Tile>()) { t.BorderBrush = Brushes.Transparent; t.BorderThickness = new Thickness(1); }
+        CollapseGap(_dropGap);
+        _dropGap = null;
+        _dropGapIndex = -1;
+    }
+
+    private static void SetBg(FrameworkElement el, Brush b)
+    {
+        if (el is Panel p) p.Background = b;
+        else if (el is Border bd) bd.Background = b;
     }
 
     /// <summary>「^」の一覧をドロップ先にする。落としたアイコンは「^」の中にしまう。</summary>
@@ -569,13 +618,13 @@ public sealed class TaskbarController : IDisposable
         {
             bool ok = DraggedIcon(e) is { IsPinned: true };
             e.Effects = ok ? DragDropEffects.Move : DragDropEffects.None;
-            if (area is Panel p) p.Background = ok ? Theme.Current.Hover : normal;
+            SetBg(area, ok ? Theme.Current.Hover : normal);
             e.Handled = true;
         };
-        area.DragLeave += (_, _) => { if (area is Panel p) p.Background = normal; };
+        area.DragLeave += (_, _) => SetBg(area, normal);
         area.Drop += (_, e) =>
         {
-            if (area is Panel p) p.Background = normal;
+            SetBg(area, normal);
             if (DraggedIcon(e) is not { IsPinned: true } icon) return;
             icon.Unpin();
             _shell.SavePinnedTray(_settings);

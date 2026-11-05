@@ -46,6 +46,8 @@ public sealed class LiveReorder
     /// </summary>
     public Action<FrameworkElement>? DragOut { get; set; }
     private const double DragOutDistance = 28;
+    /// <summary>この条件を満たしたら（例: カーソルが「^」ボタンの上に来たら）横方向でも DragOut に引き渡す。</summary>
+    public Func<MouseEventArgs, bool>? LeaveWhen { get; set; }
 
     /// <summary>直前の操作がドラッグだったか（クリック処理側で確認し、true ならクリックとして扱わない）。読むとリセット。</summary>
     public bool ConsumeDragged()
@@ -102,7 +104,7 @@ public sealed class LiveReorder
         var d = e.GetPosition(_panel) - _start;
         double delta = _horizontal ? d.X : d.Y;
         double across = _horizontal ? d.Y : d.X;
-        if (DragOut != null && Math.Abs(across) > DragOutDistance)
+        if (DragOut != null && (Math.Abs(across) > DragOutDistance || LeaveWhen?.Invoke(e) == true))
         {
             var item = _drag;
             Cancel();
