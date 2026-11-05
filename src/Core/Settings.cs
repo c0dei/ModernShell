@@ -62,6 +62,12 @@ public sealed class Settings
     /// <summary>空ならシステムのアクセントカラー。#RRGGBB 形式。</summary>
     public string AccentColor { get; set; } = "";
     public double CornerRadius { get; set; } = 8;
+    /// <summary>メニュー（右クリック・ジャンプリスト・サブメニュー）の文字サイズ (px)。</summary>
+    public int MenuFontSize { get; set; } = 14;
+    /// <summary>タスクバー背景の不透明度 (0 = ぼかしだけ ～ 100 = 不透明)。</summary>
+    public int TaskbarOpacity { get; set; } = 60;
+    /// <summary>スタートメニュー背景の不透明度 (0 = 標準の Acrylic/Mica のまま ～ 100 = 不透明)。</summary>
+    public int StartMenuOpacity { get; set; } = 0;
     /// <summary>背景効果の描画方式。Auto: Win11 22H2 以降は公式 API、それ以外は Acrylic ぼかし。</summary>
     public BackdropEngine BackdropEngine { get; set; } = BackdropEngine.Auto;
 
@@ -136,7 +142,17 @@ public sealed class Settings
 
     public event Action? Changed;
 
+    /// <summary>現在の設定（メニュー部品など、設定を受け取らない場所から参照する）。</summary>
+    [JsonIgnore] public static Settings? Current { get; private set; }
+
     public static Settings Load()
+    {
+        var loaded = LoadCore();
+        Current = loaded;
+        return loaded;
+    }
+
+    private static Settings LoadCore()
     {
         try
         {

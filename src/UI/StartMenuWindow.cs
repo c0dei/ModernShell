@@ -159,7 +159,9 @@ public sealed class StartMenuWindow : Window
     private void Rebuild()
     {
         var t = Theme.Current;
-        Backdrop.Apply(this, _settings.Backdrop, _settings.BackdropEngine, t, alwaysInactive: false);
+        // 0 のときは標準の濃さ（Acrylic ぼかし方式でも既定値）にする
+        Backdrop.Apply(this, _settings.Backdrop, _settings.BackdropEngine, t, alwaysInactive: false,
+            tint: _settings.StartMenuOpacity > 0 ? _settings.StartMenuOpacity / 100.0 : null);
         Foreground = t.Text;
 
         Width = MenuWidth;

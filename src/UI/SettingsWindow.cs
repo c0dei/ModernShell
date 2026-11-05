@@ -307,6 +307,13 @@ public sealed class SettingsWindow : Window
         p.Children.Add(DropDownRow("背景効果の描画方式", "透けない場合は「Acrylic ぼかし」を試してください",
             new[] { ("Auto", "自動"), ("SystemBackdrop", "Windows 11 標準（22H2 以降）"), ("AccentBlur", "Acrylic ぼかし（互換）") },
             _s.BackdropEngine.ToString(), v => _s.BackdropEngine = Enum.Parse<BackdropEngine>(v)));
+        p.Children.Add(SliderRow("タスクバーの不透明度", "0 にするとぼかしだけ、100 で不透明。Acrylic / Mica のとき有効です",
+            _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.Backdrop != BackdropKind.Solid));
+        p.Children.Add(SliderRow("スタート メニューの不透明度", "0 で標準の Acrylic / Mica。上げるほど濃くなります",
+            _s.StartMenuOpacity, v => _s.StartMenuOpacity = v, _s.Backdrop != BackdropKind.Solid));
+        p.Children.Add(DropDownRow("メニューの文字サイズ", "右クリックメニュー・ジャンプリスト・サブメニュー共通",
+            new[] { ("12", "12 px（小）"), ("13", "13 px"), ("14", "14 px（標準）"), ("15", "15 px"), ("16", "16 px（大）") },
+            _s.MenuFontSize.ToString(), v => _s.MenuFontSize = int.Parse(v)));
         p.Children.Add(DropDownRow("角の丸み", "", new[] { ("0", "なし"), ("4", "小"), ("8", "標準"), ("12", "大") },
             ((int)_s.CornerRadius).ToString(), v => _s.CornerRadius = double.Parse(v)));
         p.Children.Add(InfoBar("透けて見えないときは",
@@ -400,6 +407,21 @@ public sealed class SettingsWindow : Window
     {
         var combo = new FluentComboBox(options, current, v => { set(v); Commit(); });
         return Card(Texts(title, desc), combo, enabled);
+    }
+
+    /// <summary>スライダー行（0–100%）。値は離したときに保存する。</summary>
+    private Border SliderRow(string title, string desc, int value, Action<int> set, bool enabled = true)
+    {
+        var label = UiKit.Label($"{value}%", 14);
+        label.MinWidth = 44;
+        label.TextAlignment = TextAlignment.Right;
+        var slider = new FluentSlider(0, 100, value);
+        slider.ValueChanged += v => label.Text = $"{v:0}%";
+        slider.ValueCommitted += v => { set((int)v); Commit(); };
+        var right = new StackPanel { Orientation = Orientation.Horizontal };
+        right.Children.Add(label);
+        right.Children.Add(Spaced(slider, 12));
+        return Card(Texts(title, desc), right, enabled);
     }
 
     private Border TextRow(string title, string desc, string value, Action<string> set, bool enabled = true)

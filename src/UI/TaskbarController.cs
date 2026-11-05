@@ -144,7 +144,8 @@ public sealed class TaskbarController : IDisposable
     private string LayoutKey() => string.Join("|", _settings.UseCustomTaskbar, _settings.TaskbarStyle, _settings.StartButtonPosition,
         _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarHeight, _settings.TaskbarIconSize, _settings.IslandMargin,
         _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds, _settings.Backdrop, _settings.BackdropEngine,
-        _settings.MagnifyOnHover, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius);
+        _settings.MagnifyOnHover, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
+        _settings.TaskbarOpacity);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e) => _dispatcher.BeginInvoke(UpdateStatus);
 
     // ------------------------------------------------------------------
@@ -242,18 +243,6 @@ public sealed class TaskbarController : IDisposable
         // 空いている場所でも右クリックを受け取れるよう、透明の背景を付ける
         if (content is Panel panel && panel.Background == null) panel.Background = Brushes.Transparent;
         var s = new BarSurface(anchor, h, _settings) { Content = content, Foreground = Theme.Current.Text };
-        // ボタン以外の場所を右クリック → Windows のタスクバーと同じく「タスク マネージャー」「タスクバーの設定」
-        s.MouseRightButtonUp += (_, e) =>
-        {
-            if (e.Handled) return;
-            e.Handled = true;
-            Flyout.Show(content, new[]
-            {
-                new MenuItemSpec("\uE9D9", "タスク マネージャー", SystemActions.OpenTaskManager),
-                MenuItemSpec.Separator,
-                new MenuItemSpec("\uE713", "タスクバーの設定", () => OpenSettingsRequested?.Invoke()),
-            }, PlacementMode.MousePoint);
-        };
         s.ContentSizeChanged += Arrange;
         s.Loaded += (_, _) => Arrange();
         _surfaces.Add(s);
@@ -710,6 +699,18 @@ public sealed class TaskbarController : IDisposable
         stack.Children.Add(edit);
 
         _overflowPopup = FluentSurface.Create(stack, anchor, FlyoutPlacement);
+        // Windows と同じく「^」ボタンを基準に左右中央へ出す（画面端では自動で内側にずれる）
+        _overflowPopup.Placement = PlacementMode.Custom;
+        _overflowPopup.VerticalOffset = 0;
+        double gap = 8 * (VisualTreeHelper.GetDpi(anchor).DpiScaleY);
+        bool top = IsTop;
+        _overflowPopup.CustomPopupPlacementCallback = (popupSize, targetSize, _) =>
+        {
+            double x = (targetSize.Width - popupSize.Width) / 2;
+            var above = new CustomPopupPlacement(new Point(x, -popupSize.Height - gap), PopupPrimaryAxis.Horizontal);
+            var below = new CustomPopupPlacement(new Point(x, targetSize.Height + gap), PopupPrimaryAxis.Horizontal);
+            return top ? new[] { below, above } : new[] { above, below };
+        };
         _overflowPopup.Closed += (_, _) => { if (_trayEditMode) { _trayEditMode = false; RebuildTray(); } };
         FillOverflow();
         _overflowPopup.IsOpen = true;

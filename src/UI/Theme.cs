@@ -171,7 +171,9 @@ public static class Backdrop
     /// （WindowStyle=None だと真っ黒/不透明になる）。
     /// ※ Windows の「設定 → 個人用設定 → 色 → 透明効果」がオフだと、どの方式でも不透明になる。
     /// </summary>
-    public static void Apply(Window w, BackdropKind kind, BackdropEngine engine, Theme t, bool alwaysInactive)
+    /// <param name="tint">背景の不透明度 (0–1)。null なら既定。
+    /// Acrylic ぼかし方式では色の濃さそのもの、Windows 標準方式では上に重ねる単色の濃さとして使う。</param>
+    public static void Apply(Window w, BackdropKind kind, BackdropEngine engine, Theme t, bool alwaysInactive, double? tint = null)
     {
         var hwnd = new WindowInteropHelper(w).EnsureHandle();
         var src = HwndSource.FromHwnd(hwnd);
@@ -207,6 +209,8 @@ public static class Backdrop
 
         if (system)
         {
+            // 標準の背景効果は透明度を変えられないので、上に半透明の単色を重ねて濃くする
+            if (tint is > 0) w.Background = new SolidColorBrush(Color.FromArgb((byte)Math.Round(Math.Clamp(tint.Value, 0, 1) * 255), t.SolidColor.R, t.SolidColor.G, t.SolidColor.B));
             SetAccent(hwnd, AccentState.Disabled, 0);
             int type = kind == BackdropKind.Mica ? Win32.DWMSBT_MAINWINDOW : Win32.DWMSBT_TRANSIENTWINDOW;
             Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_SYSTEMBACKDROP_TYPE, ref type, sizeof(int));
@@ -214,7 +218,7 @@ public static class Backdrop
         else
         {
             // Mica 指定時は濃いめのティントで近い見た目にする
-            byte alpha = kind == BackdropKind.Mica ? (byte)0xD8 : (byte)0x99;
+            byte alpha = tint is { } v ? (byte)Math.Round(Math.Clamp(v, 0, 1) * 255) : kind == BackdropKind.Mica ? (byte)0xD8 : (byte)0x99;
             var c = t.SolidColor;
             uint abgr = ((uint)alpha << 24) | ((uint)c.B << 16) | ((uint)c.G << 8) | c.R;
             SetAccent(hwnd, AccentState.AcrylicBlurBehind, abgr);

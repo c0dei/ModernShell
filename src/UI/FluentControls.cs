@@ -9,6 +9,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Shapes;
 using ModernShell.Native;
 
 namespace ModernShell.UI;
@@ -247,5 +248,86 @@ public sealed class FluentComboBox : Border
         double total = ListPadding * 2 + _options.Length * ItemPitch;
         FluentSurface.AnimateOpen(list, (ListPadding + index * ItemPitch + ItemPitch / 2) / total);
         selectedTile?.Focus();
+    }
+}
+
+/// <summary>
+/// Windows 11 (WinUI) のスライダー。細いトラック + アクセント色の塗り + 丸いつまみ（中にアクセント色の点）。
+/// ドラッグ中は ValueChanged、離したときに ValueCommitted を出す。
+/// </summary>
+public sealed class FluentSlider : Grid
+{
+    private readonly double _min, _max;
+    private readonly Border _fill;
+    private readonly Grid _thumb;
+    private readonly Ellipse _dot;
+    private readonly Canvas _canvas;
+    private double _value;
+
+    public event Action<double>? ValueChanged;
+    public event Action<double>? ValueCommitted;
+
+    public double Value => _value;
+
+    public FluentSlider(double min, double max, double value, double width = 220)
+    {
+        var t = Theme.Current;
+        _min = min; _max = max; _value = Math.Clamp(value, min, max);
+        Width = width;
+        Height = 32;
+        Background = Brushes.Transparent; // 全体をつかめるように
+        Cursor = Cursors.Hand;
+
+        var track = new Border { Height = 4, CornerRadius = new CornerRadius(2), Background = t.IsDark ? new SolidColorBrush(Color.FromArgb(0x8B, 255, 255, 255)) : new SolidColorBrush(Color.FromArgb(0x72, 0, 0, 0)), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 10, 0) };
+        _fill = new Border { Height = 4, CornerRadius = new CornerRadius(2), Background = t.AccentBrush, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+        _dot = new Ellipse { Width = 12, Height = 12, Fill = t.AccentBrush };
+        _thumb = new Grid { Width = 20, Height = 20 };
+        _thumb.Children.Add(new Ellipse { Fill = t.SolidBackground, Stroke = t.ControlBorder, StrokeThickness = 1 });
+        _thumb.Children.Add(_dot);
+        _canvas = new Canvas { IsHitTestVisible = false };
+        _canvas.Children.Add(_thumb);
+        Children.Add(track);
+        Children.Add(_fill);
+        Children.Add(_canvas);
+
+        MouseLeftButtonDown += (_, e) => { CaptureMouse(); SetFromMouse(e); _dot.Width = _dot.Height = 10; e.Handled = true; };
+        MouseMove += (_, e) => { if (IsMouseCaptured) SetFromMouse(e); };
+        MouseLeftButtonUp += (_, _) => { if (!IsMouseCaptured) return; ReleaseMouseCapture(); _dot.Width = _dot.Height = 12; ValueCommitted?.Invoke(_value); };
+        MouseEnter += (_, _) => { if (!IsMouseCaptured) _dot.Width = _dot.Height = 14; };
+        MouseLeave += (_, _) => { if (!IsMouseCaptured) _dot.Width = _dot.Height = 12; };
+        Focusable = true;
+        KeyDown += (_, e) =>
+        {
+            double step = (_max - _min) / 20;
+            if (e.Key is Key.Left or Key.Down) { Set(_value - step); ValueCommitted?.Invoke(_value); e.Handled = true; }
+            else if (e.Key is Key.Right or Key.Up) { Set(_value + step); ValueCommitted?.Invoke(_value); e.Handled = true; }
+        };
+        SizeChanged += (_, _) => Layout();
+        Loaded += (_, _) => Layout();
+    }
+
+    private void SetFromMouse(MouseEventArgs e)
+    {
+        double usable = Math.Max(1, ActualWidth - 20);
+        double ratio = Math.Clamp((e.GetPosition(this).X - 10) / usable, 0, 1);
+        Set(_min + ratio * (_max - _min));
+    }
+
+    private void Set(double v)
+    {
+        v = Math.Round(Math.Clamp(v, _min, _max));
+        if (v == _value) return;
+        _value = v;
+        Layout();
+        ValueChanged?.Invoke(v);
+    }
+
+    private void Layout()
+    {
+        double usable = Math.Max(1, ActualWidth - 20);
+        double x = (_value - _min) / (_max - _min) * usable;
+        _fill.Width = Math.Max(0, x);
+        Canvas.SetLeft(_thumb, x);
+        Canvas.SetTop(_thumb, (ActualHeight - 20) / 2);
     }
 }

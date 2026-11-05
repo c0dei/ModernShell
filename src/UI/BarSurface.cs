@@ -52,7 +52,7 @@ public sealed class BarSurface : Window
         long ex = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE);
         // TOOLWINDOW: Alt+Tab に出さない / NOACTIVATE: クリックしても前面ウィンドウを奪わない（最小化トグル判定に必須）
         Win32.SetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE, (IntPtr)(ex | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_NOACTIVATE));
-        Backdrop.Apply(this, settings.Backdrop, settings.BackdropEngine, Theme.Current, alwaysInactive: true);
+        Backdrop.Apply(this, settings.Backdrop, settings.BackdropEngine, Theme.Current, alwaysInactive: true, tint: settings.TaskbarOpacity / 100.0);
         HwndSource.FromHwnd(hwnd)!.AddHook(WndProc);
 
         SizeChanged += (_, _) => ContentSizeChanged?.Invoke();

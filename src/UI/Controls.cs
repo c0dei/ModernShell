@@ -6,6 +6,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using ModernShell.Core;
 
 namespace ModernShell.UI;
 
@@ -218,21 +219,21 @@ public static class Flyout
             }
             if (spec.IsHeader)
             {
-                var h = UiKit.Label(spec.Text, 12, t.TextSecondary, FontWeights.SemiBold);
+                var h = UiKit.Label(spec.Text, Math.Max(10, (Settings.Current?.MenuFontSize ?? 14) - 2), t.TextSecondary, FontWeights.SemiBold);
                 h.Margin = new Thickness(12, 8, 12, 4);
                 panel.Children.Add(h);
                 continue;
             }
-            // サブメニュー（Windows 標準の右クリックメニュー）は、OS の従来型メニューと同じく 12px・詰めた行間にする。
-            // 1 段目（ジャンプリスト等）は Windows 11 のタスクバーのメニューと同じ 14px
-            bool compact = parent != null;
-            var row = new Grid { Margin = compact ? new Thickness(10, 5, 18, 5) : new Thickness(12, 8, 20, 8) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 26 : 28) });
+            // 文字サイズは設定の「メニューの文字サイズ」（1 段目もサブメニューも同じ）。行の高さもそれに合わせる
+            double fs = Math.Clamp(Settings.Current?.MenuFontSize ?? 14, 10, 20);
+            double pad = Math.Round(fs * 0.55);
+            var row = new Grid { Margin = new Thickness(fs - 2, pad, fs + 6, pad) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(fs * 2) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            FrameworkElement g = spec.Icon != null ? UiKit.Icon(spec.Icon, 16) : UiKit.Glyph(spec.Glyph, 14);
+            FrameworkElement g = spec.Icon != null ? UiKit.Icon(spec.Icon, fs + 2) : UiKit.Glyph(spec.Glyph, fs);
             g.HorizontalAlignment = HorizontalAlignment.Left;
             row.Children.Add(g);
-            var l = UiKit.Label(spec.Text, compact ? 12 : 14, null, spec.IsDefault ? FontWeights.SemiBold : FontWeights.Normal);
+            var l = UiKit.Label(spec.Text, fs, null, spec.IsDefault ? FontWeights.SemiBold : FontWeights.Normal);
             Grid.SetColumn(l, 1);
             row.Children.Add(l);
             if (spec.Children != null)

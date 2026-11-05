@@ -12,6 +12,7 @@
     <AssemblyName>ModernShell</AssemblyName>
     <StartupObject>ModernShell.Program</StartupObject>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>assets\ModernShell.ico</ApplicationIcon>
     <Version>0.2.0</Version>
     <!-- Linux/macOS からのクロスビルドも可能にする -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
