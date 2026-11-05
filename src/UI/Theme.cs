@@ -28,6 +28,33 @@ public sealed class Theme
     public Color SolidColor { get; init; }
     public double Radius { get; init; } = 8;
 
+    // ---- Windows 11 (WinUI) のコントロール配色 ----
+    private static SolidColorBrush F(byte a, byte r, byte g, byte b) { var x = new SolidColorBrush(Color.FromArgb(a, r, g, b)); x.Freeze(); return x; }
+    /// <summary>ボタン/ドロップダウンの地の色（通常・ホバー・押下）。</summary>
+    public Brush ControlFill => IsDark ? F(0x0F, 255, 255, 255) : F(0xB3, 255, 255, 255);
+    public Brush ControlFillHover => IsDark ? F(0x15, 255, 255, 255) : F(0x80, 0xF9, 0xF9, 0xF9);
+    public Brush ControlFillPressed => IsDark ? F(0x08, 255, 255, 255) : F(0x4D, 0xF9, 0xF9, 0xF9);
+    /// <summary>コントロールの枠。WinUI と同じく下端だけ色を変えて立体感を出す。</summary>
+    public Brush ControlBorder
+    {
+        get
+        {
+            var top = IsDark ? Color.FromArgb(0x18, 255, 255, 255) : Color.FromArgb(0x0F, 0, 0, 0);
+            var bottom = IsDark ? Color.FromArgb(0x12, 255, 255, 255) : Color.FromArgb(0x29, 0, 0, 0);
+            var b = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1), MappingMode = BrushMappingMode.RelativeToBoundingBox };
+            b.GradientStops.Add(new GradientStop(top, 0));
+            b.GradientStops.Add(new GradientStop(top, 0.92));
+            b.GradientStops.Add(new GradientStop(bottom, 0.92));
+            b.GradientStops.Add(new GradientStop(bottom, 1));
+            b.Freeze();
+            return b;
+        }
+    }
+    /// <summary>メニュー/ドロップダウン一覧の Acrylic の地の色。</summary>
+    public Color FlyoutColor => IsDark ? Color.FromRgb(0x2C, 0x2C, 0x2C) : Color.FromRgb(0xFC, 0xFC, 0xFC);
+    /// <summary>ポップアップに Acrylic を使うか（背景効果「なし」のときは単色）。</summary>
+    public static bool TranslucentPopups { get; private set; } = true;
+
     public static readonly FontFamily IconFont = new("Segoe Fluent Icons, Segoe MDL2 Assets");
     public static readonly FontFamily TextFont = new("Segoe UI Variable Text, Segoe UI, Yu Gothic UI");
 
@@ -36,6 +63,7 @@ public sealed class Theme
 
     public static void Apply(Settings s)
     {
+        TranslucentPopups = s.Backdrop != BackdropKind.Solid;
         Current = Build(s);
         Changed?.Invoke();
     }
@@ -184,7 +212,7 @@ public static class Backdrop
         }
     }
 
-    private enum AccentState { Disabled = 0, BlurBehind = 3, AcrylicBlurBehind = 4 }
+    internal enum AccentState { Disabled = 0, BlurBehind = 3, AcrylicBlurBehind = 4 }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct AccentPolicy { public AccentState State; public int Flags; public uint GradientColor; public int AnimationId; }
@@ -195,7 +223,7 @@ public static class Backdrop
     [DllImport("user32.dll")]
     private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
 
-    private static void SetAccent(IntPtr hwnd, AccentState state, uint abgr)
+    internal static void SetAccent(IntPtr hwnd, AccentState state, uint abgr)
     {
         var policy = new AccentPolicy { State = state, Flags = 2, GradientColor = abgr };
         int size = Marshal.SizeOf<AccentPolicy>();

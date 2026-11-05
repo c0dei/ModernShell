@@ -191,49 +191,33 @@ public static class Flyout
     {
         var t = Theme.Current;
         var panel = new StackPanel { Margin = new Thickness(4) };
-        var popup = new Popup
-        {
-            AllowsTransparency = true,
-            StaysOpen = false,
-            Placement = placement,
-            PlacementTarget = target,
-            PopupAnimation = PopupAnimation.Fade,
-        };
+        var popup = FluentSurface.Create(panel, target, placement);
 
         foreach (var spec in items)
         {
             if (spec.IsSeparator)
             {
-                panel.Children.Add(new Border { Height = 1, Background = t.Stroke, Margin = new Thickness(4, 4, 4, 4) });
+                panel.Children.Add(new Border { Height = 1, Background = t.Stroke, Margin = new Thickness(-4, 3, -4, 3) });
                 continue;
             }
-            var row = new Grid { Margin = new Thickness(10, 7, 16, 7) };
+            var row = new Grid { Margin = new Thickness(12, 8, 20, 8) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var g = UiKit.Glyph(spec.Glyph, 14);
             g.HorizontalAlignment = HorizontalAlignment.Left;
             row.Children.Add(g);
-            var l = UiKit.Label(spec.Text, 13);
+            var l = UiKit.Label(spec.Text, 14);
             Grid.SetColumn(l, 1);
             row.Children.Add(l);
-            var tile = new Tile { Child = row, MinWidth = 200 };
+            var tile = new Tile { Child = row, MinWidth = 220, Margin = new Thickness(0, 1, 0, 1) };
             var action = spec.Action;
             tile.Click += _ => { popup.IsOpen = false; action(); };
             panel.Children.Add(tile);
         }
 
-        popup.Child = new Border
-        {
-            Background = t.SolidBackground,
-            BorderBrush = t.Stroke,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(t.Radius),
-            Child = panel,
-            Margin = new Thickness(8),
-            Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 16, ShadowDepth = 2, Opacity = 0.3 },
-        };
         popup.IsOpen = true;
         ToggleGuard(popup, target);
+        FluentSurface.AnimateOpen(panel, placement == PlacementMode.Top ? 1 : 0);
         if (panel.Children.Count > 0 && panel.Children[0] is Tile first) first.Focus();
         return popup;
     }

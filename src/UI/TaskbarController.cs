@@ -510,16 +510,7 @@ public sealed class TaskbarController : IDisposable
         stack.Children.Add(_overflowHint);
         stack.Children.Add(edit);
 
-        _overflowPopup = new Popup
-        {
-            AllowsTransparency = true, StaysOpen = false, PlacementTarget = anchor, Placement = FlyoutPlacement, PopupAnimation = PopupAnimation.Fade,
-            Child = new Border
-            {
-                Background = t.SolidBackground, BorderBrush = t.Stroke, BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(t.Radius), Margin = new Thickness(8), Child = stack,
-                Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 16, ShadowDepth = 2, Opacity = 0.3 },
-            },
-        };
+        _overflowPopup = FluentSurface.Create(stack, anchor, FlyoutPlacement);
         _overflowPopup.Closed += (_, _) => { if (_trayEditMode) { _trayEditMode = false; RebuildTray(); } };
         FillOverflow();
         _overflowPopup.IsOpen = true;

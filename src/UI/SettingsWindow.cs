@@ -397,23 +397,8 @@ public sealed class SettingsWindow : Window
 
     private Border DropDownRow(string title, string desc, (string value, string label)[] options, string current, Action<string> set, bool enabled = true)
     {
-        var label = options.FirstOrDefault(o => o.value == current).label ?? options[0].label;
-        var text = UiKit.Label(label, 14);
-        var chevron = UiKit.Glyph("", 10);
-        chevron.Margin = new Thickness(16, 0, 0, 0);
-        var g = new Grid { MinWidth = 160 };
-        g.Children.Add(text);
-        chevron.HorizontalAlignment = HorizontalAlignment.Right;
-        g.Children.Add(chevron);
-        var button = new Tile
-        {
-            Background = T.SolidBackground, BorderBrush = T.Stroke, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4), Padding = new Thickness(11, 5, 11, 6), Child = g,
-        };
-        button.MouseLeave += (_, _) => { button.Background = T.SolidBackground; button.BorderBrush = T.Stroke; };
-        button.Click += b => Flyout.Show(b, options.Select(o =>
-            new MenuItemSpec(o.value == current ? "" : "", o.label, () => { set(o.value); Commit(); })), PlacementMode.Bottom);
-        return Card(Texts(title, desc), button, enabled);
+        var combo = new FluentComboBox(options, current, v => { set(v); Commit(); });
+        return Card(Texts(title, desc), combo, enabled);
     }
 
     private Border TextRow(string title, string desc, string value, Action<string> set, bool enabled = true)
@@ -431,14 +416,18 @@ public sealed class SettingsWindow : Window
 
     private Border ButtonRow(string title, string desc, string buttonText, Action onClick, bool accent = false)
     {
+        // WinUI のボタン: 標準は半透明の地 + 下端の濃い枠、アクセントはアクセント色の地
+        var normal = accent ? T.AccentBrush : T.ControlFill;
         var b = new Tile
         {
-            Padding = new Thickness(16, 5, 16, 6), CornerRadius = new CornerRadius(4),
-            Background = accent ? T.AccentBrush : T.SolidBackground, BorderBrush = T.Stroke, BorderThickness = new Thickness(1),
+            Padding = new Thickness(16, 5, 16, 6), CornerRadius = new CornerRadius(4), MinWidth = 120,
+            Background = normal, BorderBrush = T.ControlBorder, BorderThickness = new Thickness(1),
             Child = UiKit.Label(buttonText, 14, accent ? T.OnAccent : T.Text),
         };
-        var normal = b.Background;
-        b.MouseLeave += (_, _) => { b.Background = normal; b.BorderBrush = T.Stroke; };
+        ((TextBlock)b.Child).HorizontalAlignment = HorizontalAlignment.Center;
+        b.MouseEnter += (_, _) => { b.Background = accent ? normal : T.ControlFillHover; if (accent) b.Opacity = 0.9; };
+        b.MouseLeave += (_, _) => { b.Background = normal; b.BorderBrush = T.ControlBorder; b.Opacity = 1; };
+        b.PreviewMouseLeftButtonDown += (_, _) => { if (!accent) b.Background = T.ControlFillPressed; else b.Opacity = 0.8; };
         b.Click += _ => onClick();
         return Card(Texts(title, desc), b);
     }
