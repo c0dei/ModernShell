@@ -40,6 +40,13 @@ public sealed class LiveReorder
 
     public bool IsDragging => _drag != null;
 
+    /// <summary>
+    /// 並びと直角の方向（横並びなら上下）に大きく引き出されたときに呼ばれる。
+    /// 設定すると、その時点で並べ替えを取り消して呼び出し側に引き渡す（例: トレイアイコンを「^」の中へしまう）。
+    /// </summary>
+    public Action<FrameworkElement>? DragOut { get; set; }
+    private const double DragOutDistance = 28;
+
     /// <summary>直前の操作がドラッグだったか（クリック処理側で確認し、true ならクリックとして扱わない）。読むとリセット。</summary>
     public bool ConsumeDragged()
     {
@@ -94,6 +101,14 @@ public sealed class LiveReorder
         if (_drag == null) return;
         var d = e.GetPosition(_panel) - _start;
         double delta = _horizontal ? d.X : d.Y;
+        double across = _horizontal ? d.Y : d.X;
+        if (DragOut != null && Math.Abs(across) > DragOutDistance)
+        {
+            var item = _drag;
+            Cancel();
+            DragOut(item);
+            return;
+        }
         Set(_drag, delta, animate: false);
 
         // つかんだ要素の中心が、どの要素の半分を越えたかで差し込み先を決める
@@ -128,6 +143,21 @@ public sealed class LiveReorder
             tt.BeginAnimation(prop, null);
             tt.SetValue(prop, value);
         }
+    }
+
+    /// <summary>並べ替えを取り消して全部元の位置へ戻す。</summary>
+    private void Cancel()
+    {
+        var item = _drag;
+        if (item == null) return;
+        _drag = null;
+        _pending = null;
+        _justDragged = true;
+        item.ReleaseMouseCapture();
+        item.Effect = null;
+        item.Opacity = 1;
+        Panel.SetZIndex(item, 0);
+        foreach (var el in _items) Set(el, 0, animate: true);
     }
 
     private void End()

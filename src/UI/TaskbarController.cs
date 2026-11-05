@@ -92,7 +92,7 @@ public sealed class TaskbarController : IDisposable
 
         _catalog.Changed += OnCatalogChanged;
         _settings.Changed += OnSettingsChanged;
-        Theme.Changed += OnSettingsChanged;
+        Theme.Changed += OnThemeChanged;
         _reservation.PositionChanged += Arrange;
         _reservation.FullscreenChanged += _ => Arrange();
         NetworkChange.NetworkAvailabilityChanged += OnNetworkChanged;
@@ -128,7 +128,23 @@ public sealed class TaskbarController : IDisposable
 
     private void OnPinsChanged() => _dispatcher.BeginInvoke(() => { if (PinsFromWindows) Kick(_appsDebounce); });
     private void OnCatalogChanged() => _dispatcher.BeginInvoke(() => Kick(_appsDebounce));
-    private void OnSettingsChanged() => _dispatcher.BeginInvoke(() => { if (!_disposed) Rebuild(); });
+    /// <summary>
+    /// 設定が保存されるたびに全部作り直すと、スタートのピン留め変更などでもタスクバーがちらつく。
+    /// 見た目に関わる設定が変わったときだけ作り直し、それ以外はボタンの並びだけ更新する。
+    /// </summary>
+    private void OnSettingsChanged() => _dispatcher.BeginInvoke(() =>
+    {
+        if (_disposed) return;
+        if (LayoutKey() != _layoutKey) Rebuild();
+        else { Kick(_appsDebounce); Kick(_trayDebounce); }
+    });
+    private void OnThemeChanged() => _dispatcher.BeginInvoke(() => { if (!_disposed) Rebuild(); });
+
+    private string _layoutKey = "";
+    private string LayoutKey() => string.Join("|", _settings.UseCustomTaskbar, _settings.TaskbarStyle, _settings.StartButtonPosition,
+        _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarHeight, _settings.TaskbarIconSize, _settings.IslandMargin,
+        _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds, _settings.Backdrop, _settings.BackdropEngine,
+        _settings.MagnifyOnHover, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e) => _dispatcher.BeginInvoke(UpdateStatus);
 
     // ------------------------------------------------------------------
@@ -136,6 +152,7 @@ public sealed class TaskbarController : IDisposable
 
     public void Rebuild()
     {
+        _layoutKey = LayoutKey();
         foreach (var s in _surfaces) s.Close();
         _surfaces.Clear();
 
@@ -215,7 +232,8 @@ public sealed class TaskbarController : IDisposable
     private static FrameworkElement Island(FrameworkElement content)
     {
         content.VerticalAlignment = VerticalAlignment.Center;
-        content.Margin = new Thickness(4, 0, 4, 0);
+        // 島の両端に少し余白を取り、右クリック（タスク マネージャー等）できる場所を確保する
+        content.Margin = new Thickness(8, 0, 8, 0);
         return content;
     }
 
@@ -319,6 +337,7 @@ public sealed class TaskbarController : IDisposable
 
         _trayIcons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         p.Children.Add(_trayIcons);
+        MakeTrayDropTarget(p);
 
         _network = UiKit.Glyph("", 15);
         _battery = UiKit.Glyph("", 15);
@@ -368,7 +387,11 @@ public sealed class TaskbarController : IDisposable
         if (_trayIcons == null || _overflowButton == null) return;
         _trayIcons.Children.Clear();
         var pinned = Icons(_shell.Tray?.PinnedIcons).OrderBy(i => i.PinOrder).ToList();
-        var reorder = new LiveReorder(_trayIcons, Orientation.Horizontal, (from, to) => MoveTrayIcon(pinned, from, to));
+        var reorder = new LiveReorder(_trayIcons, Orientation.Horizontal, (from, to) => MoveTrayIcon(pinned, from, to))
+        {
+            // 上へ引き出すと「^」の一覧が開き、そこへ落とせばしまえる（Windows と同じ）
+            DragOut = el => { if (el.Tag is ManagedShell.WindowsTray.NotifyIcon ni) StartTrayDrag(ni, el); },
+        };
         foreach (var icon in pinned)
         {
             Watch(icon);
@@ -379,7 +402,7 @@ public sealed class TaskbarController : IDisposable
     }
 
     /// <summary>トレイアイコン 1 個。マウス操作はそのままアプリへ転送する（右クリックメニューもアプリ自身が出す）。</summary>
-    private Tile TrayIconTile(ManagedShell.WindowsTray.NotifyIcon icon, bool editable, LiveReorder? reorder = null)
+    private Tile TrayIconTile(ManagedShell.WindowsTray.NotifyIcon icon, bool editable, LiveReorder? reorder = null, bool dragToBar = false)
     {
         var img = UiKit.Icon(icon.Icon, 16);
         var grid = new Grid();
@@ -392,7 +415,7 @@ public sealed class TaskbarController : IDisposable
                 Background = icon.IsPinned ? Theme.Current.AccentBrush : Theme.Current.TextSecondary, Margin = new Thickness(0, -4, -6, 0),
             });
         }
-        var tile = new Tile { Width = Compact ? 26 : 32, Height = Math.Min(36, TileH), Margin = new Thickness(1, 0, 1, 0), Child = grid, ToolTip = icon.Title };
+        var tile = new Tile { Width = Compact ? 26 : 32, Height = Math.Min(36, TileH), Margin = new Thickness(1, 0, 1, 0), Child = grid, ToolTip = icon.Title, Tag = icon };
 
         if (editable && _trayEditMode)
         {
@@ -413,18 +436,42 @@ public sealed class TaskbarController : IDisposable
         // 並べ替え可能なアイコンは、左ボタンの押下をすぐにはアプリへ送らず、離したときに「ドラッグでなかった」場合だけ
         // 押下 → 解放の順に送る（ドラッグ中にアプリのメニューが開かないように）
         reorder?.Add(tile);
+        bool deferLeft = reorder != null || dragToBar;
+        Point? downAt = null;
+        bool draggedOut = false;
         tile.PreviewMouseDown += (_, e) =>
         {
             SetPlacement(icon, tile);
-            if (reorder != null && e.ChangedButton == MouseButton.Left) return;
+            if (deferLeft && e.ChangedButton == MouseButton.Left)
+            {
+                downAt = e.GetPosition(tile);
+                draggedOut = false;
+                if (dragToBar) e.Handled = true;
+                return;
+            }
             icon.IconMouseDown(e.ChangedButton, MouseHelper.GetCursorPositionParam(), dbl);
             e.Handled = true;
         };
+        if (dragToBar)
+        {
+            // 「^」の中のアイコンをタスクバーへドラッグ → 常に表示（Windows と同じ）
+            tile.PreviewMouseMove += (_, e) =>
+            {
+                if (downAt is not { } p0 || e.LeftButton != MouseButtonState.Pressed) return;
+                var d = e.GetPosition(tile) - p0;
+                if (Math.Abs(d.X) < 6 && Math.Abs(d.Y) < 6) return;
+                downAt = null;
+                draggedOut = true;
+                StartTrayDrag(icon, tile);
+            };
+        }
         tile.PreviewMouseUp += (_, e) =>
         {
-            if (reorder != null && e.ChangedButton == MouseButton.Left)
+            if (deferLeft && e.ChangedButton == MouseButton.Left)
             {
-                if (reorder.IsDragging) return; // 並べ替えの終了は LiveReorder が処理する
+                downAt = null;
+                if (draggedOut || reorder?.IsDragging == true) return; // ドラッグだった
+                if (reorder?.ConsumeDragged() == true) return;
                 SetPlacement(icon, tile);
                 icon.IconMouseDown(MouseButton.Left, MouseHelper.GetCursorPositionParam(), dbl);
             }
@@ -434,6 +481,108 @@ public sealed class TaskbarController : IDisposable
             e.Handled = true;
         };
         return tile;
+    }
+
+    // ---- トレイアイコンのドラッグで「常に表示」⇔「^ の中にしまう」 ----
+
+    /// <summary>トレイアイコンのドラッグを始める。「^」の一覧を開いておき、そこへ落とせばしまう、タスクバーへ落とせば常に表示。</summary>
+    private void StartTrayDrag(ManagedShell.WindowsTray.NotifyIcon icon, FrameworkElement source)
+    {
+        if (_overflowButton == null) return;
+        _overflowButton.Visibility = Visibility.Visible;
+        if (_overflowPopup?.IsOpen != true) ShowOverflow(_overflowButton);
+        if (_overflowPopup != null) _overflowPopup.StaysOpen = true; // ドラッグ中に閉じないように
+        try { DragDrop.DoDragDrop(source, new DataObject("ModernShell.TrayIcon", icon), DragDropEffects.Move); }
+        catch (Exception ex) { Log.Error("tray drag", ex); }
+        if (_overflowPopup?.IsOpen == true) _overflowPopup.StaysOpen = _trayEditMode;
+        ClearTrayDropLine();
+    }
+
+    private static ManagedShell.WindowsTray.NotifyIcon? DraggedIcon(DragEventArgs e) =>
+        e.Data.GetData("ModernShell.TrayIcon") as ManagedShell.WindowsTray.NotifyIcon;
+
+    /// <summary>タスクバー側（トレイ部分）をドロップ先にする。落とした位置に「常に表示」で入れる。</summary>
+    private void MakeTrayDropTarget(Panel trayGroup)
+    {
+        trayGroup.AllowDrop = true;
+        if (trayGroup.Background == null) trayGroup.Background = Brushes.Transparent;
+        trayGroup.DragOver += (_, e) =>
+        {
+            if (DraggedIcon(e) is not { } icon || _trayIcons == null) { e.Effects = DragDropEffects.None; e.Handled = true; return; }
+            e.Effects = DragDropEffects.Move;
+            ShowTrayDropLine(TrayInsertIndex(e));
+            e.Handled = true;
+        };
+        trayGroup.DragLeave += (_, _) => ClearTrayDropLine();
+        trayGroup.Drop += (_, e) =>
+        {
+            ClearTrayDropLine();
+            if (DraggedIcon(e) is not { } icon || _trayIcons == null) return;
+            var pinned = _trayIcons.Children.OfType<FrameworkElement>().Select(t => t.Tag).OfType<ManagedShell.WindowsTray.NotifyIcon>().ToList();
+            int index = TrayInsertIndex(e);
+            int position = index < pinned.Count ? pinned[index].PinOrder : (_shell.Tray?.PinnedNotifyIcons.Length ?? 0);
+            icon.Pin(position); // しまってあったアイコンは常に表示に、常に表示のアイコンはその位置へ移動
+            _shell.SavePinnedTray(_settings);
+            RebuildTray();
+            if (_overflowPopup?.IsOpen == true) FillOverflow();
+            e.Handled = true;
+        };
+    }
+
+    /// <summary>カーソル位置が、常に表示しているアイコンの何番目の前にあたるか。</summary>
+    private int TrayInsertIndex(DragEventArgs e)
+    {
+        if (_trayIcons == null) return 0;
+        int i = 0;
+        foreach (FrameworkElement el in _trayIcons.Children)
+        {
+            if (e.GetPosition(el).X < el.ActualWidth / 2) return i;
+            i++;
+        }
+        return i;
+    }
+
+    private void ShowTrayDropLine(int index)
+    {
+        if (_trayIcons == null) return;
+        var tiles = _trayIcons.Children.OfType<Tile>().ToList();
+        for (int i = 0; i < tiles.Count; i++)
+        {
+            bool before = i == index, after = index == tiles.Count && i == tiles.Count - 1;
+            tiles[i].BorderBrush = before || after ? Theme.Current.AccentBrush : Brushes.Transparent;
+            tiles[i].BorderThickness = before ? new Thickness(3, 0, 0, 0) : after ? new Thickness(0, 0, 3, 0) : new Thickness(1);
+        }
+    }
+
+    private void ClearTrayDropLine()
+    {
+        if (_trayIcons == null) return;
+        foreach (var t in _trayIcons.Children.OfType<Tile>()) { t.BorderBrush = Brushes.Transparent; t.BorderThickness = new Thickness(1); }
+    }
+
+    /// <summary>「^」の一覧をドロップ先にする。落としたアイコンは「^」の中にしまう。</summary>
+    private void MakeOverflowDropTarget(FrameworkElement area)
+    {
+        area.AllowDrop = true;
+        var normal = Brushes.Transparent;
+        area.DragOver += (_, e) =>
+        {
+            bool ok = DraggedIcon(e) is { IsPinned: true };
+            e.Effects = ok ? DragDropEffects.Move : DragDropEffects.None;
+            if (area is Panel p) p.Background = ok ? Theme.Current.Hover : normal;
+            e.Handled = true;
+        };
+        area.DragLeave += (_, _) => { if (area is Panel p) p.Background = normal; };
+        area.Drop += (_, e) =>
+        {
+            if (area is Panel p) p.Background = normal;
+            if (DraggedIcon(e) is not { IsPinned: true } icon) return;
+            icon.Unpin();
+            _shell.SavePinnedTray(_settings);
+            RebuildTray();
+            FillOverflow();
+            e.Handled = true;
+        };
     }
 
     /// <summary>常に表示するトレイアイコンの並べ替えを確定する。</summary>
@@ -505,7 +654,8 @@ public sealed class TaskbarController : IDisposable
         };
         UpdateEdit();
 
-        var stack = new StackPanel();
+        var stack = new StackPanel { Background = Brushes.Transparent };
+        MakeOverflowDropTarget(stack);
         stack.Children.Add(_overflowPanel);
         stack.Children.Add(_overflowHint);
         stack.Children.Add(edit);
@@ -564,7 +714,7 @@ public sealed class TaskbarController : IDisposable
         foreach (var icon in Icons(_shell.Tray?.UnpinnedIcons))
         {
             Watch(icon);
-            all.Children.Add(TrayIconTile(icon, editable: true));
+            all.Children.Add(TrayIconTile(icon, editable: true, dragToBar: true));
         }
         if (all.Children.Count == 0)
             all.Children.Add(new TextBlock { Text = "アイコンはありません", Margin = new Thickness(8), Foreground = t.TextSecondary });
@@ -1004,7 +1154,7 @@ public sealed class TaskbarController : IDisposable
         _windowsPins.Dispose();
         _catalog.Changed -= OnCatalogChanged;
         _settings.Changed -= OnSettingsChanged;
-        Theme.Changed -= OnSettingsChanged;
+        Theme.Changed -= OnThemeChanged;
         NetworkChange.NetworkAvailabilityChanged -= OnNetworkChanged;
         if (_overflowPopup != null) _overflowPopup.IsOpen = false;
         foreach (var s in _surfaces) s.Close();

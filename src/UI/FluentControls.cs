@@ -41,6 +41,9 @@ public static class FluentSurface
                 Child = content,
             },
         };
+        // タスクバー等に重ならないよう、上下に出すときは少し離す（Windows のメニューと同じくらいの間隔）
+        if (placement == PlacementMode.Top) popup.VerticalOffset = -8;
+        else if (placement == PlacementMode.Bottom) popup.VerticalOffset = 8;
         popup.Opened += (_, _) => { _openList.Add(popup); ApplyBackdrop(popup); };
         popup.Closed += (_, _) => _openList.Remove(popup);
         return popup;
