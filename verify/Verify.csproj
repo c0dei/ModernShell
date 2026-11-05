@@ -1,0 +1,25 @@
+<!--
+  Linux 上でのコンパイル検証専用（WindowsDesktop SDK が無い環境向け）。
+  Windows では ../ModernShell.csproj を使うこと。
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <NoWarn>CA1416</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../src/**/*.cs" />
+    <PackageDownload Include="Microsoft.WindowsDesktop.App.Ref" Version="[8.0.11]" />
+  </ItemGroup>
+  <Target Name="AddDesktopRefs" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <!-- NETCore.App 側の WindowsBase ファサードを外して本物を使う -->
+      <Reference Remove="@(Reference)" Condition="'%(Filename)' == 'WindowsBase'" />
+      <Reference Include="$(NuGetPackageRoot)microsoft.windowsdesktop.app.ref/8.0.11/ref/net8.0/*.dll" />
+    </ItemGroup>
+  </Target>
+</Project>

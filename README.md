@@ -1,0 +1,116 @@
+# ModernShell
+
+Start11 のような **モダンなスタートメニュー / タスクバー置き換え** を、
+**explorer.exe に一切コードを注入しない** 方式で実現する Windows 11 / 10 向けアプリです。
+
+> ExplorerPatcher / Windhawk はどちらも explorer.exe のプロセス内にコードを入れて（DLL 注入・関数フック）
+> 純正 UI を書き換えます。Windows Update で内部実装が変わると、それが explorer のクラッシュに直結します。
+> ModernShell は **別プロセスで自前の UI を描画し、公開 API だけで純正 UI を「横取り・非表示」にする** ため、
+> ModernShell が落ちても explorer は落ちません。
+
+## 機能 (v0.1)
+
+### スタートメニュー
+- Win キー単押し / 純正スタートボタンのクリックを横取りして独自スタートを表示（Win+E などの組み合わせはそのまま）
+- Acrylic / Mica 背景、角丸、ライト/ダーク自動追従、アクセントカラー
+- ピン留め（右クリックでピン留め/解除、ドラッグ＆ドロップで並べ替え、先頭へ移動）
+- すべてのアプリ（A–Z / 五十音の行でグループ化。ストアアプリ含む `shell:AppsFolder` を列挙）
+- インクリメンタル検索（前方一致・単語先頭・部分一致・頭文字、ひらがな/カタカナ・全角/半角を同一視）
+  ↑↓ で選択、Enter で起動、Ctrl+Shift+Enter で管理者として起動、コマンド実行 / Web 検索
+- 管理者として実行、ファイルの場所を開く
+- 電源メニュー（ロック / スリープ / サインアウト / 再起動 / シャットダウン）
+
+### タスクバー（任意・既定 OFF）
+- 純正タスクバーを隠し、AppBar として独自タスクバーを表示（作業領域も正しく確保）
+- 中央 / 左寄せ、上 / 下、高さ変更
+- ピン留め＋実行中ウィンドウ、同一アプリのグループ化（複数ウィンドウは一覧ポップアップ）
+- クリックで前面化 / 最小化、中クリックで新規起動、右クリックでピン留め・閉じる
+- 全画面アプリ中は最前面を解除
+- 時計（クリックで通知センター）、クイック設定ボタン、デスクトップの表示
+
+### 安全装置
+- 終了時・例外時・次回起動時に純正タスクバーを自動で元に戻す
+- 万一隠れたままになったら `ModernShell.exe --restore`
+- explorer が再起動しても (`TaskbarCreated`) 状態を再適用
+- スリープ復帰 / ロック解除時にキーボードフックを付け直す
+
+## ビルド
+
+Windows + .NET 8 SDK:
+
+```bash
+dotnet build ModernShell.csproj -c Release
+```
+
+単一 exe にする場合:
+
+```bash
+dotnet publish ModernShell.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish
+```
+
+GitHub に push すると `.github/workflows/build.yml` が windows-latest でビルドし、成果物（exe）を Artifacts に置きます。
+
+設定ファイル: `%AppData%\ModernShell\settings.json` / ログ: `%AppData%\ModernShell\modernshell.log`
+
+## アーキテクチャ
+
+```
+src/
+  App.cs                  エントリポイント、単一インスタンス、各部品の配線、例外/復元処理
+  Native/Win32.cs         P/Invoke 定義
+  Core/
+    Hooks.cs              WH_KEYBOARD_LL / WH_MOUSE_LL（Win キー・スタートボタン横取り）
+    NativeTaskbar.cs      純正タスクバーの非表示/復元、UIA でスタートボタン位置取得
+    AppCatalog.cs         shell:AppsFolder 列挙（デスクトップ + ストアアプリ）、起動
+    WindowTracker.cs      SetWinEventHook(OUTOFCONTEXT) でトップレベルウィンドウ追跡
+    IconHelper.cs         IShellItemImageFactory でアルファ付き高解像度アイコン
+    SystemActions.cs      電源操作、Win+A/N/D 等の送出、スタートアップ登録
+    Settings.cs           JSON 設定、ログ
+  UI/
+    StartMenuWindow.cs    スタートメニュー
+    TaskbarWindow.cs      AppBar タスクバー
+    SettingsWindow.cs     設定画面
+    Theme.cs              配色・Mica/Acrylic 適用
+    Controls.cs           Tile（フラットボタン）、Flyout（モダンなコンテキストメニュー）
+verify/Verify.csproj      Linux 上でのコンパイル検証用（Windows では不要）
+```
+
+### 「注入しない」ための技術選択
+
+| やりたいこと | ModernShell の方法 | 注入型ツールの方法 |
+|---|---|---|
+| Win キーで独自スタート | 低レベルキーボードフック + マスクキー送出（AutoHotkey と同じ手法） | explorer 内の関数をフック |
+| 純正スタートボタンのクリック | UIA で位置取得 + 低レベルマウスフック | XAML ツリー改変 |
+| タスクバー置き換え | 純正を `ShowWindow(SW_HIDE)` + 自前 AppBar | explorer 内の描画を改変 |
+| ウィンドウ一覧 | `SetWinEventHook(WINEVENT_OUTOFCONTEXT)` | explorer 内部状態を参照 |
+
+低レベルフック (`WH_*_LL`) は DLL 注入を伴わず、自プロセスのメッセージループで呼ばれます。
+コールバックは軽量にして重い処理は Dispatcher に回しています（遅いと OS にフックを外されるため）。
+
+## 既知の制限 / ロードマップ
+
+- [ ] **通知領域（システムトレイ）アイコン**: 独自タスクバーではまだ表示されません。
+      純正タスクバーを使う既定モードなら問題ありません。
+      実装案: `Shell_TrayWnd` クラスの隠しウィンドウを自前で持ち `Shell_NotifyIcon` の WM_COPYDATA を受ける
+      （RetroBar / Cairo Shell 方式）。explorer と競合するため慎重に設計が必要
+- [ ] マルチモニター（現在はプライマリのみ）
+- [ ] ストアアプリのウィンドウ（ApplicationFrameHost）の AUMID 判定精度向上
+- [ ] ジャンプリスト / 最近使ったファイル（おすすめ）
+- [ ] タスクバーのドラッグ並べ替え、ホバー時のサムネイルプレビュー（`DwmRegisterThumbnail`）
+- [ ] スタートのフォルダ（グループ）、レイアウト切替（Win7 風 / Win10 風）
+- [ ] すべてのアプリの頭文字ジャンプ、仮想化による高速化
+- [ ] 検索: ファイル検索（Windows Search の OLE DB）、設定項目検索
+- [ ] インストーラ、自動更新
+
+## 動作確認のお願い（未検証ポイント）
+
+このコードは Linux 上で Windows 用参照アセンブリに対してコンパイル確認済み（エラー/警告 0）ですが、
+**実機 Windows での実行確認はまだ**です。特に以下は環境差が出やすいので確認してください:
+
+1. Win キー単押しで純正スタートが開かず、ModernShell のスタートだけが開くか
+2. 純正タスクバーのスタートボタンのクリック横取り（UIA で位置が取れているか）
+3. Acrylic / Mica 背景が透過して見えるか（真っ黒になる場合は設定で「Solid」に）
+4. 独自タスクバー ON/OFF 切替で作業領域が正しく戻るか
+5. 高 DPI（125%/150%）での位置・サイズ
+
+問題があれば `%AppData%\ModernShell\modernshell.log` を確認してください。
