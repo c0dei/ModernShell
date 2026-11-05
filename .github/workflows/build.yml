@@ -1,15 +1,63 @@
 name: build
-on: [push, pull_request, workflow_dispatch]
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']          # v0.1.0 のようなタグを push すると Release を作成
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write         # Release 作成に必要
+
 jobs:
   build:
     runs-on: windows-latest
+    strategy:
+      matrix:
+        rid: [win-x64, win-arm64]
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - run: dotnet publish ModernShell.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish
+
+      - name: Determine version
+        id: ver
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-ci.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ランタイム込みの単一 exe（.NET のインストール不要）
+      - name: Publish
+        shell: bash
+        run: >
+          dotnet publish ModernShell.csproj -c Release -r ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=none
+          -p:Version=${{ steps.ver.outputs.version }}
+          -o publish
+
+      - name: Rename
+        shell: bash
+        run: mv publish/ModernShell.exe "publish/ModernShell-${{ steps.ver.outputs.version }}-${{ matrix.rid }}.exe"
+
       - uses: actions/upload-artifact@v4
         with:
-          name: ModernShell-win-x64
-          path: publish/
+          name: ModernShell-${{ matrix.rid }}
+          path: publish/*.exe
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: publish/*.exe
+          generate_release_notes: true

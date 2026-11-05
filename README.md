@@ -58,7 +58,20 @@ dotnet build ModernShell.csproj -c Release
 dotnet publish ModernShell.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish
 ```
 
-GitHub に push すると `.github/workflows/build.yml` が windows-latest でビルドし、成果物（exe）を Artifacts に置きます。
+### GitHub Actions（自動ビルド / リリース）
+
+- `main` への push・PR ごとに windows-latest でビルドし、Actions の Artifacts に exe を置きます。
+- `v` から始まるタグを push すると、**Releases にランタイム込みの単一 exe（x64 / ARM64）を自動で添付**します。
+
+```bash
+git tag v0.1.0
+```
+
+```bash
+git push origin v0.1.0
+```
+
+exe は .NET ランタイム同梱なので、インストール不要でそのまま起動できます。
 
 設定ファイル: `%AppData%\ModernShell\settings.json` / ログ: `%AppData%\ModernShell\modernshell.log`
 
