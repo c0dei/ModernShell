@@ -111,7 +111,11 @@ public static class Program
         _themeKey = ThemeKey();
 
         _catalog = new AppCatalog();
-        _hooks = new InputHooks(app.Dispatcher) { InterceptWinKey = () => _settings.ReplaceStartMenu };
+        _hooks = new InputHooks(app.Dispatcher)
+        {
+            InterceptWinKey = () => _settings.ReplaceStartMenu,
+            InterceptStartButton = () => _settings.InterceptNativeStartButton,
+        };
 
         _start = new StartMenuWindow(_settings, _catalog) { AnchorProvider = StartAnchor };
         _start.OpenSettingsRequested += ShowSettings;
@@ -135,7 +139,7 @@ public static class Program
         // 純正スタートボタン位置の監視（純正タスクバー使用時のみ意味がある）
         _startButtonWatcher = NativeTaskbar.WatchStartButton(
             r => _hooks.NativeStartButtonRect = r,
-            () => _settings.ReplaceStartMenu && _settings.InterceptNativeStartButton && !_settings.UseCustomTaskbar);
+            () => _settings.InterceptNativeStartButton && !_settings.UseCustomTaskbar);
 
         _settings.Changed += () => app.Dispatcher.BeginInvoke(OnSettingsChanged);
         SystemEvents.UserPreferenceChanged += (_, e) =>
@@ -204,7 +208,8 @@ public static class Program
                 return;
             }
             _taskbar = new TaskbarController(_settings, _catalog, _shell, Application.Current.Dispatcher);
-            _taskbar.StartClicked += () => _start.Toggle();
+            // スタートボタンで開くのは設定どおり（ModernShell のスタート / Windows 標準のスタート）
+            _taskbar.StartClicked += () => { if (_settings.InterceptNativeStartButton) _start.Toggle(); else Input.NativeStart(); };
             _taskbar.SearchClicked += () => _start.ShowMenu("");
             _taskbar.OpenSettingsRequested += ShowSettings;
             _taskbar.ExitRequested += Exit;

@@ -217,9 +217,16 @@ public static class Backdrop
         }
         else
         {
-            // Mica 指定時は濃いめのティントで近い見た目にする
-            byte alpha = tint is { } v ? (byte)Math.Round(Math.Clamp(v, 0, 1) * 255) : kind == BackdropKind.Mica ? (byte)0xD8 : (byte)0x99;
             var c = t.SolidColor;
+            byte alpha;
+            if (tint is { } v)
+            {
+                // 濃さはスタートメニューと同じく「上に重ねる半透明の色」で付ける（アクセントポリシーの色の濃さは
+                // 環境によって効かないことがあるため）。ぼかし側の色はごく薄くしておく（0 だと既定色になる環境がある）
+                alpha = 0x10;
+                w.Background = new SolidColorBrush(Color.FromArgb((byte)Math.Round(Math.Clamp(v, 0, 1) * 255), c.R, c.G, c.B));
+            }
+            else alpha = kind == BackdropKind.Mica ? (byte)0xD8 : (byte)0x99; // Mica 指定時は濃いめのティントで近い見た目にする
             uint abgr = ((uint)alpha << 24) | ((uint)c.B << 16) | ((uint)c.G << 8) | c.R;
             SetAccent(hwnd, AccentState.AcrylicBlurBehind, abgr);
         }

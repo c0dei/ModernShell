@@ -63,6 +63,9 @@ public sealed class InputHooks : IDisposable
     /// <summary>メニュー表示中に Esc が押された。UI スレッドで実行。</summary>
     public event Action? MenuEscape;
 
+    /// <summary>ここが true の間だけ純正タスクバーのスタートボタンのクリックを横取りする（Win キーとは別に設定できる）。</summary>
+    public Func<bool> InterceptStartButton { get; set; } = () => true;
+
     /// <summary>ここが true の間だけ Win キーを横取りする。</summary>
     public Func<bool> InterceptWinKey { get; set; } = () => true;
 
@@ -155,7 +158,7 @@ public sealed class InputHooks : IDisposable
                 _dispatcher.BeginInvoke(() => MenuMouseDown?.Invoke(pt));
             }
 
-            if (msg is Win32.WM_LBUTTONDOWN or Win32.WM_LBUTTONUP && _startRect?.Value is { } r && InterceptWinKey())
+            if (msg is Win32.WM_LBUTTONDOWN or Win32.WM_LBUTTONUP && _startRect?.Value is { } r && InterceptStartButton())
             {
                 var m = Marshal.PtrToStructure<Win32.MSLLHOOKSTRUCT>(lParam);
                 if (m.dwExtraInfo != Input.Tag)

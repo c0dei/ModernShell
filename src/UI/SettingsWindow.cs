@@ -156,10 +156,11 @@ public sealed class SettingsWindow : Window
 
     private void StartPage(StackPanel p)
     {
-        p.Children.Add(ToggleRow("Win キーで ModernShell のスタートを開く", "Win+E などの組み合わせはそのまま使えます",
-            _s.ReplaceStartMenu, v => _s.ReplaceStartMenu = v));
-        p.Children.Add(ToggleRow("純正のスタートボタンも置き換える", "純正タスクバーを使っているときに有効です",
-            _s.InterceptNativeStartButton, v => _s.InterceptNativeStartButton = v, enabled: _s.ReplaceStartMenu && !_s.UseCustomTaskbar));
+        var which = new[] { ("ModernShell", "ModernShell のスタート"), ("Windows", "Windows 標準のスタート") };
+        p.Children.Add(DropDownRow("Win キーで開くスタート", "Win+E などの組み合わせはどちらでもそのまま使えます",
+            which, _s.ReplaceStartMenu ? "ModernShell" : "Windows", v => _s.ReplaceStartMenu = v == "ModernShell"));
+        p.Children.Add(DropDownRow("スタート ボタンで開くスタート", "タスクバーのスタートボタン（ModernShell / 純正どちらのタスクバーでも）をクリックしたとき",
+            which, _s.InterceptNativeStartButton ? "ModernShell" : "Windows", v => _s.InterceptNativeStartButton = v == "ModernShell"));
         p.Children.Add(ToggleRow("開いたときに「すべてのアプリ」を表示", "", _s.ShowAllAppsFirst, v => _s.ShowAllAppsFirst = v));
         p.Children.Add(DropDownRow("ピン留めの列数", "", new[] { ("4", "4 列"), ("5", "5 列"), ("6", "6 列"), ("7", "7 列"), ("8", "8 列") },
             _s.PinnedColumns.ToString(), v => _s.PinnedColumns = int.Parse(v)));
