@@ -38,6 +38,9 @@ public static class Program
     private static Timer? _startButtonWatcher;
     private static string _themeKey = "";
     private static bool _customTaskbarApplied;
+    /// <summary>このプロセスで一度でも ManagedShell を起動したか（同じプロセスでは 2 回目の起動ができない）。</summary>
+    private static bool _shellStartedOnce;
+    private static bool _openSettingsOnStart;
 
     private const int HotkeyEmergencyId = 0x4D53;
 
@@ -57,6 +60,14 @@ public static class Program
             RunWatchdog(parentPid);
             return 0;
         }
+
+        // 再起動時は前のプロセスの終了を待ってから二重起動チェックをする
+        int after = Array.FindIndex(args, a => a.Equals("--after", StringComparison.OrdinalIgnoreCase));
+        if (after >= 0 && after + 1 < args.Length && int.TryParse(args[after + 1], out int prevPid))
+        {
+            try { using var prev = Process.GetProcessById(prevPid); prev.WaitForExit(15000); } catch { }
+        }
+        _openSettingsOnStart = args.Contains("--settings", StringComparer.OrdinalIgnoreCase);
 
         using var mutex = new Mutex(true, MutexName, out bool created);
         if (!created)
@@ -136,6 +147,18 @@ public static class Program
         new Thread(() => { while (showSettings.WaitOne()) app.Dispatcher.BeginInvoke(ShowSettings); }) { IsBackground = true }.Start();
 
         CreateTrayIcon();
+        if (_openSettingsOnStart) app.Dispatcher.BeginInvoke(ShowSettings, DispatcherPriority.ApplicationIdle);
+    }
+
+    private static void Restart(bool openSettings)
+    {
+        try
+        {
+            var args = $"--after {Environment.ProcessId}" + (openSettings ? " --settings" : "");
+            Process.Start(new ProcessStartInfo(Environment.ProcessPath!, args) { UseShellExecute = false });
+            Exit();
+        }
+        catch (Exception ex) { Log.Error("restart", ex); }
     }
 
     private static string ThemeKey() => $"{_settings.Theme}|{_settings.Backdrop}|{_settings.AccentColor}|{_settings.CornerRadius}";
@@ -154,6 +177,14 @@ public static class Program
 
         if (_settings.UseCustomTaskbar)
         {
+            if (_shellStartedOnce)
+            {
+                // ManagedShell は一度終了すると同じプロセスで再初期化できないため、自分を再起動して有効化する
+                Log.Info("restarting to re-enable custom taskbar");
+                Restart(openSettings: _settingsWindow != null);
+                return;
+            }
+            _shellStartedOnce = true;
             try
             {
                 _shell = new ShellHost(_settings);

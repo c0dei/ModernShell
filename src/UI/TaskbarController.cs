@@ -531,7 +531,11 @@ public sealed class TaskbarController : IDisposable
     private IEnumerable<ApplicationWindow> TaskWindows() =>
         _shell.Tasks?.GroupedWindows?.Cast<ApplicationWindow>().Where(w => w.ShowInTaskbar) ?? Enumerable.Empty<ApplicationWindow>();
 
-    private static string GroupKey(ApplicationWindow w) => w.AppUserModelID ?? w.WinFileName ?? w.Handle.ToString();
+    // ManagedShell は値がないとき null ではなく空文字を返すので、空文字は「なし」として扱う
+    // （そうしないと AUMID を持たないアプリが全部 1 つのボタンにまとめられてしまう）
+    private static string? Aumid(ApplicationWindow w) => string.IsNullOrEmpty(w.AppUserModelID) ? null : w.AppUserModelID;
+    private static string? ExePath(ApplicationWindow w) => string.IsNullOrEmpty(w.WinFileName) ? null : w.WinFileName;
+    private static string GroupKey(ApplicationWindow w) => Aumid(w) ?? ExePath(w) ?? w.Handle.ToString();
 
     private void RebuildApps()
     {
@@ -547,7 +551,7 @@ public sealed class TaskbarController : IDisposable
         foreach (var w in TaskWindows())
         {
             Watch(w);
-            var g = groups.FirstOrDefault(x => x.Pinned != null && KnownApps.Matches(x.Pinned, w.AppUserModelID, w.WinFileName));
+            var g = groups.FirstOrDefault(x => x.Pinned != null && KnownApps.Matches(x.Pinned, Aumid(w), ExePath(w)));
             if (g == null || !_settings.GroupTaskbarButtons && g.Windows.Count > 0)
             {
                 string key = _settings.GroupTaskbarButtons ? GroupKey(w) : w.Handle.ToString();
@@ -630,8 +634,8 @@ public sealed class TaskbarController : IDisposable
     private AppEntry? FindApp(ApplicationWindow? w)
     {
         if (w == null) return null;
-        return (w.AppUserModelID != null ? _catalog.Find(w.AppUserModelID) : null)
-               ?? (w.WinFileName != null ? _catalog.FindByExe(w.WinFileName) : null);
+        return (Aumid(w) is { } id ? _catalog.Find(id) : null)
+               ?? (ExePath(w) is { } exe ? _catalog.FindByExe(exe) : null);
     }
 
     /// <summary>アイランド型のホバー拡大（Mac のドック風）。レイアウトは変えず描画だけ拡大する。</summary>
