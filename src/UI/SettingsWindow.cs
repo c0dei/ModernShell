@@ -22,6 +22,7 @@ public sealed class SettingsWindow : Window
 
     private readonly Settings _s;
     private Page _page = Page.Taskbar;
+    private bool _pickerOpen;
     private ScrollViewer? _scroll;
     public event Action? ExitRequested;
     /// <summary>Windows のタスクバーのピン留め（並び順どおりの ID 一覧）を返す。App が設定する。</summary>
@@ -671,7 +672,10 @@ public sealed class SettingsWindow : Window
 
     private FrameworkElement Swatches()
     {
-        var colors = new[] { "", "#0067C0", "#0078D4", "#00706A", "#107C10", "#6B3FB5", "#B4009E", "#C50F1F", "#A34A00" };
+        var colors = new List<string> { "", "#0067C0", "#0078D4", "#00706A", "#107C10", "#6B3FB5", "#B4009E", "#C50F1F", "#A34A00" };
+        // 一覧にない色（カラーピッカーで選んだ色）も見本として並べる
+        if (_s.AccentColor.Length > 0 && !colors.Contains(_s.AccentColor, StringComparer.OrdinalIgnoreCase) && Theme.ParseColor(_s.AccentColor) != null)
+            colors.Add(_s.AccentColor.ToUpperInvariant());
         var wrap = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
         foreach (var hex in colors)
         {
@@ -690,13 +694,34 @@ public sealed class SettingsWindow : Window
             tile.MouseLeave += (_, _) => { tile.Background = fill; tile.BorderBrush = sel ? T.Text : Brushes.Transparent; };
             tile.MouseEnter += (_, _) => tile.Background = fill;
             var value = hex;
-            tile.Click += _ => { _s.AccentColor = value; Commit(); };
+            tile.Click += _ => { _s.AccentColor = value; _pickerOpen = false; Commit(); };
             wrap.Children.Add(tile);
+        }
+
+        // 「カスタム」: 押すとカラーピッカーをその場に開く
+        var plus = new Tile
+        {
+            Width = 44, Height = 44, Margin = new Thickness(0, 0, 8, 8), CornerRadius = T.Corner(4), Background = T.ControlFill,
+            BorderThickness = new Thickness(1), BorderBrush = T.ControlBorder, Child = UiKit.Glyph("\uE710", 16), ToolTip = "色を選ぶ",
+        };
+        plus.MouseLeave += (_, _) => { plus.Background = T.ControlFill; plus.BorderBrush = T.ControlBorder; };
+        plus.Click += _ => { _pickerOpen = !_pickerOpen; Commit(); };
+        wrap.Children.Add(plus);
+
+        var content = new StackPanel();
+        content.Children.Add(wrap);
+        if (_pickerOpen)
+        {
+            var start = Theme.ParseColor(_s.AccentColor) ?? Theme.SystemAccent();
+            var picker = new ColorPicker(start) { Margin = new Thickness(0, 8, 0, 14) };
+            picker.Applied += c => { _s.AccentColor = $"#{c.R:X2}{c.G:X2}{c.B:X2}"; _pickerOpen = false; Commit(); };
+            picker.Cancelled += () => { _pickerOpen = false; Commit(); };
+            content.Children.Add(picker);
         }
         var card = new Border
         {
             Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6),
-            Padding = new Thickness(20, 14, 12, 6), Child = wrap,
+            Padding = new Thickness(20, 14, 12, 6), Child = content,
         };
         return card;
     }

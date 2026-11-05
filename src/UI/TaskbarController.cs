@@ -353,17 +353,19 @@ public sealed class TaskbarController : IDisposable
     {
         if (_trayIcons == null || _overflowButton == null) return;
         _trayIcons.Children.Clear();
-        foreach (var icon in Icons(_shell.Tray?.PinnedIcons).OrderBy(i => i.PinOrder))
+        var pinned = Icons(_shell.Tray?.PinnedIcons).OrderBy(i => i.PinOrder).ToList();
+        var reorder = new LiveReorder(_trayIcons, Orientation.Horizontal, (from, to) => MoveTrayIcon(pinned, from, to));
+        foreach (var icon in pinned)
         {
             Watch(icon);
-            _trayIcons.Children.Add(TrayIconTile(icon, editable: false));
+            _trayIcons.Children.Add(TrayIconTile(icon, editable: false, reorder));
         }
         _overflowButton.Visibility = Icons(_shell.Tray?.UnpinnedIcons).Any() || _trayEditMode ? Visibility.Visible : Visibility.Collapsed;
         if (_overflowPopup?.IsOpen == true) FillOverflow();
     }
 
     /// <summary>トレイアイコン 1 個。マウス操作はそのままアプリへ転送する（右クリックメニューもアプリ自身が出す）。</summary>
-    private Tile TrayIconTile(ManagedShell.WindowsTray.NotifyIcon icon, bool editable)
+    private Tile TrayIconTile(ManagedShell.WindowsTray.NotifyIcon icon, bool editable, LiveReorder? reorder = null)
     {
         var img = UiKit.Icon(icon.Icon, 16);
         var grid = new Grid();
@@ -386,43 +388,7 @@ public sealed class TaskbarController : IDisposable
                 _shell.SavePinnedTray(_settings);
                 RebuildTray();
             };
-            if (icon.IsPinned)
-            {
-                // 常に表示するアイコン同士はドラッグで並べ替え
-                tile.AllowDrop = true;
-                Point start = default;
-                tile.PreviewMouseLeftButtonDown += (_, e) => start = e.GetPosition(null);
-                tile.PreviewMouseMove += (_, e) =>
-                {
-                    if (e.LeftButton != MouseButtonState.Pressed) return;
-                    var d = e.GetPosition(null) - start;
-                    if (Math.Abs(d.X) < 6 && Math.Abs(d.Y) < 6) return;
-                    DragDrop.DoDragDrop(tile, new DataObject("ModernShell.TrayIcon", icon), DragDropEffects.Move);
-                };
-                // 差し込み位置を示す線（アイコンの左右どちらに入るか）
-                bool After(DragEventArgs e) => e.GetPosition(tile).X > tile.ActualWidth / 2;
-                void ShowLine(bool? after)
-                {
-                    tile.BorderBrush = after == null ? Brushes.Transparent : Theme.Current.AccentBrush;
-                    tile.BorderThickness = after switch { true => new Thickness(0, 0, 3, 0), false => new Thickness(3, 0, 0, 0), _ => new Thickness(1) };
-                }
-                tile.DragOver += (_, e) =>
-                {
-                    bool ok = e.Data.GetData("ModernShell.TrayIcon") is ManagedShell.WindowsTray.NotifyIcon d && !ReferenceEquals(d, icon);
-                    e.Effects = ok ? DragDropEffects.Move : DragDropEffects.None;
-                    ShowLine(ok ? After(e) : null);
-                    e.Handled = true;
-                };
-                tile.DragLeave += (_, _) => ShowLine(null);
-                tile.Drop += (_, e) =>
-                {
-                    ShowLine(null);
-                    if (e.Data.GetData("ModernShell.TrayIcon") is not ManagedShell.WindowsTray.NotifyIcon dragged || ReferenceEquals(dragged, icon)) return;
-                    dragged.Pin(icon.PinOrder + (After(e) ? 1 : 0));
-                    _shell.SavePinnedTray(_settings);
-                    RebuildTray();
-                };
-            }
+            if (icon.IsPinned) reorder?.Add(tile); // 常に表示するアイコン同士はドラッグで並べ替え
             return tile;
         }
 
@@ -430,20 +396,40 @@ public sealed class TaskbarController : IDisposable
         tile.MouseEnter += (_, _) => { SetPlacement(icon, tile); icon.IconMouseEnter(MouseHelper.GetCursorPositionParam()); };
         tile.MouseLeave += (_, _) => icon.IconMouseLeave(MouseHelper.GetCursorPositionParam());
         tile.MouseMove += (_, _) => icon.IconMouseMove(MouseHelper.GetCursorPositionParam());
+        // 並べ替え可能なアイコンは、左ボタンの押下をすぐにはアプリへ送らず、離したときに「ドラッグでなかった」場合だけ
+        // 押下 → 解放の順に送る（ドラッグ中にアプリのメニューが開かないように）
+        reorder?.Add(tile);
         tile.PreviewMouseDown += (_, e) =>
         {
             SetPlacement(icon, tile);
+            if (reorder != null && e.ChangedButton == MouseButton.Left) return;
             icon.IconMouseDown(e.ChangedButton, MouseHelper.GetCursorPositionParam(), dbl);
             e.Handled = true;
         };
         tile.PreviewMouseUp += (_, e) =>
         {
+            if (reorder != null && e.ChangedButton == MouseButton.Left)
+            {
+                if (reorder.IsDragging) return; // 並べ替えの終了は LiveReorder が処理する
+                SetPlacement(icon, tile);
+                icon.IconMouseDown(MouseButton.Left, MouseHelper.GetCursorPositionParam(), dbl);
+            }
             SetPlacement(icon, tile);
             icon.IconMouseUp(e.ChangedButton, MouseHelper.GetCursorPositionParam(), dbl);
             if (_overflowPopup != null) _overflowPopup.IsOpen = false;
             e.Handled = true;
         };
         return tile;
+    }
+
+    /// <summary>常に表示するトレイアイコンの並べ替えを確定する。</summary>
+    private void MoveTrayIcon(List<ManagedShell.WindowsTray.NotifyIcon> visible, int from, int to)
+    {
+        var dragged = visible[from];
+        var target = visible[to];
+        dragged.Pin(target.PinOrder + (to > from ? 1 : 0));
+        _shell.SavePinnedTray(_settings);
+        RebuildTray();
     }
 
     /// <summary>アプリがメニューやポップアップを正しい位置に出せるよう、アイコンの画面上の矩形を渡す。</summary>
@@ -482,7 +468,7 @@ public sealed class TaskbarController : IDisposable
     {
         if (_overflowPopup?.IsOpen == true) { _overflowPopup.IsOpen = false; return; } // 編集中（固定表示）に「^」で閉じる
         var t = Theme.Current;
-        _overflowPanel = new StackPanel { MaxWidth = 6 * 34 + 12, Margin = new Thickness(6) };
+        _overflowPanel = new StackPanel { Margin = new Thickness(6) };
         _overflowHint = UiKit.Label("", 11, t.TextSecondary);
         _overflowHint.TextWrapping = TextWrapping.Wrap;
         _overflowHint.MaxWidth = 6 * 34;
@@ -538,13 +524,18 @@ public sealed class TaskbarController : IDisposable
 
         if (_trayEditMode)
         {
-            var pinned = Section("常に表示（ドラッグで並べ替え）");
-            foreach (var icon in Icons(_shell.Tray?.PinnedIcons).OrderBy(i => i.PinOrder))
+            Section("常に表示（ドラッグで並べ替え）");
+            _overflowPanel.Children.RemoveAt(_overflowPanel.Children.Count - 1); // 折り返しパネルの代わりに 1 行のパネルを使う
+            var pinnedRow = new StackPanel { Orientation = Orientation.Horizontal };
+            _overflowPanel.Children.Add(pinnedRow);
+            var pinnedIcons = Icons(_shell.Tray?.PinnedIcons).OrderBy(i => i.PinOrder).ToList();
+            var reorder = new LiveReorder(pinnedRow, Orientation.Horizontal, (from, to) => { MoveTrayIcon(pinnedIcons, from, to); FillOverflow(); });
+            foreach (var icon in pinnedIcons)
             {
                 Watch(icon);
-                pinned.Children.Add(TrayIconTile(icon, editable: true));
+                pinnedRow.Children.Add(TrayIconTile(icon, editable: true, reorder));
             }
-            if (pinned.Children.Count == 0) pinned.Children.Add(UiKit.Label("なし", 12, t.TextSecondary));
+            if (pinnedRow.Children.Count == 0) pinnedRow.Children.Add(UiKit.Label("なし", 12, t.TextSecondary));
             var others = Section("「^」の中に表示");
             foreach (var icon in Icons(_shell.Tray?.UnpinnedIcons))
             {
@@ -649,7 +640,21 @@ public sealed class TaskbarController : IDisposable
             .Concat(groups.Where(g => g.Pinned == null).OrderBy(g => _order.IndexOf(g.Key)));
 
         _apps.Children.Clear();
-        foreach (var g in ordered) _apps.Children.Add(AppButton(g));
+        var pinnedIds = new List<string>();
+        LiveReorder? reorder = null;
+        if (!PinsFromWindows)
+            reorder = new LiveReorder(_apps, Orientation.Horizontal, (from, to) => CommitPinnedOrder(pinnedIds, from, to));
+        foreach (var g in ordered)
+        {
+            var tile = AppButton(g);
+            _apps.Children.Add(tile);
+            // ピン留めボタンはドラッグで並べ替え（つかむとカーソルに付いてきて、他のボタンがよける）
+            if (reorder != null && g.Pinned != null)
+            {
+                pinnedIds.Add(g.Pinned.Id);
+                reorder.Add(tile);
+            }
+        }
         _apps.Visibility = _apps.Children.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -703,7 +708,6 @@ public sealed class TaskbarController : IDisposable
         };
         tile.MiddleClick += _ => (g.Pinned ?? FindApp(g.Windows.FirstOrDefault()))?.Launch();
         tile.RightClick += x => Flyout.Show(x, GroupMenu(g), FlyoutPlacement);
-        if (g.Pinned != null && !PinsFromWindows) EnableReorder(tile, g.Pinned);
         return tile;
     }
 
@@ -721,46 +725,20 @@ public sealed class TaskbarController : IDisposable
         return null;
     }
 
-    // ピン留めボタンのドラッグ並べ替え（ModernShell で管理しているときのみ。Windows のピン留めは書き換えられない）
-    private Point _dragStart;
-    private void EnableReorder(Tile tile, AppEntry app)
+    /// <summary>
+    /// ピン留めボタンの並べ替えを確定する（ModernShell で管理しているときのみ。Windows のピン留めは書き換えられない）。
+    /// 見えているピン留めの並びを変え、解決できなかった ID の位置はそのまま保つ。
+    /// </summary>
+    private void CommitPinnedOrder(List<string> visibleIds, int from, int to)
     {
-        tile.AllowDrop = true;
-        tile.PreviewMouseLeftButtonDown += (_, e) => _dragStart = e.GetPosition(null);
-        tile.PreviewMouseMove += (_, e) =>
-        {
-            if (e.LeftButton != MouseButtonState.Pressed) return;
-            var d = e.GetPosition(null) - _dragStart;
-            if (Math.Abs(d.X) < 8 && Math.Abs(d.Y) < 8) return;
-            DragDrop.DoDragDrop(tile, new DataObject("ModernShell.TaskbarPin", app.Id), DragDropEffects.Move);
-        };
-        bool After(DragEventArgs e) => e.GetPosition(tile).X > tile.ActualWidth / 2;
-        void ShowLine(bool? after)
-        {
-            tile.BorderBrush = after == null ? Brushes.Transparent : Theme.Current.AccentBrush;
-            tile.BorderThickness = after switch { true => new Thickness(0, 0, 3, 0), false => new Thickness(3, 0, 0, 0), _ => new Thickness(1) };
-        }
-        tile.DragOver += (_, e) =>
-        {
-            bool ok = e.Data.GetData("ModernShell.TaskbarPin") is string d && d != app.Id;
-            e.Effects = ok ? DragDropEffects.Move : DragDropEffects.None;
-            ShowLine(ok ? After(e) : null);
-            e.Handled = true;
-        };
-        tile.DragLeave += (_, _) => ShowLine(null);
-        tile.Drop += (_, e) =>
-        {
-            ShowLine(null);
-            if (e.Data.GetData("ModernShell.TaskbarPin") is not string dragged || dragged == app.Id) return;
-            var list = _settings.PinnedTaskbar;
-            int from = list.FindIndex(x => x.Equals(dragged, StringComparison.OrdinalIgnoreCase));
-            if (from < 0) return;
-            list.RemoveAt(from);
-            int to = list.FindIndex(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase));
-            if (to < 0) { list.Insert(from, dragged); return; }
-            list.Insert(After(e) ? to + 1 : to, dragged);
-            _settings.Save();
-        };
+        var moved = visibleIds[from];
+        visibleIds.RemoveAt(from);
+        visibleIds.Insert(to, moved);
+        var list = _settings.PinnedTaskbar;
+        int v = 0;
+        for (int i = 0; i < list.Count; i++)
+            if (visibleIds.Contains(list[i], StringComparer.OrdinalIgnoreCase)) list[i] = visibleIds[v++];
+        _settings.Save();
     }
 
     /// <summary>前面（アクティブ）なら最小化、それ以外は前面化（最小化中なら復元）。</summary>

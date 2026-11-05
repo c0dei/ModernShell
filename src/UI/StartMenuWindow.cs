@@ -9,6 +9,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Shell;
 using ModernShell.Core;
 using ModernShell.Native;
@@ -25,6 +26,8 @@ public sealed class StartMenuWindow : Window
     private const double MainWidth = 640, WidgetWidth = 330, MenuHeight = 720;
     private double MenuWidth => WidgetPanel.AnyEnabled(_settings) ? MainWidth + WidgetWidth : MainWidth;
     private WidgetPanel? _widgets;
+    private Grid _main = null!;
+    private FrameworkElement? _folderOverlay;
 
     private readonly Settings _settings;
     private readonly AppCatalog _catalog;
@@ -122,6 +125,7 @@ public sealed class StartMenuWindow : Window
         if (_openFlyout?.IsOpen == true) return; // 右クリックメニュー表示中は閉じない
         _hiddenAt = DateTime.Now;
         _widgets?.Close();
+        CloseFolder();
         Hide();
     }
 
@@ -167,6 +171,8 @@ public sealed class StartMenuWindow : Window
         _root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         var main = new Grid();
+        _main = main;
+        _folderOverlay = null;
         main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         main.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         _root.Children.Add(main);
@@ -301,6 +307,7 @@ public sealed class StartMenuWindow : Window
 
     private void ShowPage(Page page)
     {
+        CloseFolder();
         _page = page;
         _content.Content = page switch
         {
@@ -413,15 +420,107 @@ public sealed class StartMenuWindow : Window
         dock.Children.Add(header);
 
         var list = new StackPanel { Margin = new Thickness(12, 0, 12, 12) };
-        foreach (var group in _catalog.Apps.GroupBy(a => GroupKey(a.Name)))
+        // フォルダに入っていないアプリと、フォルダ（OS のスタートと同じく、中身が 2 つ以上のもの）を名前順に並べる
+        var entries = _catalog.Apps.Where(a => a.Folder == null)
+            .Select(a => (name: a.Name, app: (AppEntry?)a, items: (List<AppEntry>?)null))
+            .Concat(_catalog.Apps.Where(a => a.Folder != null).GroupBy(a => a.Folder!, StringComparer.CurrentCultureIgnoreCase)
+                .Select(g => (name: g.Key, app: (AppEntry?)null, items: (List<AppEntry>?)g.ToList())))
+            .OrderBy(e => e.name, StringComparer.CurrentCultureIgnoreCase);
+        foreach (var group in entries.GroupBy(e => GroupKey(e.name)))
         {
             var h = UiKit.Label(group.Key, 13, Theme.Current.Text, FontWeights.SemiBold);
             h.Margin = new Thickness(12, 12, 0, 4);
             list.Children.Add(h);
-            foreach (var app in group) list.Children.Add(ListTile(app, AppMenu(app, pinnedPage: false)));
+            foreach (var e in group)
+                list.Children.Add(e.app != null ? ListTile(e.app, AppMenu(e.app, pinnedPage: false)) : FolderTile(e.name, e.items!));
         }
         dock.Children.Add(Scroll(list));
         return dock;
+    }
+
+    // ---- フォルダ ----
+
+    private Tile FolderTile(string name, List<AppEntry> items)
+    {
+        var img = UiKit.Icon(null, 24);
+        var path = new[] { Environment.SpecialFolder.CommonPrograms, Environment.SpecialFolder.Programs }
+            .Select(f => System.IO.Path.Combine(Environment.GetFolderPath(f), name)).FirstOrDefault(System.IO.Directory.Exists);
+        if (path != null)
+            Task.Run(() => IconHelper.Get(path, 48)).ContinueWith(r => { if (r.Result != null) img.Dispatcher.BeginInvoke(() => img.Source = r.Result); }, TaskScheduler.Default);
+        else
+            img.Source = null;
+        var label = UiKit.Label(name, 13);
+        label.Margin = new Thickness(14, 0, 0, 0);
+        var row = UiKit.Row(img, label);
+        row.VerticalAlignment = VerticalAlignment.Center;
+        var tile = new Tile { Height = 40, Padding = new Thickness(12, 0, 12, 0), Child = row, ToolTip = $"{name}（{items.Count} 個）" };
+        tile.Click += _ => ShowFolder(name, items);
+        return tile;
+    }
+
+    /// <summary>OS のスタートと同じく、フォルダの中身をリストの上に重ねて表示する。外側クリック / Esc で閉じる。</summary>
+    private void ShowFolder(string name, List<AppEntry> items)
+    {
+        CloseFolder();
+        var t = Theme.Current;
+        var wrap = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Center };
+        foreach (var app in items.OrderBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase))
+        {
+            var img = UiKit.Icon(null, 32);
+            LoadIconAsync(img, app, 32);
+            var label = UiKit.Label(app.Name, 12);
+            label.TextAlignment = TextAlignment.Center;
+            label.TextWrapping = TextWrapping.Wrap;
+            label.MaxHeight = 32;
+            label.Margin = new Thickness(4, 6, 4, 0);
+            label.HorizontalAlignment = HorizontalAlignment.Center;
+            var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            stack.Children.Add(img);
+            stack.Children.Add(label);
+            var tile = new Tile { Width = 110, Height = 90, Margin = new Thickness(2), Child = stack, ToolTip = app.Name };
+            var a = app;
+            tile.Click += _ => Launch(a);
+            tile.RightClick += x => OpenFlyout(x, AppMenu(a, pinnedPage: false));
+            wrap.Children.Add(tile);
+        }
+        var title = UiKit.Label(name, 20, t.Text, FontWeights.SemiBold);
+        title.HorizontalAlignment = HorizontalAlignment.Center;
+        title.Margin = new Thickness(0, 0, 0, 20);
+        var body = new StackPanel();
+        body.Children.Add(title);
+        body.Children.Add(new ScrollViewer { Content = wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, MaxHeight = 380, Focusable = false });
+
+        var panel = new Border
+        {
+            Width = 520, MinHeight = 240, Padding = new Thickness(24, 24, 24, 24),
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Background = t.SolidBackground, BorderBrush = t.Stroke, BorderThickness = new Thickness(1), CornerRadius = t.Corner(8),
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 24, ShadowDepth = 4, Opacity = 0.35 },
+            Child = body,
+        };
+        panel.MouseLeftButtonDown += (_, e) => e.Handled = true; // 中身のクリックで閉じない
+        // ほぼ透明の下敷きでクリックを受け、外側クリックで閉じる
+        var overlay = new Grid { Background = new SolidColorBrush(Color.FromArgb(0x30, 0, 0, 0)) };
+        overlay.Children.Add(panel);
+        overlay.MouseLeftButtonDown += (_, _) => CloseFolder();
+        Grid.SetRowSpan(overlay, 2);
+        _main.Children.Add(overlay);
+        _folderOverlay = overlay;
+
+        var scale = new ScaleTransform(0.94, 0.94);
+        panel.RenderTransformOrigin = new Point(0.5, 0.5);
+        panel.RenderTransform = scale;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.94, 1, TimeSpan.FromMilliseconds(160)) { EasingFunction = ease });
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.94, 1, TimeSpan.FromMilliseconds(160)) { EasingFunction = ease });
+        overlay.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120)));
+    }
+
+    private void CloseFolder()
+    {
+        if (_folderOverlay == null) return;
+        _main.Children.Remove(_folderOverlay);
+        _folderOverlay = null;
     }
 
     private Tile ListTile(AppEntry app, IEnumerable<MenuItemSpec> menu, string? subtitle = null)
@@ -547,7 +646,8 @@ public sealed class StartMenuWindow : Window
         switch (e.Key)
         {
             case Key.Escape:
-                if (_search.Text.Length > 0) _search.Text = "";
+                if (_folderOverlay != null) CloseFolder();
+                else if (_search.Text.Length > 0) _search.Text = "";
                 else if (_page == Page.AllApps) ShowPage(Page.Pinned);
                 else HideMenu();
                 e.Handled = true;

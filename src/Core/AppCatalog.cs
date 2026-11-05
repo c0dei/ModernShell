@@ -21,6 +21,8 @@ public sealed class AppEntry
     public required string Name { get; init; }
     /// <summary>判明していれば実体 exe のフルパス（タスクバーでの実行中ウィンドウとの突き合わせに使う）。</summary>
     public string? ExePath { get; init; }
+    /// <summary>スタートメニューのフォルダ名（「7-Zip」など）。フォルダに入っていなければ null。</summary>
+    public string? Folder { get; init; }
 
     /// <summary>Id がファイルパス（Windows のタスクバーにピン留めされた .lnk など）か。</summary>
     public bool IsFile => Path.IsPathRooted(Id);
@@ -78,10 +80,10 @@ public sealed class AppCatalog
         {
             try
             {
-                var list = Enumerate();
+                var (list, aliases) = Enumerate();
                 _apps = list;
-                _byId = list.GroupBy(a => a.Id, StringComparer.OrdinalIgnoreCase)
-                            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+                // まとめて消えた重複エントリの ID でも、残したエントリが見つかるようにする（ピン留めが消えないように）
+                _byId = aliases;
                 Log.Info($"apps loaded: {list.Count}");
                 tcs.SetResult();
             }
@@ -112,8 +114,9 @@ public sealed class AppCatalog
 
     private void Kick() => _debounce?.Change(TimeSpan.FromSeconds(3), TimeSpan.FromMinutes(10));
 
-    private static List<AppEntry> Enumerate()
+    private static (List<AppEntry> apps, Dictionary<string, AppEntry> byId) Enumerate()
     {
+        var folders = StartMenuFolders();
         var result = new List<AppEntry>();
         var shellType = Type.GetTypeFromProgID("Shell.Application") ?? throw new InvalidOperationException("Shell.Application not available");
         dynamic shell = Activator.CreateInstance(shellType)!;
@@ -127,8 +130,12 @@ public sealed class AppCatalog
                     string name = item.Name;
                     string path = item.Path;
                     if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(path)) continue;
-                    if (IsNoise(name, path)) continue;
-                    result.Add(new AppEntry { Id = path, Name = name, ExePath = ResolveExe(path) });
+                    var exe = ResolveExe(path);
+                    string? group = (exe != null && folders.byExe.TryGetValue(exe, out var f1)) ? f1
+                                  : folders.byName.TryGetValue(name.Trim(), out var f2) ? f2 : null;
+                    // フォルダの中身は OS と同じくすべて出す（ヘルプやアンインストールも）。直下の雑多なものだけ除外
+                    if (group == null && IsNoise(name, path)) continue;
+                    result.Add(new AppEntry { Id = path, Name = name, ExePath = exe, Folder = group });
                 }
                 catch { /* 個別アイテムの失敗は無視 */ }
                 finally { Marshal.FinalReleaseComObject(item); }
@@ -137,12 +144,69 @@ public sealed class AppCatalog
         }
         finally { Marshal.FinalReleaseComObject(shell); }
 
-        // 同じアプリが複数登録されていることがある（ユーザー用と全ユーザー用のショートカットなど）。
-        // 名前と実体の exe が同じものは 1 つにまとめる（exe が分からないものはまとめない）
-        return result
-            .GroupBy(a => a.ExePath != null ? a.Name.ToLowerInvariant() + "|" + a.ExePath.ToLowerInvariant() : "id|" + a.Id)
-            .Select(g => g.First())
-            .OrderBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        // 同じアプリが複数登録されていることがある（ユーザー用と全ユーザー用のショートカット、32/64bit 版など）。
+        // 名前（とフォルダ）が同じものは 1 つにまとめる。実体の exe が分かっているものを優先して残す
+        var byId = new Dictionary<string, AppEntry>(StringComparer.OrdinalIgnoreCase);
+        var kept = new List<AppEntry>();
+        foreach (var g in result.GroupBy(a => (a.Folder ?? "") + "|" + a.Name.Trim(), StringComparer.CurrentCultureIgnoreCase))
+        {
+            var keep = g.OrderByDescending(a => a.ExePath != null).ThenByDescending(a => a.IsStoreApp).First();
+            kept.Add(keep);
+            foreach (var a in g) byId.TryAdd(a.Id, keep);
+        }
+
+        // 中身が 1 つしかないフォルダは、OS と同じくフォルダにせず直接並べる
+        var single = kept.Where(a => a.Folder != null).GroupBy(a => a.Folder!, StringComparer.CurrentCultureIgnoreCase)
+            .Where(g => g.Count() < 2).SelectMany(g => g).ToList();
+        foreach (var a in single)
+        {
+            var flat = new AppEntry { Id = a.Id, Name = a.Name, ExePath = a.ExePath, Folder = null };
+            if (IsNoise(flat.Name, flat.Id)) { kept.Remove(a); continue; }
+            kept[kept.IndexOf(a)] = flat;
+            foreach (var key in byId.Where(kv => kv.Value == a).Select(kv => kv.Key).ToList()) byId[key] = flat;
+        }
+
+        return (kept.OrderBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase).ToList(), byId);
+    }
+
+    // OS がフォルダとして見せない（中身を直接並べる / 「Windows ツール」にまとめる）システム系フォルダ
+    private static readonly HashSet<string> FlattenFolders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Startup", "Accessories", "Accessibility", "Administrative Tools", "System Tools", "Maintenance",
+        "Windows Accessories", "Windows Administrative Tools", "Windows Ease of Access", "Windows System",
+        "Windows PowerShell", "Windows Tools",
+    };
+
+    /// <summary>スタートメニューの Programs フォルダを走査し、ショートカット名 / リンク先 exe → 直下のフォルダ名 を作る。</summary>
+    private static (Dictionary<string, string> byName, Dictionary<string, string> byExe) StartMenuFolders()
+    {
+        var byName = new Dictionary<string, string>(StringComparer.CurrentCultureIgnoreCase);
+        var byExe = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var root in new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms),
+            Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+        })
+        {
+            try
+            {
+                if (!Directory.Exists(root)) continue;
+                foreach (var lnk in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
+                {
+                    var dir = Path.GetDirectoryName(lnk);
+                    if (dir == null) continue;
+                    var rel = Path.GetRelativePath(root, dir);
+                    if (rel == ".") continue;
+                    var top = rel.Split(Path.DirectorySeparatorChar)[0];
+                    if (FlattenFolders.Contains(top)) continue;
+                    byName.TryAdd(Path.GetFileNameWithoutExtension(lnk).Trim(), top);
+                    if (lnk.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase) && WindowsPins.ShortcutTarget(lnk) is { } target)
+                        byExe.TryAdd(target, top);
+                }
+            }
+            catch (Exception ex) { Log.Error("start menu folders", ex); }
+        }
+        return (byName, byExe);
     }
 
     private static readonly Regex Noise = new(@"(uninstall|アンインストール|readme|help|ヘルプ|website|web site|documentation)", RegexOptions.IgnoreCase);
