@@ -903,10 +903,21 @@ public sealed class TaskbarController : IDisposable
     {
         // Windows 標準の右クリックメニューをそのまま使う（取れなかったときだけ自前の項目）
         // Windows のタスクバーと同じく、ショートカットがあればその .lnk のメニューを使う（「プロパティ」も出る）
-        var shell = app.ShortcutPath != null && System.IO.File.Exists(app.ShortcutPath)
-            ? ShellContextMenu.For(app.ShortcutPath, OwnerHandle, verbsOnly: true)
-            : ShellContextMenu.For(app.ShellPath, OwnerHandle);
-        return shell.Count > 0 ? shell : ManualAppMenu(app);
+        var target = app.ShortcutPath != null && System.IO.File.Exists(app.ShortcutPath) ? app.ShortcutPath : app.ShellPath;
+        var shell = ShellContextMenu.TaskbarStyle(target, OwnerHandle);
+        if (shell.Count == 0) return ManualAppMenu(app);
+        // Windows 側のメニューに無い（または外部アプリから動かせない）タスクバーのピン留めは ModernShell の項目で補う
+        if (!IsWindowsPin(app) && !shell.Any(m => m.Text.Contains("タスク") && m.Text.Contains("ピン留め")))
+        {
+            var pins = EditablePins;
+            bool onBar = pins.Contains(app.Id, StringComparer.OrdinalIgnoreCase);
+            int at = shell.FindIndex(m => m.IsSeparator);
+            var pinItem = onBar
+                ? new MenuItemSpec("\uE77A", "タスクバーからピン留めを外す", () => { pins.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
+                : new MenuItemSpec("\uE718", "タスクバーにピン留めする", () => { pins.Add(app.Id); _settings.Save(); });
+            shell.Insert(at < 0 ? shell.Count : at, pinItem);
+        }
+        return shell;
     }
 
     private IntPtr OwnerHandle => _surfaces.FirstOrDefault()?.Handle ?? IntPtr.Zero;

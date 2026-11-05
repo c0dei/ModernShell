@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Media;
@@ -26,7 +27,7 @@ public static class ShellContextMenu
     {
         [PreserveSig] int QueryContextMenu(IntPtr hmenu, uint indexMenu, uint idCmdFirst, uint idCmdLast, uint flags);
         [PreserveSig] int InvokeCommand(ref CMINVOKECOMMANDINFOEX info);
-        [PreserveSig] int GetCommandString(UIntPtr idCmd, uint type, IntPtr reserved, StringBuilder name, uint cch);
+        [PreserveSig] int GetCommandString(UIntPtr idCmd, uint type, IntPtr reserved, IntPtr name, uint cch);
     }
 
     [ComImport, Guid("000214f4-0000-0000-c000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -153,6 +154,78 @@ public static class ShellContextMenu
         }
         catch (Exception ex) { Log.Error("shell context menu", ex); }
         finally { if (item != null) Marshal.ReleaseComObject(item); }
+        return result;
+    }
+
+    // Windows のタスクバーがアプリの右クリックに出す動作（この順番で並べる）と、そのアイコン
+    private static readonly (string verb, string glyph)[] TaskbarVerbs =
+    {
+        ("open", "\uE737"),
+        ("runas", "\uE7EF"),
+        ("pintostartscreen", "\uE718"), ("unpinfromstartscreen", "\uE77A"),
+        ("taskbarpin", "\uE718"), ("taskbarunpin", "\uE77A"),
+        ("properties", "\uE90F"),
+    };
+
+    /// <summary>
+    /// Windows のタスクバーと同じ項目だけを出す（開く / 管理者として実行 / スタート・タスクバーのピン留め / プロパティ）。
+    /// 標準メニューには他のアプリが追加した項目（メモ帳で編集、7-Zip など）も入るので、Windows 内部の動作名で選び出す。
+    /// </summary>
+    public static List<MenuItemSpec> TaskbarStyle(string parsingName, IntPtr owner)
+    {
+        Release();
+        var found = new List<(int order, MenuItemSpec spec)>();
+        IShellItem? item = null;
+        try
+        {
+            var iidItem = typeof(IShellItem).GUID;
+            if (SHCreateItemFromParsingName(parsingName, IntPtr.Zero, ref iidItem, out item) != 0 || item == null) return new();
+            var bhid = BHID_SFUIObject;
+            var iidCm = typeof(IContextMenu).GUID;
+            if (item.BindToHandler(IntPtr.Zero, ref bhid, ref iidCm, out var pcm) != 0 || pcm == IntPtr.Zero) return new();
+            var cm = Marshal.GetObjectForIUnknown(pcm);
+            Marshal.Release(pcm);
+            var hmenu = CreatePopupMenu();
+            ((IContextMenu)cm).QueryContextMenu(hmenu, 0, FirstId, LastId, CMF_NORMAL);
+            _current = (hmenu, cm);
+
+            int count = GetMenuItemCount(hmenu);
+            var verbBuf = Marshal.AllocHGlobal(512);
+            var textBuf = Marshal.AllocHGlobal(1024);
+            try
+            {
+                for (uint i = 0; i < count; i++)
+                {
+                    var mii = new MENUITEMINFO
+                    {
+                        cbSize = Marshal.SizeOf<MENUITEMINFO>(), fMask = MIIM_FTYPE | MIIM_STATE | MIIM_ID | MIIM_SUBMENU | MIIM_STRING,
+                        dwTypeData = textBuf, cch = 511,
+                    };
+                    if (!GetMenuItemInfo(hmenu, i, true, ref mii) || (mii.fType & MFT_SEPARATOR) != 0 || mii.hSubMenu != IntPtr.Zero) continue;
+                    if (mii.wID < FirstId || mii.wID > LastId) continue;
+                    uint offset = mii.wID - FirstId;
+                    Marshal.WriteInt16(verbBuf, 0);
+                    if (((IContextMenu)cm).GetCommandString((UIntPtr)offset, 4 /*GCS_VERBW*/, IntPtr.Zero, verbBuf, 255) != 0) continue;
+                    var verb = Marshal.PtrToStringUni(verbBuf) ?? "";
+                    int order = Array.FindIndex(TaskbarVerbs, v => v.verb.Equals(verb, StringComparison.OrdinalIgnoreCase));
+                    if (order < 0 || found.Any(f => f.order == order)) continue;
+                    var text = CleanText(Marshal.PtrToStringUni(textBuf) ?? "");
+                    if (text.Length == 0) continue;
+                    found.Add((order, new MenuItemSpec(TaskbarVerbs[order].glyph, text, () => Invoke(cm, offset, owner))
+                    {
+                        Enabled = (mii.fState & MFS_DISABLED) == 0,
+                    }));
+                }
+            }
+            finally { Marshal.FreeHGlobal(verbBuf); Marshal.FreeHGlobal(textBuf); }
+        }
+        catch (Exception ex) { Log.Error("shell taskbar menu", ex); }
+        finally { if (item != null) Marshal.ReleaseComObject(item); }
+
+        var result = found.OrderBy(f => f.order).Select(f => f.spec).ToList();
+        // Windows と同じくプロパティの前に区切り線
+        int prop = found.OrderBy(f => f.order).ToList().FindIndex(f => TaskbarVerbs[f.order].verb == "properties");
+        if (prop > 0) result.Insert(prop, MenuItemSpec.Separator);
         return result;
     }
 
