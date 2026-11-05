@@ -27,6 +27,13 @@ public sealed class AppEntry
     public string? Aumid { get; init; }
     /// <summary>ショートカットの引数（ランチャー経由で起動するアプリの照合に使う）。</summary>
     public string? LaunchArgs { get; init; }
+    /// <summary>このアプリのショートカット (.lnk)。右クリックメニューを Windows のタスクバーと同じ内容（プロパティ等）にするのに使う。</summary>
+    public string? ShortcutPath { get; init; }
+
+    public AppEntry WithShortcut(string lnk) => new()
+    {
+        Id = Id, Name = Name, ExePath = ExePath, Folder = Folder, Aumid = Aumid, LaunchArgs = LaunchArgs, ShortcutPath = lnk,
+    };
 
     /// <summary>Id がファイルパス（Windows のタスクバーにピン留めされた .lnk など）か。</summary>
     public bool IsFile => Path.IsPathRooted(Id);
@@ -151,7 +158,7 @@ public sealed class AppCatalog
                                   : folders.byName.TryGetValue(name.Trim(), out var f2) ? f2 : null;
                     // フォルダの中身は OS と同じくすべて出す（ヘルプやアンインストールも）。直下の雑多なものだけ除外
                     if (group == null && IsNoise(name, path)) continue;
-                    result.Add(new AppEntry { Id = path, Name = name, ExePath = exe, Folder = group, Aumid = aumid, LaunchArgs = info?.Arguments });
+                    result.Add(new AppEntry { Id = path, Name = name, ExePath = exe, Folder = group, Aumid = aumid, LaunchArgs = info?.Arguments, ShortcutPath = info?.Path });
                 }
                 catch { /* 個別アイテムの失敗は無視 */ }
                 finally { Marshal.FinalReleaseComObject(item); }
@@ -176,7 +183,7 @@ public sealed class AppCatalog
             .Where(g => g.Count() < 2).SelectMany(g => g).ToList();
         foreach (var a in single)
         {
-            var flat = new AppEntry { Id = a.Id, Name = a.Name, ExePath = a.ExePath, Folder = null, Aumid = a.Aumid, LaunchArgs = a.LaunchArgs };
+            var flat = new AppEntry { Id = a.Id, Name = a.Name, ExePath = a.ExePath, Folder = null, Aumid = a.Aumid, LaunchArgs = a.LaunchArgs, ShortcutPath = a.ShortcutPath };
             if (IsNoise(flat.Name, flat.Id)) { kept.Remove(a); continue; }
             kept[kept.IndexOf(a)] = flat;
             foreach (var key in byId.Where(kv => kv.Value == a).Select(kv => kv.Key).ToList()) byId[key] = flat;

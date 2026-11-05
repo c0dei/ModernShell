@@ -128,7 +128,7 @@ public static class ShellContextMenu
     /// パス（ファイル / .lnk / "shell:AppsFolder\AUMID"）の標準メニューを項目一覧として返す。
     /// shift を true にすると Shift+右クリック相当の拡張項目（「パスのコピー」など）も含める。
     /// </summary>
-    public static List<MenuItemSpec> For(string parsingName, IntPtr owner, bool shift = false)
+    public static List<MenuItemSpec> For(string parsingName, IntPtr owner, bool shift = false, bool verbsOnly = false)
     {
         Release();
         var result = new List<MenuItemSpec>();
@@ -144,7 +144,10 @@ public static class ShellContextMenu
             Marshal.Release(pcm);
 
             var hmenu = CreatePopupMenu();
-            ((IContextMenu)cm).QueryContextMenu(hmenu, 0, FirstId, LastId, CMF_NORMAL | (shift ? CMF_EXTENDEDVERBS : 0));
+            // verbsOnly: ショートカットの「動作」だけ（開く / 管理者として実行 / ピン留め / プロパティ など）。
+            // スタートやタスクバーが .lnk に使う出し方で、切り取り・コピー・削除のようなファイル操作は出ない
+            ((IContextMenu)cm).QueryContextMenu(hmenu, 0, FirstId, LastId,
+                CMF_NORMAL | (shift ? CMF_EXTENDEDVERBS : 0) | (verbsOnly ? 0x2u /*CMF_VERBSONLY*/ : 0));
             _current = (hmenu, cm);
             Read(hmenu, cm, owner, result);
         }

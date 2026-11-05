@@ -5,7 +5,11 @@ using System.Text;
 namespace ModernShell.Core;
 
 /// <summary>ショートカット (.lnk) の中身。</summary>
-public sealed record ShortcutInfo(string? Target, string? Arguments, string? Aumid);
+public sealed record ShortcutInfo(string? Target, string? Arguments, string? Aumid)
+{
+    /// <summary>.lnk ファイル自体のパス。</summary>
+    public string? Path { get; init; }
+}
 
 /// <summary>
 /// .lnk を読む（リンク先・引数・AppUserModelID）。
@@ -81,7 +85,7 @@ public static class Shortcut
 
             var target = Environment.ExpandEnvironmentVariables(path.ToString());
             return new ShortcutInfo(target.Length > 0 ? target : null, args.Length > 0 ? args.ToString() : null,
-                string.IsNullOrEmpty(aumid) ? null : aumid);
+                string.IsNullOrEmpty(aumid) ? null : aumid) { Path = lnk };
         }
         catch { return null; }
         finally { if (link != null) Marshal.ReleaseComObject(link); }

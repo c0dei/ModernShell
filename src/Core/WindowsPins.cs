@@ -100,12 +100,13 @@ public sealed class WindowsPins : IDisposable
             var info = Shortcut.Read(lnk);
             var target = info?.Target;
             // AUMID が書かれていればそれで一覧のアプリを探す（一番確実）。なければリンク先の exe で探す
-            var app = (info?.Aumid != null ? _catalog.Find(info.Aumid) : null)
-                      ?? (target != null ? _catalog.FindByExe(target) : null)
+            // 一覧のアプリが見つかったら、右クリックメニュー用にピン留めのショートカットを持たせる（Windows と同じくプロパティ等が出る）
+            var app = (info?.Aumid != null ? _catalog.Find(info.Aumid)?.WithShortcut(lnk) : null)
+                      ?? (target != null ? _catalog.FindByExe(target)?.WithShortcut(lnk) : null)
                       ?? new AppEntry
                       {
                           Id = lnk, Name = Path.GetFileNameWithoutExtension(lnk), ExePath = target,
-                          Aumid = info?.Aumid, LaunchArgs = info?.Arguments,
+                          Aumid = info?.Aumid, LaunchArgs = info?.Arguments, ShortcutPath = lnk,
                       };
             int pos = Position(name);
             found.Add((pos < 0 ? int.MaxValue - 1000 + found.Count : pos, app));

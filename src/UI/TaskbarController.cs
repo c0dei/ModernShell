@@ -221,7 +221,21 @@ public sealed class TaskbarController : IDisposable
 
     private void AddSurface(BarSurface.Anchor anchor, double h, FrameworkElement content)
     {
+        // 空いている場所でも右クリックを受け取れるよう、透明の背景を付ける
+        if (content is Panel panel && panel.Background == null) panel.Background = Brushes.Transparent;
         var s = new BarSurface(anchor, h, _settings) { Content = content, Foreground = Theme.Current.Text };
+        // ボタン以外の場所を右クリック → Windows のタスクバーと同じく「タスク マネージャー」「タスクバーの設定」
+        s.MouseRightButtonUp += (_, e) =>
+        {
+            if (e.Handled) return;
+            e.Handled = true;
+            Flyout.Show(content, new[]
+            {
+                new MenuItemSpec("\uE9D9", "タスク マネージャー", SystemActions.OpenTaskManager),
+                MenuItemSpec.Separator,
+                new MenuItemSpec("\uE713", "タスクバーの設定", () => OpenSettingsRequested?.Invoke()),
+            }, PlacementMode.MousePoint);
+        };
         s.ContentSizeChanged += Arrange;
         s.Loaded += (_, _) => Arrange();
         _surfaces.Add(s);
@@ -826,6 +840,8 @@ public sealed class TaskbarController : IDisposable
         var w0 = g.Windows.FirstOrDefault();
         var aumid = (w0 != null ? Aumid(w0) : null) ?? app?.Aumid ?? (app != null && !app.IsFile && !app.Id.Contains('\\') ? app.Id : null);
         var exe = (w0 != null ? ExePath(w0) : null) ?? app?.ExePath;
+        // パッケージ版アプリ（Terminal など）のタスクは "ms-appx:///…" でパッケージ内の画像を指すので、インストール先を求めておく
+        var packageRoot = PackageInfo.RootFromExe(exe) ?? (aumid != null && aumid.Contains('!') ? PackageInfo.InstallPath(aumid) : null);
         try
         {
             foreach (var cat in JumpList.Read(aumid, exe))
@@ -841,7 +857,7 @@ public sealed class TaskbarController : IDisposable
                     {
                         // アイコン: ショートカットに書かれたアイコン → シェルのアイコン取得 → アプリのアイコン の順に試す
                         // （シェルのアイコン取得は解決できないと null ではなく汎用アイコンを返すので後回し）
-                        Icon = (it.IconFile != null ? ModernShell.Core.IconHelper.FromFile(it.IconFile, it.IconIndex) : null)
+                        Icon = JumpIcon(it.IconFile, it.IconIndex, packageRoot)
                                ?? (it.IconFile == null && it.Target != null && !it.Target.EndsWith("explorer.exe", StringComparison.OrdinalIgnoreCase)
                                    ? ModernShell.Core.IconHelper.Get(path, 32) : null)
                                ?? (it.Target == null ? ModernShell.Core.IconHelper.Get(path, 32) : null)
@@ -886,7 +902,10 @@ public sealed class TaskbarController : IDisposable
     private IEnumerable<MenuItemSpec> AppItemMenu(AppEntry app)
     {
         // Windows 標準の右クリックメニューをそのまま使う（取れなかったときだけ自前の項目）
-        var shell = ShellContextMenu.For(app.ShellPath, OwnerHandle);
+        // Windows のタスクバーと同じく、ショートカットがあればその .lnk のメニューを使う（「プロパティ」も出る）
+        var shell = app.ShortcutPath != null && System.IO.File.Exists(app.ShortcutPath)
+            ? ShellContextMenu.For(app.ShortcutPath, OwnerHandle, verbsOnly: true)
+            : ShellContextMenu.For(app.ShellPath, OwnerHandle);
         return shell.Count > 0 ? shell : ManualAppMenu(app);
     }
 
@@ -926,6 +945,18 @@ public sealed class TaskbarController : IDisposable
             yield return new MenuItemSpec("\uE838", "ファイルの場所を開く", () => OpenPath("explorer.exe", $"/select,\"{path}\""));
             yield return new MenuItemSpec("\uE8C8", "パスをコピー", () => { try { Clipboard.SetText(path); } catch { } });
         }
+    }
+
+    /// <summary>ジャンプリスト項目のアイコン指定（DLL/EXE の番号、画像ファイル、ms-appx:/// のパッケージ内画像）を画像にする。</summary>
+    private static ImageSource? JumpIcon(string? file, int index, string? packageRoot)
+    {
+        if (string.IsNullOrEmpty(file)) return null;
+        if (file.StartsWith("ms-appx:///", StringComparison.OrdinalIgnoreCase))
+            return PackageInfo.ResolveAsset(file, packageRoot) is { } asset ? PackageInfo.LoadImage(asset) : null;
+        var ext = System.IO.Path.GetExtension(file).ToLowerInvariant();
+        if (ext is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif")
+            return System.IO.File.Exists(file) ? PackageInfo.LoadImage(file) : null;
+        return ModernShell.Core.IconHelper.FromFile(file, index);
     }
 
     private static void OpenPath(string file, string args)
