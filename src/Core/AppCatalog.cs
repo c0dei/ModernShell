@@ -137,7 +137,12 @@ public sealed class AppCatalog
         }
         finally { Marshal.FinalReleaseComObject(shell); }
 
-        return result.OrderBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        // 同じアプリが複数登録されていることがある（ユーザー用と全ユーザー用のショートカットなど）。
+        // 名前と実体の exe が同じものは 1 つにまとめる（exe が分からないものはまとめない）
+        return result
+            .GroupBy(a => a.ExePath != null ? a.Name.ToLowerInvariant() + "|" + a.ExePath.ToLowerInvariant() : "id|" + a.Id)
+            .Select(g => g.First())
+            .OrderBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 
     private static readonly Regex Noise = new(@"(uninstall|アンインストール|readme|help|ヘルプ|website|web site|documentation)", RegexOptions.IgnoreCase);
