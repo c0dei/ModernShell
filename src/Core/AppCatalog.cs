@@ -76,6 +76,13 @@ public sealed class AppCatalog
     public AppEntry? FindByExe(string exePath) =>
         _apps.FirstOrDefault(a => a.ExePath != null && string.Equals(a.ExePath, exePath, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>exe のファイル名だけで探す（インストール先が違う同じアプリ用）。候補が 1 つのときだけ返す。</summary>
+    public AppEntry? FindByExeName(string fileName)
+    {
+        var hits = _apps.Where(a => a.ExePath != null && string.Equals(Path.GetFileName(a.ExePath), fileName, StringComparison.OrdinalIgnoreCase)).Take(2).ToList();
+        return hits.Count == 1 ? hits[0] : null;
+    }
+
     public Task LoadAsync()
     {
         // Shell.Application は STA を要求するので専用スレッドで列挙する

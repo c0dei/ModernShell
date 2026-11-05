@@ -517,7 +517,7 @@ public sealed class TaskbarController : IDisposable
                 h.Margin = new Thickness(4, _overflowPanel!.Children.Count == 0 ? 0 : 8, 0, 4);
                 _overflowPanel!.Children.Add(h);
             }
-            var w = new WrapPanel();
+            var w = new WrapPanel { MaxWidth = 6 * 34 }; // Windows と同じく数個ごとに折り返す
             _overflowPanel!.Children.Add(w);
             return w;
         }
@@ -730,16 +730,36 @@ public sealed class TaskbarController : IDisposable
 
     /// <summary>ピン留めアプリ（Windows と共有なら Windows のタスクバーと同じ内容・並び順）。</summary>
     private IEnumerable<AppEntry> PinnedApps() => PinsFromWindows
-        ? _windowsPins.Apps
+        ? _windowsPins.Apps.Concat(_settings.PinnedTaskbarExtra.Select(ResolvePinned).Where(a => a != null).Cast<AppEntry>())
         : _settings.PinnedTaskbar.Select(ResolvePinned).Where(a => a != null).Cast<AppEntry>();
+
+    /// <summary>ModernShell 側で変更できるピン留めの一覧（Windows と共有中は「追加分」）。</summary>
+    private List<string> EditablePins => PinsFromWindows ? _settings.PinnedTaskbarExtra : _settings.PinnedTaskbar;
+    private bool IsWindowsPin(AppEntry app) => PinsFromWindows && _windowsPins.Apps.Any(a => a.Id.Equals(app.Id, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>ピン留め ID → アプリ。Windows から取り込んだショートカット (.lnk のパス) にも対応。</summary>
     private AppEntry? ResolvePinned(string id)
     {
         if (_catalog.Find(id) is { } app) return app;
         if (System.IO.Path.IsPathRooted(id) && System.IO.File.Exists(id))
-            return new AppEntry { Id = id, Name = System.IO.Path.GetFileNameWithoutExtension(id), ExePath = WindowsPins.ShortcutTarget(id) };
+            return id.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                ? ExeEntry(id, null)
+                : new AppEntry { Id = id, Name = System.IO.Path.GetFileNameWithoutExtension(id), ExePath = WindowsPins.ShortcutTarget(id) };
         return null;
+    }
+
+    /// <summary>実行ファイルからアプリ項目を作る（表示名はファイルの説明、なければファイル名）。</summary>
+    private static AppEntry ExeEntry(string exe, System.Windows.Media.ImageSource? _)
+    {
+        string name = System.IO.Path.GetFileNameWithoutExtension(exe);
+        try
+        {
+            var info = System.Diagnostics.FileVersionInfo.GetVersionInfo(exe);
+            if (!string.IsNullOrWhiteSpace(info.FileDescription)) name = info.FileDescription.Trim();
+            else if (!string.IsNullOrWhiteSpace(info.ProductName)) name = info.ProductName.Trim();
+        }
+        catch { }
+        return new AppEntry { Id = exe, Name = name, ExePath = exe };
     }
 
     /// <summary>
@@ -768,8 +788,12 @@ public sealed class TaskbarController : IDisposable
     private AppEntry? FindApp(ApplicationWindow? w)
     {
         if (w == null) return null;
+        var exe = ExePath(w);
         return (Aumid(w) is { } id ? _catalog.Find(id) : null)
-               ?? (ExePath(w) is { } exe ? _catalog.FindByExe(exe) : null);
+               ?? (exe != null ? _catalog.FindByExe(exe) : null)
+               ?? (exe != null ? _catalog.FindByExeName(System.IO.Path.GetFileName(exe)) : null)
+               // アプリ一覧に無いアプリでも、実行ファイルから項目を作ってピン留めできるようにする
+               ?? (exe != null && !exe.EndsWith("ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase) ? ExeEntry(exe, w.Icon) : null);
     }
 
     /// <summary>アイランド型のホバー拡大（Mac のドック風）。レイアウトは変えず描画だけ拡大する。</summary>
@@ -815,7 +839,13 @@ public sealed class TaskbarController : IDisposable
                                   || path.Contains(@"\ModernShell\jumplist\", StringComparison.OrdinalIgnoreCase);
                     items.Add(new MenuItemSpec("", Truncate(it.Title, 48), () => OpenPath(path))
                     {
-                        Icon = ModernShell.Core.IconHelper.Get(path, 32),
+                        // アイコン: ショートカットに書かれたアイコン → シェルのアイコン取得 → アプリのアイコン の順に試す
+                        // （シェルのアイコン取得は解決できないと null ではなく汎用アイコンを返すので後回し）
+                        Icon = (it.IconFile != null ? ModernShell.Core.IconHelper.FromFile(it.IconFile, it.IconIndex) : null)
+                               ?? (it.IconFile == null && it.Target != null && !it.Target.EndsWith("explorer.exe", StringComparison.OrdinalIgnoreCase)
+                                   ? ModernShell.Core.IconHelper.Get(path, 32) : null)
+                               ?? (it.Target == null ? ModernShell.Core.IconHelper.Get(path, 32) : null)
+                               ?? w0?.Icon ?? app?.Icon(32),
                         SubMenu = () => JumpItemMenu(path, isTask),
                     });
                 }
@@ -827,17 +857,18 @@ public sealed class TaskbarController : IDisposable
         if (app != null)
         {
             items.Add(new MenuItemSpec("", app.Name, () => app.Launch()) { Icon = w0?.Icon ?? app.Icon(32), SubMenu = () => AppItemMenu(app) });
-            if (PinsFromWindows)
+            if (IsWindowsPin(app))
             {
                 // Windows のピン留めはアプリから変更できない（Windows が API を提供していない）
-                items.Add(new MenuItemSpec("\uE946", "ピン留めは Windows のタスクバーと共有中", () => OpenSettingsRequested?.Invoke()));
+                items.Add(new MenuItemSpec("\uE946", "Windows のタスクバーのピン留め（Windows 側で変更）", () => OpenSettingsRequested?.Invoke()));
             }
             else
             {
-                bool pinned = _settings.PinnedTaskbar.Contains(app.Id, StringComparer.OrdinalIgnoreCase);
+                var pins = EditablePins;
+                bool pinned = pins.Contains(app.Id, StringComparer.OrdinalIgnoreCase);
                 items.Add(pinned
-                    ? new MenuItemSpec("", "タスクバーからピン留めを外す", () => { _settings.PinnedTaskbar.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
-                    : new MenuItemSpec("", "タスクバーにピン留めする", () => { _settings.PinnedTaskbar.Add(app.Id); _settings.Save(); }));
+                    ? new MenuItemSpec("\uE77A", "タスクバーからピン留めを外す", () => { pins.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
+                    : new MenuItemSpec("\uE718", "タスクバーにピン留めする", () => { pins.Add(app.Id); _settings.Save(); }));
             }
         }
         if (g.Windows.Count > 0)
@@ -869,12 +900,13 @@ public sealed class TaskbarController : IDisposable
         yield return onStart
             ? new MenuItemSpec("\uE77A", "スタートからピン留めを外す", () => { _settings.PinnedStart.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
             : new MenuItemSpec("\uE718", "スタートにピン留めする", () => { _settings.PinnedStart.Add(app.Id); _settings.Save(); });
-        if (!PinsFromWindows)
+        if (!IsWindowsPin(app))
         {
-            bool onBar = _settings.PinnedTaskbar.Contains(app.Id, StringComparer.OrdinalIgnoreCase);
+            var pins = EditablePins;
+            bool onBar = pins.Contains(app.Id, StringComparer.OrdinalIgnoreCase);
             yield return onBar
-                ? new MenuItemSpec("\uE77A", "タスクバーからピン留めを外す", () => { _settings.PinnedTaskbar.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
-                : new MenuItemSpec("\uE718", "タスクバーにピン留めする", () => { _settings.PinnedTaskbar.Add(app.Id); _settings.Save(); });
+                ? new MenuItemSpec("\uE77A", "タスクバーからピン留めを外す", () => { pins.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
+                : new MenuItemSpec("\uE718", "タスクバーにピン留めする", () => { pins.Add(app.Id); _settings.Save(); });
         }
         if (app.ExePath != null) yield return new MenuItemSpec("\uE838", "ファイルの場所を開く", app.OpenFileLocation);
     }

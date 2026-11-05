@@ -9,7 +9,14 @@ using System.Text;
 namespace ModernShell.Core;
 
 /// <summary>ジャンプリストの 1 項目。Path を開けば実行できる（タスクは一時 .lnk、最近使ったものは実ファイル）。</summary>
-public sealed record JumpItem(string Title, string Path, bool IsSeparator = false);
+public sealed record JumpItem(string Title, string Path, bool IsSeparator = false)
+{
+    /// <summary>ショートカットに書かれたアイコンの場所（DLL / EXE / ICO と番号）。</summary>
+    public string? IconFile { get; init; }
+    public int IconIndex { get; init; }
+    /// <summary>ショートカットのリンク先（アイコンの最後の手段に使う）。</summary>
+    public string? Target { get; init; }
+}
 
 /// <summary>ジャンプリストの区切り（「タスク」「最近使ったもの」やアプリ独自のカテゴリ）。</summary>
 public sealed record JumpCategory(string Title, List<JumpItem> Items);
@@ -192,6 +199,25 @@ public static class JumpList
 
     [ComImport, Guid("00021401-0000-0000-C000-000000000046")] private class ShellLink { }
 
+    [ComImport, Guid("000214F9-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellLinkW
+    {
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int cch, IntPtr pfd, uint flags);
+        void GetIDList(out IntPtr ppidl);
+        void SetIDList(IntPtr pidl);
+        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder name, int cch);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
+        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder dir, int cch);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string dir);
+        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder args, int cch);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string args);
+        void GetHotkey(out short hotkey);
+        void SetHotkey(short hotkey);
+        void GetShowCmd(out int cmd);
+        void SetShowCmd(int cmd);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder path, int cch, out int index);
+    }
+
     [ComImport, Guid("00000109-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IPersistStream
     {
@@ -253,7 +279,21 @@ public static class JumpList
             Directory.CreateDirectory(TempDir);
             var path = System.IO.Path.Combine(TempDir, Convert.ToHexString(SHA1.HashData(lnk)) + ".lnk");
             if (!File.Exists(path)) File.WriteAllBytes(path, lnk);
-            return new JumpItem(ResolveIndirect(title), path);
+            // アイコンの場所とリンク先（シェルのアイコン取得で取れなかったときに使う）
+            string? iconFile = null, target = null;
+            int iconIndex = 0;
+            try
+            {
+                var sl = (IShellLinkW)link;
+                var ib = new StringBuilder(1024);
+                sl.GetIconLocation(ib, ib.Capacity, out iconIndex);
+                iconFile = ib.Length > 0 ? Environment.ExpandEnvironmentVariables(ib.ToString()) : null;
+                var tb = new StringBuilder(1024);
+                sl.GetPath(tb, tb.Capacity, IntPtr.Zero, 0);
+                target = tb.Length > 0 ? Environment.ExpandEnvironmentVariables(tb.ToString()) : null;
+            }
+            catch { }
+            return new JumpItem(ResolveIndirect(title), path) { IconFile = iconFile, IconIndex = iconIndex, Target = target };
         }
         catch { return null; }
         finally

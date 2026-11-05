@@ -56,6 +56,13 @@ public sealed class InputHooks : IDisposable
     /// <summary>Win キー単押し、または純正スタートボタンのクリック時に発火（UI スレッドで実行）。</summary>
     public event Action? StartRequested;
 
+    /// <summary>ModernShell のメニューが開いているか。開いている間は Esc と外側クリックを監視する。</summary>
+    public Func<bool> IsMenuOpen { get; set; } = () => false;
+    /// <summary>メニュー表示中に画面のどこかでマウスボタンが押された（物理ピクセル座標）。UI スレッドで実行。</summary>
+    public event Action<Win32.POINT>? MenuMouseDown;
+    /// <summary>メニュー表示中に Esc が押された。UI スレッドで実行。</summary>
+    public event Action? MenuEscape;
+
     /// <summary>ここが true の間だけ Win キーを横取りする。</summary>
     public Func<bool> InterceptWinKey { get; set; } = () => true;
 
@@ -100,6 +107,13 @@ public sealed class InputHooks : IDisposable
         int msg = (int)wParam;
         bool down = msg is Win32.WM_KEYDOWN or Win32.WM_SYSKEYDOWN;
         bool up = msg is Win32.WM_KEYUP or Win32.WM_SYSKEYUP;
+
+        // メニュー表示中の Esc はメニューを閉じるのに使い、前面のアプリには渡さない（Windows のメニューと同じ）
+        if (k.vkCode == Win32.VK_ESCAPE && IsMenuOpen())
+        {
+            if (down) _dispatcher.BeginInvoke(() => MenuEscape?.Invoke());
+            return (IntPtr)1;
+        }
         bool isWin = k.vkCode is Win32.VK_LWIN or Win32.VK_RWIN;
 
         if (isWin && InterceptWinKey())
@@ -135,6 +149,11 @@ public sealed class InputHooks : IDisposable
         {
             int msg = (int)wParam;
             if (_winDown && msg == Win32.WM_LBUTTONDOWN) _comboUsed = true;
+            if (msg is Win32.WM_LBUTTONDOWN or 0x0204 /*RBUTTONDOWN*/ or 0x0207 /*MBUTTONDOWN*/ && IsMenuOpen())
+            {
+                var pt = Marshal.PtrToStructure<Win32.MSLLHOOKSTRUCT>(lParam).pt;
+                _dispatcher.BeginInvoke(() => MenuMouseDown?.Invoke(pt));
+            }
 
             if (msg is Win32.WM_LBUTTONDOWN or Win32.WM_LBUTTONUP && _startRect?.Value is { } r && InterceptWinKey())
             {

@@ -122,6 +122,10 @@ public static class Program
             Log.Info("emergency hotkey registration failed");
 
         _hooks.StartRequested += () => _start.Toggle();
+        // メニューを Esc / 他の場所のクリックで閉じる（タスクバーはアクティブにならないので全体の入力を見て判断する）
+        _hooks.IsMenuOpen = () => FluentSurface.AnyOpen;
+        _hooks.MenuMouseDown += FluentSurface.CloseIfOutside;
+        _hooks.MenuEscape += FluentSurface.CloseTopmost;
         _hooks.Install();
 
         _ = _catalog.LoadAsync().ContinueWith(_ => app.Dispatcher.BeginInvoke(() => { _catalog.Watch(); _catalog.NotifyChanged(); }));

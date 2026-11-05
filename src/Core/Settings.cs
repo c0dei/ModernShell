@@ -51,6 +51,8 @@ public sealed class Settings
     public bool ShowSeconds { get; set; } = false;
     public List<string> PinnedTaskbar { get; set; } = new();
     public TaskbarPinSource TaskbarPinSource { get; set; } = TaskbarPinSource.Windows;
+    /// <summary>「Windows と共有」のとき、Windows のピン留めの後ろに ModernShell 側で追加したピン留め。</summary>
+    public List<string> PinnedTaskbarExtra { get; set; } = new();
     /// <summary>タスクバーのアプリアイコンの大きさ (px)。</summary>
     public int TaskbarIconSize { get; set; } = 24;
 

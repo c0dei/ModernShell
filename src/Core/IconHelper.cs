@@ -87,6 +87,29 @@ internal static class IconHelper
         return bmp;
     }
 
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern uint ExtractIconEx(string file, int index, IntPtr[]? large, IntPtr[]? small, uint count);
+
+    /// <summary>"C:\…\app.dll" の index 番目のアイコン（負の値はリソース ID）。ジャンプリストのタスクなどで使う。</summary>
+    public static ImageSource? FromFile(string file, int index)
+    {
+        if (string.IsNullOrEmpty(file) || !System.IO.File.Exists(file)) return null;
+        var key = "res|" + file + "|" + index;
+        return Cache.GetOrAdd(key, _ =>
+        {
+            var large = new IntPtr[1];
+            try
+            {
+                if (ExtractIconEx(file, index, large, null, 1) == 0 || large[0] == IntPtr.Zero) return null;
+                var src = Imaging.CreateBitmapSourceFromHIcon(large[0], Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                src.Freeze();
+                return src;
+            }
+            catch { return null; }
+            finally { if (large[0] != IntPtr.Zero) Win32.DestroyIcon(large[0]); }
+        });
+    }
+
     /// <summary>ウィンドウ自身が持つアイコン（UWP の ApplicationFrameHost 等のフォールバック用）。</summary>
     public static ImageSource? FromWindow(IntPtr hwnd)
     {

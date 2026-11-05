@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -18,7 +19,8 @@ namespace ModernShell.UI;
 /// </summary>
 public static class FluentSurface
 {
-    private static int _open;
+    private static readonly List<Popup> _openList = new();
+    private static int _open => _openList.Count;
     /// <summary>いずれかのメニュー/一覧が開いているか（開いている間はタスクバーのボタンを作り直さない）。</summary>
     public static bool AnyOpen => _open > 0;
 
@@ -39,9 +41,30 @@ public static class FluentSurface
                 Child = content,
             },
         };
-        popup.Opened += (_, _) => { _open++; ApplyBackdrop(popup); };
-        popup.Closed += (_, _) => _open = Math.Max(0, _open - 1);
+        popup.Opened += (_, _) => { _openList.Add(popup); ApplyBackdrop(popup); };
+        popup.Closed += (_, _) => _openList.Remove(popup);
         return popup;
+    }
+
+    [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(Win32.POINT pt);
+
+    /// <summary>
+    /// 画面のどこかがクリックされたとき（全体のマウス監視から呼ばれる）。ModernShell 以外のウィンドウなら開いているメニューを全部閉じる。
+    /// ※ タスクバーはアクティブにならない作りなので、他のアプリをクリックしてもメニューに通知が来ないため。
+    ///   ModernShell 自身のウィンドウ上のクリックは WPF 側の処理（外側クリックで閉じる / 開閉トグル）に任せる。
+    /// </summary>
+    public static void CloseIfOutside(Win32.POINT pt)
+    {
+        if (_openList.Count == 0) return;
+        Win32.GetWindowThreadProcessId(WindowFromPoint(pt), out var pid);
+        if (pid == (uint)Environment.ProcessId) return;
+        foreach (var p in _openList.ToArray()) p.IsOpen = false;
+    }
+
+    /// <summary>Esc で一番手前（最後に開いた）のメニューを閉じる。</summary>
+    public static void CloseTopmost()
+    {
+        if (_openList.Count > 0) _openList[^1].IsOpen = false;
     }
 
     private static void ApplyBackdrop(Popup popup)

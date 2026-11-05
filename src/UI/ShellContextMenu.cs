@@ -38,6 +38,39 @@ public static class ShellContextMenu
         [PreserveSig] int HandleMenuMsg(uint msg, IntPtr wParam, IntPtr lParam);
     }
 
+    [ComImport, Guid("bcfce0a0-ec17-11d0-8d10-00a0c90f2719"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IContextMenu3
+    {
+        [PreserveSig] int QueryContextMenu(IntPtr hmenu, uint indexMenu, uint idCmdFirst, uint idCmdLast, uint flags);
+        [PreserveSig] int InvokeCommand(ref CMINVOKECOMMANDINFOEX info);
+        [PreserveSig] int GetCommandString(UIntPtr idCmd, uint type, IntPtr reserved, StringBuilder name, uint cch);
+        [PreserveSig] int HandleMenuMsg(uint msg, IntPtr wParam, IntPtr lParam);
+        [PreserveSig] int HandleMenuMsg2(uint msg, IntPtr wParam, IntPtr lParam, out IntPtr result);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MEASUREITEMSTRUCT { public uint CtlType, CtlID, itemID, itemWidth, itemHeight; public IntPtr itemData; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct DRAWITEMSTRUCT
+    {
+        public uint CtlType, CtlID, itemID, itemAction, itemState;
+        public IntPtr hwndItem, hDC;
+        public RECTI rcItem;
+        public IntPtr itemData;
+    }
+
+    [StructLayout(LayoutKind.Sequential)] private struct RECTI { public int Left, Top, Right, Bottom; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BITMAPINFOHEADER { public uint biSize; public int biWidth, biHeight; public ushort biPlanes, biBitCount; public uint biCompression, biSizeImage; public int biXPelsPerMeter, biYPelsPerMeter; public uint biClrUsed, biClrImportant; }
+
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
+    [DllImport("gdi32.dll")] private static extern bool DeleteDC(IntPtr hdc);
+    [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr hdc, IntPtr obj);
+    [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr obj);
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateDIBSection(IntPtr hdc, ref BITMAPINFOHEADER bmi, uint usage, out IntPtr bits, IntPtr section, uint offset);
+
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct CMINVOKECOMMANDINFOEX
     {
@@ -78,7 +111,9 @@ public static class ShellContextMenu
     [DllImport("user32.dll")] private static extern int GetMenuItemCount(IntPtr h);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern bool GetMenuItemInfo(IntPtr h, uint item, bool byPosition, ref MENUITEMINFO mii);
 
-    private const uint MIIM_STATE = 0x1, MIIM_ID = 0x2, MIIM_SUBMENU = 0x4, MIIM_STRING = 0x40, MIIM_BITMAP = 0x80, MIIM_FTYPE = 0x100;
+    private const uint MIIM_STATE = 0x1, MIIM_ID = 0x2, MIIM_SUBMENU = 0x4, MIIM_CHECKMARKS = 0x8, MIIM_DATA = 0x20, MIIM_STRING = 0x40, MIIM_BITMAP = 0x80, MIIM_FTYPE = 0x100;
+    private const uint WM_MEASUREITEM = 0x002C, WM_DRAWITEM = 0x002B;
+    private static readonly IntPtr HBMMENU_CALLBACK = new(-1);
     private const uint MFT_SEPARATOR = 0x800, MFS_DISABLED = 0x3, MFS_DEFAULT = 0x1000;
     private const uint CMF_NORMAL = 0, CMF_EXTENDEDVERBS = 0x100;
     private const uint FirstId = 1, LastId = 0x7FFF;
@@ -130,7 +165,7 @@ public static class ShellContextMenu
                 var mii = new MENUITEMINFO
                 {
                     cbSize = Marshal.SizeOf<MENUITEMINFO>(),
-                    fMask = MIIM_FTYPE | MIIM_STATE | MIIM_ID | MIIM_SUBMENU | MIIM_STRING | MIIM_BITMAP,
+                    fMask = MIIM_FTYPE | MIIM_STATE | MIIM_ID | MIIM_SUBMENU | MIIM_STRING | MIIM_BITMAP | MIIM_CHECKMARKS | MIIM_DATA,
                     dwTypeData = buf, cch = 511,
                 };
                 if (!GetMenuItemInfo(hmenu, i, true, ref mii)) continue;
@@ -144,7 +179,11 @@ public static class ShellContextMenu
                 var text = CleanText(Marshal.PtrToStringUni(buf) ?? "");
                 if (text.Length == 0) continue;
 
-                var icon = MenuBitmap(mii.hbmpItem);
+                // アイコンの置き場所は拡張機能によって 3 通り:
+                //  1) 項目の画像 (hbmpItem)  2) 古い作りの拡張機能が使うチェックマーク用の画像 (hbmpUnchecked)
+                //  3) 「描画するときに呼んで」(HBMMENU_CALLBACK) → 代わりに描画を依頼して画像として受け取る
+                var icon = MenuBitmap(mii.hbmpItem) ?? MenuBitmap(mii.hbmpUnchecked)
+                           ?? (mii.hbmpItem == HBMMENU_CALLBACK ? OwnerDrawnIcon(cm, hmenu, mii.wID, mii.dwItemData) : null);
                 bool enabled = (mii.fState & MFS_DISABLED) == 0;
                 bool isDefault = (mii.fState & MFS_DEFAULT) != 0;
 
@@ -196,6 +235,78 @@ public static class ShellContextMenu
         // 1–11 は HBMMENU_* の特殊値（オーナー描画など）なので画像としては使えない
         if ((long)hbmp <= 11) return null;
         try { return IconHelper.FromHBitmap(hbmp); } catch { return null; }
+    }
+
+    /// <summary>
+    /// 自分で描画する項目のアイコンを、メモリ上の 32bit 画像に描いてもらって取り出す
+    /// （エクスプローラーがメニューを描くときと同じく WM_MEASUREITEM → WM_DRAWITEM を送る）。
+    /// </summary>
+    private static ImageSource? OwnerDrawnIcon(object cm, IntPtr hmenu, uint id, IntPtr itemData)
+    {
+        if (cm is not IContextMenu3 cm3) return null;
+        IntPtr dc = IntPtr.Zero, bmp = IntPtr.Zero, old = IntPtr.Zero;
+        try
+        {
+            var mis = new MEASUREITEMSTRUCT { CtlType = 1 /*ODT_MENU*/, itemID = id, itemData = itemData };
+            var pMis = Marshal.AllocHGlobal(Marshal.SizeOf<MEASUREITEMSTRUCT>());
+            try
+            {
+                Marshal.StructureToPtr(mis, pMis, false);
+                cm3.HandleMenuMsg2(WM_MEASUREITEM, IntPtr.Zero, pMis, out _);
+                mis = Marshal.PtrToStructure<MEASUREITEMSTRUCT>(pMis);
+            }
+            finally { Marshal.FreeHGlobal(pMis); }
+            int w = (int)Math.Clamp(mis.itemWidth == 0 ? 16 : mis.itemWidth, 16, 48);
+            int h = (int)Math.Clamp(mis.itemHeight == 0 ? 16 : mis.itemHeight, 16, 48);
+
+            var bmi = new BITMAPINFOHEADER { biSize = (uint)Marshal.SizeOf<BITMAPINFOHEADER>(), biWidth = w, biHeight = -h, biPlanes = 1, biBitCount = 32 };
+            dc = CreateCompatibleDC(IntPtr.Zero);
+            bmp = CreateDIBSection(dc, ref bmi, 0, out var bits, IntPtr.Zero, 0);
+            if (bmp == IntPtr.Zero) return null;
+            old = SelectObject(dc, bmp);
+
+            var dis = new DRAWITEMSTRUCT
+            {
+                CtlType = 1, itemID = id, itemAction = 1 /*ODA_DRAWENTIRE*/, hwndItem = hmenu, hDC = dc,
+                rcItem = new RECTI { Right = w, Bottom = h }, itemData = itemData,
+            };
+            var pDis = Marshal.AllocHGlobal(Marshal.SizeOf<DRAWITEMSTRUCT>());
+            try
+            {
+                Marshal.StructureToPtr(dis, pDis, false);
+                if (cm3.HandleMenuMsg2(WM_DRAWITEM, IntPtr.Zero, pDis, out _) != 0) return null;
+            }
+            finally { Marshal.FreeHGlobal(pDis); }
+
+            SelectObject(dc, old);
+            old = IntPtr.Zero;
+            var buf = new byte[w * h * 4];
+            Marshal.Copy(bits, buf, 0, buf.Length);
+            bool hasAlpha = false, hasColor = false;
+            for (int i = 0; i < buf.Length; i += 4)
+            {
+                if (buf[i + 3] != 0) hasAlpha = true;
+                if (buf[i] != 0 || buf[i + 1] != 0 || buf[i + 2] != 0) hasColor = true;
+            }
+            if (!hasAlpha && !hasColor) return null; // 何も描かれなかった
+            if (!hasAlpha)
+            {
+                // GDI で描かれた絵は透明度が 0 のままなので、色のある画素を不透明にする（黒い背景は透明扱い）
+                for (int i = 0; i < buf.Length; i += 4)
+                    if (buf[i] != 0 || buf[i + 1] != 0 || buf[i + 2] != 0) buf[i + 3] = 255;
+            }
+            var src = System.Windows.Media.Imaging.BitmapSource.Create(w, h, 96, 96,
+                hasAlpha ? PixelFormats.Pbgra32 : PixelFormats.Bgra32, null, buf, w * 4);
+            src.Freeze();
+            return src;
+        }
+        catch { return null; }
+        finally
+        {
+            if (old != IntPtr.Zero) SelectObject(dc, old);
+            if (bmp != IntPtr.Zero) DeleteObject(bmp);
+            if (dc != IntPtr.Zero) DeleteDC(dc);
+        }
     }
 
     private static void Invoke(object cm, uint offset, IntPtr owner)
