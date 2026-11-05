@@ -52,7 +52,9 @@ public sealed class BarSurface : Window
         long ex = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE);
         // TOOLWINDOW: Alt+Tab に出さない / NOACTIVATE: クリックしても前面ウィンドウを奪わない（最小化トグル判定に必須）
         Win32.SetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE, (IntPtr)(ex | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_NOACTIVATE));
-        Backdrop.Apply(this, settings.Backdrop, settings.BackdropEngine, Theme.Current, alwaysInactive: true, tint: settings.TaskbarOpacity / 100.0);
+        // タスクバーは常に非アクティブなので Windows 標準の背景効果は使えない（単色化する）。下地は設定の素材、濃さは重ねる色で付ける
+        Backdrop.Apply(this, settings.Backdrop, BackdropEngine.AccentBlur, Theme.Current, alwaysInactive: true,
+            tint: settings.TaskbarOpacity / 100.0, material: settings.TaskbarMaterial);
         HwndSource.FromHwnd(hwnd)!.AddHook(WndProc);
 
         SizeChanged += (_, _) => ContentSizeChanged?.Invoke();

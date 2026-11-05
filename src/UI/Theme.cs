@@ -173,7 +173,8 @@ public static class Backdrop
     /// </summary>
     /// <param name="tint">背景の不透明度 (0–1)。null なら既定。
     /// Acrylic ぼかし方式では色の濃さそのもの、Windows 標準方式では上に重ねる単色の濃さとして使う。</param>
-    public static void Apply(Window w, BackdropKind kind, BackdropEngine engine, Theme t, bool alwaysInactive, double? tint = null)
+    public static void Apply(Window w, BackdropKind kind, BackdropEngine engine, Theme t, bool alwaysInactive, double? tint = null,
+        TaskbarMaterial material = TaskbarMaterial.Acrylic)
     {
         var hwnd = new WindowInteropHelper(w).EnsureHandle();
         var src = HwndSource.FromHwnd(hwnd);
@@ -228,11 +229,19 @@ public static class Backdrop
             }
             else alpha = kind == BackdropKind.Mica ? (byte)0xD8 : (byte)0x99; // Mica 指定時は濃いめのティントで近い見た目にする
             uint abgr = ((uint)alpha << 24) | ((uint)c.B << 16) | ((uint)c.G << 8) | c.R;
-            SetAccent(hwnd, AccentState.AcrylicBlurBehind, abgr);
+            // 下地の種類: Acrylic（明るさの層とノイズ入り。暗い背景では灰色の板に見える）/ ぼかしのみ / 完全に透明
+            var state = material switch
+            {
+                TaskbarMaterial.Blur => AccentState.BlurBehind,
+                TaskbarMaterial.Clear => AccentState.TransparentGradient,
+                _ => AccentState.AcrylicBlurBehind,
+            };
+            if (material == TaskbarMaterial.Clear) abgr &= 0x00FFFFFF; // 下地は完全に透明。濃さは重ねる色だけで付ける
+            SetAccent(hwnd, state, abgr);
         }
     }
 
-    internal enum AccentState { Disabled = 0, BlurBehind = 3, AcrylicBlurBehind = 4 }
+    internal enum AccentState { Disabled = 0, TransparentGradient = 2, BlurBehind = 3, AcrylicBlurBehind = 4 }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct AccentPolicy { public AccentState State; public int Flags; public uint GradientColor; public int AnimationId; }

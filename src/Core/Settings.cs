@@ -14,6 +14,8 @@ public enum TaskbarEdge { Bottom, Top }
 /// <summary>スタート・検索・タスクビューの位置。WithApps: アプリと一緒（中央 or 左） / LeftEdge: 常に左端（3 分割）</summary>
 public enum StartButtonPosition { WithApps, LeftEdge }
 public enum BackdropEngine { Auto, SystemBackdrop, AccentBlur }
+/// <summary>タスクバーの下地。Acrylic: Windows 11 のすりガラス（明るさの層とノイズ入り） / Blur: ぼかしのみ / Clear: 完全に透明</summary>
+public enum TaskbarMaterial { Acrylic, Blur, Clear }
 /// <summary>タスクバーのピン留めの出どころ。Windows: Windows のタスクバーと同じ内容・並び順（読み取り） / ModernShell: 独自に管理</summary>
 public enum TaskbarPinSource { Windows, ModernShell }
 /// <summary>Band: 画面端に密着した帯 / Floating: 画面端から浮いた島（アイランド、Mac のドック風）</summary>
@@ -66,6 +68,7 @@ public sealed class Settings
     public int MenuFontSize { get; set; } = 14;
     /// <summary>タスクバー背景の不透明度 (0 = ぼかしだけ ～ 100 = 不透明)。</summary>
     public int TaskbarOpacity { get; set; } = 60;
+    public TaskbarMaterial TaskbarMaterial { get; set; } = TaskbarMaterial.Blur;
     /// <summary>スタートメニュー背景の不透明度 (0 = 標準の Acrylic/Mica のまま ～ 100 = 不透明)。</summary>
     public int StartMenuOpacity { get; set; } = 0;
     /// <summary>背景効果の描画方式。Auto: Win11 22H2 以降は公式 API、それ以外は Acrylic ぼかし。</summary>

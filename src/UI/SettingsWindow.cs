@@ -308,7 +308,10 @@ public sealed class SettingsWindow : Window
         p.Children.Add(DropDownRow("背景効果の描画方式", "透けない場合は「Acrylic ぼかし」を試してください",
             new[] { ("Auto", "自動"), ("SystemBackdrop", "Windows 11 標準（22H2 以降）"), ("AccentBlur", "Acrylic ぼかし（互換）") },
             _s.BackdropEngine.ToString(), v => _s.BackdropEngine = Enum.Parse<BackdropEngine>(v)));
-        p.Children.Add(SliderRow("タスクバーの不透明度", "0 にするとぼかしだけ、100 で不透明。Acrylic / Mica のとき有効です",
+        p.Children.Add(DropDownRow("タスクバーの下地", "不透明度 0% のときに見える素材です",
+            new[] { ("Blur", "ぼかしのみ"), ("Clear", "完全に透明（ぼかしなし）"), ("Acrylic", "Acrylic（すりガラス）") },
+            _s.TaskbarMaterial.ToString(), v => _s.TaskbarMaterial = Enum.Parse<TaskbarMaterial>(v), _s.Backdrop != BackdropKind.Solid));
+        p.Children.Add(SliderRow("タスクバーの不透明度", "下地の上に重ねる色の濃さ。0 で下地のまま、100 で不透明",
             _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.Backdrop != BackdropKind.Solid));
         p.Children.Add(SliderRow("スタート メニューの不透明度", "0 で標準の Acrylic / Mica。上げるほど濃くなります",
             _s.StartMenuOpacity, v => _s.StartMenuOpacity = v, _s.Backdrop != BackdropKind.Solid));

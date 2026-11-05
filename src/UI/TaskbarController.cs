@@ -145,7 +145,7 @@ public sealed class TaskbarController : IDisposable
         _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarHeight, _settings.TaskbarIconSize, _settings.IslandMargin,
         _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds, _settings.Backdrop, _settings.BackdropEngine,
         _settings.MagnifyOnHover, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
-        _settings.TaskbarOpacity);
+        _settings.TaskbarOpacity, _settings.TaskbarMaterial);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e) => _dispatcher.BeginInvoke(UpdateStatus);
 
     // ------------------------------------------------------------------
