@@ -609,7 +609,8 @@ public sealed class TaskbarController : IDisposable
 
     // ManagedShell は値がないとき null ではなく空文字を返すので、空文字は「なし」として扱う
     // （そうしないと AUMID を持たないアプリが全部 1 つのボタンにまとめられてしまう）
-    private static string? Aumid(ApplicationWindow w) => string.IsNullOrEmpty(w.AppUserModelID) ? null : w.AppUserModelID;
+    // ウィンドウに AUMID が付いていなければ、パッケージ版アプリ（Terminal、ストア版 Claude など）はプロセスから取る
+    private static string? Aumid(ApplicationWindow w) => string.IsNullOrEmpty(w.AppUserModelID) ? ProcessAumid.Get(w.Handle) : w.AppUserModelID;
     private static string? ExePath(ApplicationWindow w) => string.IsNullOrEmpty(w.WinFileName) ? null : w.WinFileName;
     private static string GroupKey(ApplicationWindow w) => Aumid(w) ?? ExePath(w) ?? w.Handle.ToString();
 
@@ -634,6 +635,7 @@ public sealed class TaskbarController : IDisposable
                 if (g == null) { g = new Group { Key = key }; groups.Add(g); }
             }
             g.Windows.Add(w);
+            if (g.Pinned == null) LogUnmatched(w);
         }
 
         foreach (var g in groups.Where(x => x.Pinned == null && !_order.Contains(x.Key))) _order.Add(g.Key);
@@ -711,6 +713,19 @@ public sealed class TaskbarController : IDisposable
         tile.MiddleClick += _ => (g.Pinned ?? FindApp(g.Windows.FirstOrDefault()))?.Launch();
         tile.RightClick += x => Flyout.Show(x, GroupMenu(g), FlyoutPlacement);
         return tile;
+    }
+
+    private readonly HashSet<string> _loggedUnmatched = new();
+
+    /// <summary>ピン留めと結び付かなかったウィンドウを 1 度だけログに残す（照合の改善用）。</summary>
+    private void LogUnmatched(ApplicationWindow w)
+    {
+        var key = GroupKey(w);
+        if (!_loggedUnmatched.Add(key) || !PinnedApps().Any()) return;
+        Log.Info($"unmatched window: exe={ExePath(w)} aumid={Aumid(w)} title={w.Title}");
+        if (_loggedUnmatched.Count == 1)
+            foreach (var p in PinnedApps())
+                Log.Info($"  pinned: name={p.Name} id={p.Id} aumid={p.Aumid} exe={p.ExePath} args={p.LaunchArgs}");
     }
 
     /// <summary>ピン留めアプリ（Windows と共有なら Windows のタスクバーと同じ内容・並び順）。</summary>
@@ -796,7 +811,13 @@ public sealed class TaskbarController : IDisposable
                 {
                     if (it.IsSeparator) { items.Add(MenuItemSpec.Separator); continue; }
                     var path = it.Path;
-                    items.Add(new MenuItemSpec("", Truncate(it.Title, 48), () => OpenPath(path)) { Icon = ModernShell.Core.IconHelper.Get(path, 32) });
+                    bool isTask = path.StartsWith(System.IO.Path.GetTempPath(), StringComparison.OrdinalIgnoreCase)
+                                  || path.Contains(@"\ModernShell\jumplist\", StringComparison.OrdinalIgnoreCase);
+                    items.Add(new MenuItemSpec("", Truncate(it.Title, 48), () => OpenPath(path))
+                    {
+                        Icon = ModernShell.Core.IconHelper.Get(path, 32),
+                        SubMenu = () => JumpItemMenu(path, isTask),
+                    });
                 }
                 items.Add(MenuItemSpec.Separator);
             }
@@ -805,7 +826,7 @@ public sealed class TaskbarController : IDisposable
 
         if (app != null)
         {
-            items.Add(new MenuItemSpec("", app.Name, () => app.Launch()) { Icon = w0?.Icon ?? app.Icon(32) });
+            items.Add(new MenuItemSpec("", app.Name, () => app.Launch()) { Icon = w0?.Icon ?? app.Icon(32), SubMenu = () => AppItemMenu(app) });
             if (PinsFromWindows)
             {
                 // Windows のピン留めはアプリから変更できない（Windows が API を提供していない）
@@ -829,6 +850,42 @@ public sealed class TaskbarController : IDisposable
     }
 
     private static string Truncate(string s, int n) => s.Length <= n ? s : s.Substring(0, n - 1) + "…";
+
+    /// <summary>メニュー内のアプリ名を右クリックしたとき（Windows と同じ: 開く / 管理者として実行 / スタート・タスクバーのピン留め）。</summary>
+    private IEnumerable<MenuItemSpec> AppItemMenu(AppEntry app)
+    {
+        yield return new MenuItemSpec("\uE8A7", "開く", () => app.Launch());
+        if (app.ExePath != null) yield return new MenuItemSpec("\uE7EF", "管理者として実行", () => app.Launch(asAdmin: true));
+        bool onStart = _settings.PinnedStart.Contains(app.Id, StringComparer.OrdinalIgnoreCase);
+        yield return onStart
+            ? new MenuItemSpec("\uE77A", "スタートからピン留めを外す", () => { _settings.PinnedStart.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
+            : new MenuItemSpec("\uE718", "スタートにピン留めする", () => { _settings.PinnedStart.Add(app.Id); _settings.Save(); });
+        if (!PinsFromWindows)
+        {
+            bool onBar = _settings.PinnedTaskbar.Contains(app.Id, StringComparer.OrdinalIgnoreCase);
+            yield return onBar
+                ? new MenuItemSpec("\uE77A", "タスクバーからピン留めを外す", () => { _settings.PinnedTaskbar.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
+                : new MenuItemSpec("\uE718", "タスクバーにピン留めする", () => { _settings.PinnedTaskbar.Add(app.Id); _settings.Save(); });
+        }
+        if (app.ExePath != null) yield return new MenuItemSpec("\uE838", "ファイルの場所を開く", app.OpenFileLocation);
+    }
+
+    /// <summary>ジャンプリストの項目を右クリックしたとき。</summary>
+    private static IEnumerable<MenuItemSpec> JumpItemMenu(string path, bool isTask)
+    {
+        yield return new MenuItemSpec("\uE8A7", "開く", () => OpenPath(path));
+        if (!isTask && System.IO.File.Exists(path))
+        {
+            yield return new MenuItemSpec("\uE838", "ファイルの場所を開く", () => OpenPath("explorer.exe", $"/select,\"{path}\""));
+            yield return new MenuItemSpec("\uE8C8", "パスをコピー", () => { try { Clipboard.SetText(path); } catch { } });
+        }
+    }
+
+    private static void OpenPath(string file, string args)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(file, args) { UseShellExecute = true }); }
+        catch (Exception ex) { Log.Error("open", ex); }
+    }
 
     private static void OpenPath(string path)
     {

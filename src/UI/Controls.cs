@@ -171,6 +171,8 @@ public sealed record MenuItemSpec(string Glyph, string Text, Action Action, bool
     public bool IsHeader { get; init; }
     /// <summary>グリフの代わりに表示するアイコン画像（アプリやファイルのアイコン）。</summary>
     public ImageSource? Icon { get; init; }
+    /// <summary>この項目を右クリックしたときに出すメニュー（Windows のジャンプリストと同じ）。</summary>
+    public Func<IEnumerable<MenuItemSpec>>? SubMenu { get; init; }
 }
 
 /// <summary>標準 ContextMenu の代わりのモダンなポップアップメニュー。</summary>
@@ -192,7 +194,10 @@ public static class Flyout
     /// メニューを開く。開いている間は呼び出し元のボタンをクリック不可にしておくことで、
     /// ボタンをもう一度押したとき「外側クリックで閉じる」だけが起きて再オープンされない（開閉トグルになる）。
     /// </summary>
-    public static Popup Show(UIElement target, IEnumerable<MenuItemSpec> items, PlacementMode placement = PlacementMode.MousePoint)
+    public static Popup Show(UIElement target, IEnumerable<MenuItemSpec> items, PlacementMode placement = PlacementMode.MousePoint) =>
+        Show(target, items, placement, parent: null);
+
+    private static Popup Show(UIElement target, IEnumerable<MenuItemSpec> items, PlacementMode placement, Popup? parent)
     {
         var t = Theme.Current;
         var panel = new StackPanel { Margin = new Thickness(4) };
@@ -223,7 +228,22 @@ public static class Flyout
             row.Children.Add(l);
             var tile = new Tile { Child = row, MinWidth = 220, Margin = new Thickness(0, 1, 0, 1) };
             var action = spec.Action;
-            tile.Click += _ => { popup.IsOpen = false; action(); };
+            tile.Click += _ =>
+            {
+                popup.IsOpen = false;
+                if (parent != null) parent.IsOpen = false; // サブメニューで選んだら親メニューも閉じる
+                action();
+            };
+            if (spec.SubMenu is { } sub)
+            {
+                // 右クリックでサブメニュー。開いている間は親メニューが閉じないよう固定する
+                tile.RightClick += x =>
+                {
+                    popup.StaysOpen = true;
+                    var child = Show(x, sub(), PlacementMode.MousePoint, popup);
+                    child.Closed += (_, _) => { if (popup.IsOpen) popup.StaysOpen = false; };
+                };
+            }
             panel.Children.Add(tile);
         }
 

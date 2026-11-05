@@ -68,8 +68,26 @@ internal static class KnownApps
         }
         // 4) ランチャー経由（例: Update.exe --processStart Discord.exe）: 引数に実行中の exe 名が含まれる
         if (app.LaunchArgs != null && app.LaunchArgs.Contains(exeName, StringComparison.OrdinalIgnoreCase)) return true;
-        // 5) 既知の組み合わせ
+        // 5) パッケージ版アプリ: 実行ファイルが WindowsApps\<パッケージ名>_<版>_<CPU>__<発行元ID>\ にある
+        if (app.IsStoreApp && PackageMatches(app.Id, exePath)) return true;
+        // 6) 既知の組み合わせ
         return AumidToExe.TryGetValue(app.Id, out var exe) && string.Equals(exeName, exe, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>"Microsoft.WindowsTerminal_8wekyb3d8bbwe!App" と "...\WindowsApps\Microsoft.WindowsTerminal_1.21_x64__8wekyb3d8bbwe\WindowsTerminal.exe" を照合。</summary>
+    private static bool PackageMatches(string aumid, string exePath)
+    {
+        int bang = aumid.IndexOf('!');
+        var family = bang > 0 ? aumid.Substring(0, bang) : aumid;
+        int us = family.LastIndexOf('_');
+        if (us <= 0) return false;
+        string name = family.Substring(0, us), publisher = family.Substring(us + 1);
+        var dir = Path.GetFileName(Path.GetDirectoryName(exePath) ?? "") ?? "";
+        // パッケージのルート直下とは限らないので、パスの各階層を見る
+        foreach (var part in exePath.Split('\\'))
+            if (part.StartsWith(name + "_", StringComparison.OrdinalIgnoreCase) && part.EndsWith("__" + publisher, StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
     }
 
     private static readonly HashSet<string> GenericExe = new(StringComparer.OrdinalIgnoreCase)
@@ -77,4 +95,44 @@ internal static class KnownApps
         "update.exe", "launcher.exe", "setup.exe", "javaw.exe", "java.exe", "python.exe", "pythonw.exe", "electron.exe",
         "rundll32.exe", "cmd.exe", "powershell.exe", "pwsh.exe", "wscript.exe", "mshta.exe", "dllhost.exe",
     };
+}
+
+/// <summary>
+/// プロセスの AppUserModelID（パッケージ版アプリのみ取得できる）。
+/// パッケージ版アプリはウィンドウに AUMID を付けないことが多いため、ピン留めとの照合に使う。
+/// </summary>
+internal static class ProcessAumid
+{
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetApplicationUserModelId(IntPtr hProcess, ref uint length, StringBuilder? id);
+
+    private static readonly Dictionary<IntPtr, string?> Cache = new();
+
+    public static string? Get(IntPtr hwnd)
+    {
+        lock (Cache)
+        {
+            if (Cache.TryGetValue(hwnd, out var cached)) return cached;
+            string? result = null;
+            try
+            {
+                Win32.GetWindowThreadProcessId(hwnd, out var pid);
+                var h = Win32.OpenProcess(Win32.PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+                if (h != IntPtr.Zero)
+                {
+                    try
+                    {
+                        uint len = 256;
+                        var sb = new StringBuilder((int)len);
+                        if (GetApplicationUserModelId(h, ref len, sb) == 0 && sb.Length > 0) result = sb.ToString();
+                    }
+                    finally { Win32.CloseHandle(h); }
+                }
+            }
+            catch { }
+            if (Cache.Count > 2000) Cache.Clear();
+            Cache[hwnd] = result;
+            return result;
+        }
+    }
 }
