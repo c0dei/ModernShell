@@ -399,10 +399,26 @@ public sealed class TaskbarController : IDisposable
                     if (Math.Abs(d.X) < 6 && Math.Abs(d.Y) < 6) return;
                     DragDrop.DoDragDrop(tile, new DataObject("ModernShell.TrayIcon", icon), DragDropEffects.Move);
                 };
+                // 差し込み位置を示す線（アイコンの左右どちらに入るか）
+                bool After(DragEventArgs e) => e.GetPosition(tile).X > tile.ActualWidth / 2;
+                void ShowLine(bool? after)
+                {
+                    tile.BorderBrush = after == null ? Brushes.Transparent : Theme.Current.AccentBrush;
+                    tile.BorderThickness = after switch { true => new Thickness(0, 0, 3, 0), false => new Thickness(3, 0, 0, 0), _ => new Thickness(1) };
+                }
+                tile.DragOver += (_, e) =>
+                {
+                    bool ok = e.Data.GetData("ModernShell.TrayIcon") is ManagedShell.WindowsTray.NotifyIcon d && !ReferenceEquals(d, icon);
+                    e.Effects = ok ? DragDropEffects.Move : DragDropEffects.None;
+                    ShowLine(ok ? After(e) : null);
+                    e.Handled = true;
+                };
+                tile.DragLeave += (_, _) => ShowLine(null);
                 tile.Drop += (_, e) =>
                 {
+                    ShowLine(null);
                     if (e.Data.GetData("ModernShell.TrayIcon") is not ManagedShell.WindowsTray.NotifyIcon dragged || ReferenceEquals(dragged, icon)) return;
-                    dragged.Pin(icon.PinOrder);
+                    dragged.Pin(icon.PinOrder + (After(e) ? 1 : 0));
                     _shell.SavePinnedTray(_settings);
                     RebuildTray();
                 };
@@ -464,7 +480,7 @@ public sealed class TaskbarController : IDisposable
 
     private void ShowOverflow(Tile anchor)
     {
-        if (_overflowPopup?.IsOpen == true) { _overflowPopup.IsOpen = false; return; }
+        if (_overflowPopup?.IsOpen == true) { _overflowPopup.IsOpen = false; return; } // 編集中（固定表示）に「^」で閉じる
         var t = Theme.Current;
         _overflowPanel = new StackPanel { MaxWidth = 6 * 34 + 12, Margin = new Thickness(6) };
         _overflowHint = UiKit.Label("", 11, t.TextSecondary);
@@ -484,6 +500,7 @@ public sealed class TaskbarController : IDisposable
             _trayEditMode = !_trayEditMode;
             // 編集中はドラッグでマウスを奪っても閉じないよう固定表示（「完了」か「^」で閉じる）
             if (_overflowPopup != null) _overflowPopup.StaysOpen = _trayEditMode;
+            if (_trayEditMode) anchor.IsHitTestVisible = true; // 固定表示中は「^」を押して閉じられるように
             UpdateEdit(); FillOverflow(); RebuildTray();
         };
         UpdateEdit();
@@ -506,6 +523,7 @@ public sealed class TaskbarController : IDisposable
         _overflowPopup.Closed += (_, _) => { if (_trayEditMode) { _trayEditMode = false; RebuildTray(); } };
         FillOverflow();
         _overflowPopup.IsOpen = true;
+        Flyout.ToggleGuard(_overflowPopup, anchor);
     }
 
     private void FillOverflow()
@@ -725,15 +743,31 @@ public sealed class TaskbarController : IDisposable
             if (Math.Abs(d.X) < 8 && Math.Abs(d.Y) < 8) return;
             DragDrop.DoDragDrop(tile, new DataObject("ModernShell.TaskbarPin", app.Id), DragDropEffects.Move);
         };
+        bool After(DragEventArgs e) => e.GetPosition(tile).X > tile.ActualWidth / 2;
+        void ShowLine(bool? after)
+        {
+            tile.BorderBrush = after == null ? Brushes.Transparent : Theme.Current.AccentBrush;
+            tile.BorderThickness = after switch { true => new Thickness(0, 0, 3, 0), false => new Thickness(3, 0, 0, 0), _ => new Thickness(1) };
+        }
+        tile.DragOver += (_, e) =>
+        {
+            bool ok = e.Data.GetData("ModernShell.TaskbarPin") is string d && d != app.Id;
+            e.Effects = ok ? DragDropEffects.Move : DragDropEffects.None;
+            ShowLine(ok ? After(e) : null);
+            e.Handled = true;
+        };
+        tile.DragLeave += (_, _) => ShowLine(null);
         tile.Drop += (_, e) =>
         {
+            ShowLine(null);
             if (e.Data.GetData("ModernShell.TaskbarPin") is not string dragged || dragged == app.Id) return;
             var list = _settings.PinnedTaskbar;
             int from = list.FindIndex(x => x.Equals(dragged, StringComparison.OrdinalIgnoreCase));
-            int to = list.FindIndex(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase));
-            if (from < 0 || to < 0) return;
+            if (from < 0) return;
             list.RemoveAt(from);
-            list.Insert(to, dragged);
+            int to = list.FindIndex(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase));
+            if (to < 0) { list.Insert(from, dragged); return; }
+            list.Insert(After(e) ? to + 1 : to, dragged);
             _settings.Save();
         };
     }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -70,6 +71,49 @@ public sealed class Settings
     public bool WidgetFolders { get; set; } = true;
     public bool WidgetRecent { get; set; } = true;
     public bool WidgetNotes { get; set; } = false;
+    /// <summary>ウィジェットの並び順（clock / weather / system / folders / recent / notes）。</summary>
+    public List<string> WidgetOrder { get; set; } = new(WidgetIds);
+
+    public static readonly string[] WidgetIds = { "clock", "weather", "system", "folders", "recent", "notes" };
+
+    /// <summary>保存された並び順を正規化（未知の ID を除き、足りない ID を末尾に補う）。</summary>
+    public List<string> OrderedWidgets()
+    {
+        var list = WidgetOrder.Where(id => WidgetIds.Contains(id)).Distinct().ToList();
+        list.AddRange(WidgetIds.Where(id => !list.Contains(id)));
+        return list;
+    }
+
+    public bool IsWidgetEnabled(string id) => id switch
+    {
+        "clock" => WidgetClock, "weather" => WidgetWeather, "system" => WidgetSystem,
+        "folders" => WidgetFolders, "recent" => WidgetRecent, "notes" => WidgetNotes, _ => false,
+    };
+
+    public void SetWidgetEnabled(string id, bool on)
+    {
+        switch (id)
+        {
+            case "clock": WidgetClock = on; break;
+            case "weather": WidgetWeather = on; break;
+            case "system": WidgetSystem = on; break;
+            case "folders": WidgetFolders = on; break;
+            case "recent": WidgetRecent = on; break;
+            case "notes": WidgetNotes = on; break;
+        }
+    }
+
+    /// <summary>ウィジェット <paramref name="id"/> を <paramref name="index"/> 番目へ移動。</summary>
+    public void MoveWidget(string id, int index)
+    {
+        var list = OrderedWidgets();
+        int from = list.IndexOf(id);
+        if (from < 0) return;
+        list.RemoveAt(from);
+        if (from < index) index--;
+        list.Insert(Math.Clamp(index, 0, list.Count), id);
+        WidgetOrder = list;
+    }
     /// <summary>天気の地点（都市名。Open-Meteo のジオコーディングで検索）。</summary>
     public string WeatherCity { get; set; } = "Tokyo";
 

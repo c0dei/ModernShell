@@ -243,14 +243,48 @@ public sealed class SettingsWindow : Window
     {
         p.Children.Add(ToggleRow("スタート メニューにウィジェットを表示", "スタート メニューの右側に表示します", _s.ShowWidgets, v => _s.ShowWidgets = v));
         bool on = _s.ShowWidgets;
-        p.Children.Add(Section("表示するウィジェット"));
-        p.Children.Add(ToggleRow("時計とカレンダー", "", _s.WidgetClock, v => _s.WidgetClock = v, on));
-        p.Children.Add(ToggleRow("天気", "Open-Meteo（無料・登録不要）から取得します。地点の名前が送信されます", _s.WidgetWeather, v => _s.WidgetWeather = v, on));
-        p.Children.Add(TextRow("天気の地点", "都市名（例: Tokyo, Osaka, 札幌）", _s.WeatherCity, v => _s.WeatherCity = v, on && _s.WidgetWeather));
-        p.Children.Add(ToggleRow("システム", "CPU・メモリ・ディスクの使用状況", _s.WidgetSystem, v => _s.WidgetSystem = v, on));
-        p.Children.Add(ToggleRow("フォルダー", "ドキュメント・ダウンロードなどへのショートカット", _s.WidgetFolders, v => _s.WidgetFolders = v, on));
-        p.Children.Add(ToggleRow("最近使ったファイル", "", _s.WidgetRecent, v => _s.WidgetRecent = v, on));
-        p.Children.Add(ToggleRow("メモ", "書いた内容は自動で保存されます", _s.WidgetNotes, v => _s.WidgetNotes = v, on));
+        p.Children.Add(Section("表示するウィジェットと並び順"));
+        p.Children.Add(Note("↑↓ で並び順を変えられます。スタート メニュー上でもウィジェットの見出しをドラッグして並べ替えできます。"));
+        var order = _s.OrderedWidgets();
+        for (int i = 0; i < order.Count; i++)
+        {
+            var id = order[i];
+            var (title, desc) = id switch
+            {
+                "clock" => ("時計とカレンダー", ""),
+                "weather" => ("天気", "Open-Meteo（無料・登録不要）から取得します。地点の名前が送信されます"),
+                "system" => ("システム", "CPU・メモリ・ディスクの使用状況"),
+                "folders" => ("フォルダー", "ドキュメント・ダウンロードなどへのショートカット"),
+                "recent" => ("最近使ったファイル", ""),
+                _ => ("メモ", "書いた内容は自動で保存されます"),
+            };
+            p.Children.Add(WidgetRow(id, title, desc, i, order.Count, on));
+            if (id == "weather")
+                p.Children.Add(TextRow("天気の地点", "都市名（例: Tokyo, Osaka, 札幌）", _s.WeatherCity, v => _s.WeatherCity = v, on && _s.WidgetWeather));
+        }
+    }
+
+    /// <summary>ウィジェット 1 行: 名前 / ↑ / ↓ / トグル。</summary>
+    private Border WidgetRow(string id, string title, string desc, int index, int count, bool enabled)
+    {
+        Tile Arrow(string glyph, string tip, bool can, int to)
+        {
+            var b = new Tile
+            {
+                Width = 32, Height = 32, CornerRadius = new CornerRadius(4), Child = UiKit.Glyph(glyph, 12), ToolTip = tip,
+                IsEnabled = can, Opacity = can ? 1 : 0.3, Margin = new Thickness(0, 0, 4, 0),
+            };
+            b.Click += _ => { _s.MoveWidget(id, to); Commit(); };
+            return b;
+        }
+        var sw = new ToggleSwitch(_s.IsWidgetEnabled(id));
+        sw.Toggled += v => { _s.SetWidgetEnabled(id, v); Commit(); };
+        sw.Margin = new Thickness(12, 0, 0, 0);
+        var right = new StackPanel { Orientation = Orientation.Horizontal };
+        right.Children.Add(Arrow("\uE70E", "上へ", index > 0, index - 1));
+        right.Children.Add(Arrow("\uE70D", "下へ", index < count - 1, index + 2));
+        right.Children.Add(sw);
+        return Card(Texts(title, desc), right, enabled);
     }
 
     private void LookPage(StackPanel p)

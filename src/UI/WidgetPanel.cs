@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ModernShell.Core;
@@ -56,12 +57,18 @@ public sealed class WidgetPanel : ScrollViewer
     {
         var t = Theme.Current;
         var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 16) };
-        if (_settings.WidgetClock) stack.Children.Add(ClockCard(t));
-        if (_settings.WidgetWeather) stack.Children.Add(WeatherCard(t));
-        if (_settings.WidgetSystem) stack.Children.Add(SystemCard(t));
-        if (_settings.WidgetFolders) stack.Children.Add(FoldersCard(t));
-        if (_settings.WidgetRecent) stack.Children.Add(RecentCard(t));
-        if (_settings.WidgetNotes) stack.Children.Add(NotesCard(t));
+        _cpu = _mem = _disk = null;
+        _clockTime = _clockDate = null;
+        foreach (var id in _settings.OrderedWidgets().Where(_settings.IsWidgetEnabled))
+        {
+            Border card = id switch
+            {
+                "clock" => ClockCard(t), "weather" => WeatherCard(t), "system" => SystemCard(t),
+                "folders" => FoldersCard(t), "recent" => RecentCard(t), _ => NotesCard(t),
+            };
+            EnableReorder(card, id);
+            stack.Children.Add(card);
+        }
         Content = stack;
     }
 
@@ -86,11 +93,64 @@ public sealed class WidgetPanel : ScrollViewer
 
     // ------------------------------------------------------------------
 
+    // ---- ドラッグで並べ替え（見出しをつかんで上下に移動。差し込み位置に線を表示） ----
+    private Point _dragStart;
+
+    private void EnableReorder(Border card, string id)
+    {
+        var t = Theme.Current;
+        card.AllowDrop = true;
+        if (card.Child is StackPanel { Children.Count: > 0 } s && s.Children[0] is FrameworkElement header)
+        {
+            header.Cursor = Cursors.SizeAll;
+            header.ToolTip = "ドラッグで並べ替え";
+            header.PreviewMouseLeftButtonDown += (_, e) => { _dragStart = e.GetPosition(this); e.Handled = true; header.CaptureMouse(); };
+            header.PreviewMouseLeftButtonUp += (_, _) => header.ReleaseMouseCapture();
+            header.PreviewMouseMove += (_, e) =>
+            {
+                if (e.LeftButton != MouseButtonState.Pressed || !header.IsMouseCaptured) return;
+                var d = e.GetPosition(this) - _dragStart;
+                if (Math.Abs(d.Y) < 6 && Math.Abs(d.X) < 6) return;
+                header.ReleaseMouseCapture();
+                card.Opacity = 0.5;
+                DragDrop.DoDragDrop(card, new DataObject("ModernShell.Widget", id), DragDropEffects.Move);
+                card.Opacity = 1;
+            };
+        }
+
+        bool Below(DragEventArgs e) => e.GetPosition(card).Y > card.ActualHeight / 2;
+        void ShowLine(bool? below)
+        {
+            card.BorderBrush = below == null ? t.Stroke : t.AccentBrush;
+            card.BorderThickness = below switch { true => new Thickness(1, 1, 1, 4), false => new Thickness(1, 4, 1, 1), _ => new Thickness(1) };
+        }
+        card.DragOver += (_, e) =>
+        {
+            bool ok = e.Data.GetData("ModernShell.Widget") is string d && d != id;
+            e.Effects = ok ? DragDropEffects.Move : DragDropEffects.None;
+            ShowLine(ok ? Below(e) : null);
+            e.Handled = true;
+        };
+        card.DragLeave += (_, _) => ShowLine(null);
+        card.Drop += (_, e) =>
+        {
+            ShowLine(null);
+            if (e.Data.GetData("ModernShell.Widget") is not string dragged || dragged == id) return;
+            int index = _settings.OrderedWidgets().IndexOf(id) + (Below(e) ? 1 : 0);
+            _settings.MoveWidget(dragged, index);
+            _settings.SaveQuiet(); // スタートメニュー全体は作り直さず、ウィジェット列だけ更新
+            Open();
+        };
+    }
+
     private static Border Card(Theme t, string title, UIElement body)
     {
         var stack = new StackPanel();
-        var h = UiKit.Label(title, 12, t.TextSecondary, FontWeights.SemiBold);
-        h.Margin = new Thickness(0, 0, 0, 8);
+        var h = new DockPanel { Margin = new Thickness(0, 0, 0, 8), Background = Brushes.Transparent };
+        var grip = UiKit.Glyph("\uE76F", 12, t.TextSecondary);
+        DockPanel.SetDock(grip, Dock.Right);
+        h.Children.Add(grip);
+        h.Children.Add(UiKit.Label(title, 12, t.TextSecondary, FontWeights.SemiBold));
         stack.Children.Add(h);
         stack.Children.Add(body);
         return new Border

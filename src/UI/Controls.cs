@@ -171,21 +171,24 @@ public sealed record MenuItemSpec(string Glyph, string Text, Action Action, bool
 /// <summary>標準 ContextMenu の代わりのモダンなポップアップメニュー。</summary>
 public static class Flyout
 {
-    private static Popup? _current;
-    private static UIElement? _lastTarget;
-    private static DateTime _lastClosedAt;
+    /// <summary>
+    /// ポップアップを開いたボタンを、開いている間だけヒットテスト対象外にする。
+    /// （StaysOpen=false のポップアップは外側の押下で閉じるが、その押下がボタンにも届くと閉じた直後に開き直してしまうため）
+    /// </summary>
+    public static void ToggleGuard(Popup popup, UIElement target)
+    {
+        if (!popup.IsOpen) return;
+        target.IsHitTestVisible = false;
+        popup.Closed += (_, _) => target.Dispatcher.BeginInvoke(() => target.IsHitTestVisible = true,
+            System.Windows.Threading.DispatcherPriority.Input);
+    }
 
     /// <summary>
-    /// メニューを開く。同じ要素をもう一度クリックしたときは閉じる（開閉トグル）。
-    /// ポップアップは外側のマウス押下で先に閉じてしまうため、直前に同じ要素のメニューが閉じた場合も「閉じる操作」とみなす。
+    /// メニューを開く。開いている間は呼び出し元のボタンをクリック不可にしておくことで、
+    /// ボタンをもう一度押したとき「外側クリックで閉じる」だけが起きて再オープンされない（開閉トグルになる）。
     /// </summary>
     public static Popup Show(UIElement target, IEnumerable<MenuItemSpec> items, PlacementMode placement = PlacementMode.MousePoint)
     {
-        if (ReferenceEquals(target, _lastTarget))
-        {
-            if (_current?.IsOpen == true) { _current.IsOpen = false; return _current; }
-            if ((DateTime.Now - _lastClosedAt).TotalMilliseconds < 400) return new Popup();
-        }
         var t = Theme.Current;
         var panel = new StackPanel { Margin = new Thickness(4) };
         var popup = new Popup
@@ -229,10 +232,8 @@ public static class Flyout
             Margin = new Thickness(8),
             Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 16, ShadowDepth = 2, Opacity = 0.3 },
         };
-        popup.Closed += (_, _) => { if (ReferenceEquals(_current, popup)) _lastClosedAt = DateTime.Now; };
-        _current = popup;
-        _lastTarget = target;
         popup.IsOpen = true;
+        ToggleGuard(popup, target);
         if (panel.Children.Count > 0 && panel.Children[0] is Tile first) first.Focus();
         return popup;
     }
