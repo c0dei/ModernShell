@@ -223,13 +223,16 @@ public static class Flyout
                 panel.Children.Add(h);
                 continue;
             }
-            var row = new Grid { Margin = new Thickness(12, 8, 20, 8) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
+            // サブメニュー（Windows 標準の右クリックメニュー）は、OS の従来型メニューと同じく 12px・詰めた行間にする。
+            // 1 段目（ジャンプリスト等）は Windows 11 のタスクバーのメニューと同じ 14px
+            bool compact = parent != null;
+            var row = new Grid { Margin = compact ? new Thickness(10, 5, 18, 5) : new Thickness(12, 8, 20, 8) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 26 : 28) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             FrameworkElement g = spec.Icon != null ? UiKit.Icon(spec.Icon, 16) : UiKit.Glyph(spec.Glyph, 14);
             g.HorizontalAlignment = HorizontalAlignment.Left;
             row.Children.Add(g);
-            var l = UiKit.Label(spec.Text, 14, null, spec.IsDefault ? FontWeights.SemiBold : FontWeights.Normal);
+            var l = UiKit.Label(spec.Text, compact ? 12 : 14, null, spec.IsDefault ? FontWeights.SemiBold : FontWeights.Normal);
             Grid.SetColumn(l, 1);
             row.Children.Add(l);
             if (spec.Children != null)
