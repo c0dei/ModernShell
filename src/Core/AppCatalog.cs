@@ -23,6 +23,10 @@ public sealed class AppEntry
     public string? ExePath { get; init; }
     /// <summary>スタートメニューのフォルダ名（「7-Zip」など）。フォルダに入っていなければ null。</summary>
     public string? Folder { get; init; }
+    /// <summary>アプリが自分のウィンドウに付ける AppUserModelID（分かれば）。</summary>
+    public string? Aumid { get; init; }
+    /// <summary>ショートカットの引数（ランチャー経由で起動するアプリの照合に使う）。</summary>
+    public string? LaunchArgs { get; init; }
 
     /// <summary>Id がファイルパス（Windows のタスクバーにピン留めされた .lnk など）か。</summary>
     public bool IsFile => Path.IsPathRooted(Id);
@@ -130,12 +134,17 @@ public sealed class AppCatalog
                     string name = item.Name;
                     string path = item.Path;
                     if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(path)) continue;
-                    var exe = ResolveExe(path);
+                    // ショートカットの情報（リンク先・AUMID・引数）を名前で引く
+                    folders.byNameInfo.TryGetValue(name.Trim(), out var info);
+                    var exe = ResolveExe(path)
+                              ?? (info?.Target is { } tg && tg.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && File.Exists(tg) ? tg : null);
+                    // AppsFolder の ID は、明示的な AUMID を持つアプリではその AUMID そのもの（パス区切りを含まない）
+                    var aumid = !path.Contains('\\') && !path.Contains('/') ? path : info?.Aumid;
                     string? group = (exe != null && folders.byExe.TryGetValue(exe, out var f1)) ? f1
                                   : folders.byName.TryGetValue(name.Trim(), out var f2) ? f2 : null;
                     // フォルダの中身は OS と同じくすべて出す（ヘルプやアンインストールも）。直下の雑多なものだけ除外
                     if (group == null && IsNoise(name, path)) continue;
-                    result.Add(new AppEntry { Id = path, Name = name, ExePath = exe, Folder = group });
+                    result.Add(new AppEntry { Id = path, Name = name, ExePath = exe, Folder = group, Aumid = aumid, LaunchArgs = info?.Arguments });
                 }
                 catch { /* 個別アイテムの失敗は無視 */ }
                 finally { Marshal.FinalReleaseComObject(item); }
@@ -160,7 +169,7 @@ public sealed class AppCatalog
             .Where(g => g.Count() < 2).SelectMany(g => g).ToList();
         foreach (var a in single)
         {
-            var flat = new AppEntry { Id = a.Id, Name = a.Name, ExePath = a.ExePath, Folder = null };
+            var flat = new AppEntry { Id = a.Id, Name = a.Name, ExePath = a.ExePath, Folder = null, Aumid = a.Aumid, LaunchArgs = a.LaunchArgs };
             if (IsNoise(flat.Name, flat.Id)) { kept.Remove(a); continue; }
             kept[kept.IndexOf(a)] = flat;
             foreach (var key in byId.Where(kv => kv.Value == a).Select(kv => kv.Key).ToList()) byId[key] = flat;
@@ -178,10 +187,11 @@ public sealed class AppCatalog
     };
 
     /// <summary>スタートメニューの Programs フォルダを走査し、ショートカット名 / リンク先 exe → 直下のフォルダ名 を作る。</summary>
-    private static (Dictionary<string, string> byName, Dictionary<string, string> byExe) StartMenuFolders()
+    private static (Dictionary<string, string> byName, Dictionary<string, string> byExe, Dictionary<string, ShortcutInfo> byNameInfo) StartMenuFolders()
     {
         var byName = new Dictionary<string, string>(StringComparer.CurrentCultureIgnoreCase);
         var byExe = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var byNameInfo = new Dictionary<string, ShortcutInfo>(StringComparer.CurrentCultureIgnoreCase);
         foreach (var root in new[]
         {
             Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms),
@@ -195,18 +205,20 @@ public sealed class AppCatalog
                 {
                     var dir = Path.GetDirectoryName(lnk);
                     if (dir == null) continue;
+                    var display = Path.GetFileNameWithoutExtension(lnk).Trim();
+                    var info = lnk.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase) ? Shortcut.Read(lnk) : null;
+                    if (info != null) byNameInfo.TryAdd(display, info);
                     var rel = Path.GetRelativePath(root, dir);
                     if (rel == ".") continue;
                     var top = rel.Split(Path.DirectorySeparatorChar)[0];
                     if (FlattenFolders.Contains(top)) continue;
-                    byName.TryAdd(Path.GetFileNameWithoutExtension(lnk).Trim(), top);
-                    if (lnk.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase) && WindowsPins.ShortcutTarget(lnk) is { } target)
-                        byExe.TryAdd(target, top);
+                    byName.TryAdd(display, top);
+                    if (info?.Target is { } target) byExe.TryAdd(target, top);
                 }
             }
             catch (Exception ex) { Log.Error("start menu folders", ex); }
         }
-        return (byName, byExe);
+        return (byName, byExe, byNameInfo);
     }
 
     private static readonly Regex Noise = new(@"(uninstall|アンインストール|readme|help|ヘルプ|website|web site|documentation)", RegexOptions.IgnoreCase);

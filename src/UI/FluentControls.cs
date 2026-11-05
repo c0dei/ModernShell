@@ -18,6 +18,10 @@ namespace ModernShell.UI;
 /// </summary>
 public static class FluentSurface
 {
+    private static int _open;
+    /// <summary>いずれかのメニュー/一覧が開いているか（開いている間はタスクバーのボタンを作り直さない）。</summary>
+    public static bool AnyOpen => _open > 0;
+
     /// <summary>Popup を Fluent 表面として構成する。中身（Child）は背景なしの要素を渡すこと。</summary>
     public static Popup Create(UIElement content, UIElement target, PlacementMode placement)
     {
@@ -35,7 +39,8 @@ public static class FluentSurface
                 Child = content,
             },
         };
-        popup.Opened += (_, _) => ApplyBackdrop(popup);
+        popup.Opened += (_, _) => { _open++; ApplyBackdrop(popup); };
+        popup.Closed += (_, _) => _open = Math.Max(0, _open - 1);
         return popup;
     }
 

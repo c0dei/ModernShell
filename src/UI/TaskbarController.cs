@@ -616,6 +616,8 @@ public sealed class TaskbarController : IDisposable
     private void RebuildApps()
     {
         if (_apps == null) return;
+        // メニューを開いている間に作り直すと、メニューの基準のボタンが消えて画面左上に飛んでしまうので後回しにする
+        if (FluentSurface.AnyOpen) { Kick(_appsDebounce); return; }
         var groups = new List<Group>();
 
         foreach (var app in PinnedApps())
@@ -780,9 +782,30 @@ public sealed class TaskbarController : IDisposable
     {
         var app = g.Pinned ?? FindApp(g.Windows.FirstOrDefault());
         var items = new List<MenuItemSpec>();
+
+        // ジャンプリスト（Windows のタスクバーの右クリックと同じ「最近使ったもの」「タスク」など）
+        var w0 = g.Windows.FirstOrDefault();
+        var aumid = (w0 != null ? Aumid(w0) : null) ?? app?.Aumid ?? (app != null && !app.IsFile && !app.Id.Contains('\\') ? app.Id : null);
+        var exe = (w0 != null ? ExePath(w0) : null) ?? app?.ExePath;
+        try
+        {
+            foreach (var cat in JumpList.Read(aumid, exe))
+            {
+                items.Add(MenuItemSpec.Header(cat.Title));
+                foreach (var it in cat.Items)
+                {
+                    if (it.IsSeparator) { items.Add(MenuItemSpec.Separator); continue; }
+                    var path = it.Path;
+                    items.Add(new MenuItemSpec("", Truncate(it.Title, 48), () => OpenPath(path)) { Icon = ModernShell.Core.IconHelper.Get(path, 32) });
+                }
+                items.Add(MenuItemSpec.Separator);
+            }
+        }
+        catch (Exception ex) { Log.Error("jumplist menu", ex); }
+
         if (app != null)
         {
-            items.Add(new MenuItemSpec("", app.Name, () => app.Launch()));
+            items.Add(new MenuItemSpec("", app.Name, () => app.Launch()) { Icon = w0?.Icon ?? app.Icon(32) });
             if (PinsFromWindows)
             {
                 // Windows のピン留めはアプリから変更できない（Windows が API を提供していない）
@@ -806,6 +829,12 @@ public sealed class TaskbarController : IDisposable
     }
 
     private static string Truncate(string s, int n) => s.Length <= n ? s : s.Substring(0, n - 1) + "…";
+
+    private static void OpenPath(string path)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
+        catch (Exception ex) { Log.Error("open jump item", ex); }
+    }
 
     // ------------------------------------------------------------------
 

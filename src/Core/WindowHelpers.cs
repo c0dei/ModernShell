@@ -53,10 +53,28 @@ internal static class KnownApps
     /// <summary>ピン留めアプリと実行中ウィンドウ（AUMID / exe フルパス）が同じアプリか。</summary>
     public static bool Matches(AppEntry app, string? aumid, string? exePath)
     {
-        if (aumid != null && string.Equals(aumid, app.Id, StringComparison.OrdinalIgnoreCase)) return true;
+        // 1) AppUserModelID が一致（ストアアプリ、Chrome、VS Code など AUMID を持つアプリ）
+        if (aumid != null && (string.Equals(aumid, app.Id, StringComparison.OrdinalIgnoreCase)
+                              || string.Equals(aumid, app.Aumid, StringComparison.OrdinalIgnoreCase))) return true;
         if (exePath == null) return false;
-        if (app.ExePath != null) return string.Equals(app.ExePath, exePath, StringComparison.OrdinalIgnoreCase);
-        return AumidToExe.TryGetValue(app.Id, out var exe)
-               && string.Equals(Path.GetFileName(exePath), exe, StringComparison.OrdinalIgnoreCase);
+        var exeName = Path.GetFileName(exePath);
+        if (app.ExePath != null)
+        {
+            // 2) 実行ファイルが同じ
+            if (string.Equals(app.ExePath, exePath, StringComparison.OrdinalIgnoreCase)) return true;
+            // 3) 同じ名前の exe（バージョン番号付きフォルダに入るアプリなど。ランチャー類の汎用名は除く）
+            var pinnedName = Path.GetFileName(app.ExePath);
+            if (string.Equals(pinnedName, exeName, StringComparison.OrdinalIgnoreCase) && !GenericExe.Contains(exeName)) return true;
+        }
+        // 4) ランチャー経由（例: Update.exe --processStart Discord.exe）: 引数に実行中の exe 名が含まれる
+        if (app.LaunchArgs != null && app.LaunchArgs.Contains(exeName, StringComparison.OrdinalIgnoreCase)) return true;
+        // 5) 既知の組み合わせ
+        return AumidToExe.TryGetValue(app.Id, out var exe) && string.Equals(exeName, exe, StringComparison.OrdinalIgnoreCase);
     }
+
+    private static readonly HashSet<string> GenericExe = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "update.exe", "launcher.exe", "setup.exe", "javaw.exe", "java.exe", "python.exe", "pythonw.exe", "electron.exe",
+        "rundll32.exe", "cmd.exe", "powershell.exe", "pwsh.exe", "wscript.exe", "mshta.exe", "dllhost.exe",
+    };
 }

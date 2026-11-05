@@ -97,9 +97,16 @@ public sealed class WindowsPins : IDisposable
         foreach (var lnk in lnkFiles)
         {
             var name = Path.GetFileName(lnk);
-            var target = ShortcutTarget(lnk);
-            var app = (target != null ? _catalog.FindByExe(target) : null)
-                      ?? new AppEntry { Id = lnk, Name = Path.GetFileNameWithoutExtension(lnk), ExePath = target };
+            var info = Shortcut.Read(lnk);
+            var target = info?.Target;
+            // AUMID が書かれていればそれで一覧のアプリを探す（一番確実）。なければリンク先の exe で探す
+            var app = (info?.Aumid != null ? _catalog.Find(info.Aumid) : null)
+                      ?? (target != null ? _catalog.FindByExe(target) : null)
+                      ?? new AppEntry
+                      {
+                          Id = lnk, Name = Path.GetFileNameWithoutExtension(lnk), ExePath = target,
+                          Aumid = info?.Aumid, LaunchArgs = info?.Arguments,
+                      };
             int pos = Position(name);
             found.Add((pos < 0 ? int.MaxValue - 1000 + found.Count : pos, app));
         }
@@ -116,40 +123,7 @@ public sealed class WindowsPins : IDisposable
             .GroupBy(a => a.Id, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
     }
 
-    // ---- .lnk のリンク先 ----
-    [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
-    private class ShellLink { }
-
-    [ComImport, Guid("000214F9-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IShellLinkW
-    {
-        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int cch, IntPtr pfd, uint flags);
-        // 以降のメソッドは使わないので宣言を省略（vtable の先頭だけ利用）
-    }
-
-    [ComImport, Guid("0000010B-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IPersistFile
-    {
-        void GetClassID(out Guid clsid);
-        [PreserveSig] int IsDirty();
-        void Load([MarshalAs(UnmanagedType.LPWStr)] string file, uint mode);
-    }
-
-    internal static string? ShortcutTarget(string lnk)
-    {
-        object? link = null;
-        try
-        {
-            link = new ShellLink();
-            ((IPersistFile)link).Load(lnk, 0);
-            var sb = new StringBuilder(1024);
-            ((IShellLinkW)link).GetPath(sb, sb.Capacity, IntPtr.Zero, 0);
-            var path = Environment.ExpandEnvironmentVariables(sb.ToString());
-            return path.Length > 0 ? path : null;
-        }
-        catch { return null; }
-        finally { if (link != null) Marshal.ReleaseComObject(link); }
-    }
+    internal static string? ShortcutTarget(string lnk) => Shortcut.Read(lnk)?.Target;
 
     private void OnCatalogChanged() => ThreadPool.QueueUserWorkItem(_ => Refresh(force: true));
 

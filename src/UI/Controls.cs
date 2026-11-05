@@ -165,7 +165,12 @@ public static class UiKit
 public sealed record MenuItemSpec(string Glyph, string Text, Action Action, bool Danger = false)
 {
     public static MenuItemSpec Separator => new("", "-", () => { });
+    /// <summary>カテゴリ見出し（クリック不可）。ジャンプリストの「タスク」「最近使ったもの」など。</summary>
+    public static MenuItemSpec Header(string text) => new("", text, () => { }) { IsHeader = true };
     public bool IsSeparator => Text == "-";
+    public bool IsHeader { get; init; }
+    /// <summary>グリフの代わりに表示するアイコン画像（アプリやファイルのアイコン）。</summary>
+    public ImageSource? Icon { get; init; }
 }
 
 /// <summary>標準 ContextMenu の代わりのモダンなポップアップメニュー。</summary>
@@ -200,10 +205,17 @@ public static class Flyout
                 panel.Children.Add(new Border { Height = 1, Background = t.Stroke, Margin = new Thickness(-4, 3, -4, 3) });
                 continue;
             }
+            if (spec.IsHeader)
+            {
+                var h = UiKit.Label(spec.Text, 12, t.TextSecondary, FontWeights.SemiBold);
+                h.Margin = new Thickness(12, 8, 12, 4);
+                panel.Children.Add(h);
+                continue;
+            }
             var row = new Grid { Margin = new Thickness(12, 8, 20, 8) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var g = UiKit.Glyph(spec.Glyph, 14);
+            FrameworkElement g = spec.Icon != null ? UiKit.Icon(spec.Icon, 16) : UiKit.Glyph(spec.Glyph, 14);
             g.HorizontalAlignment = HorizontalAlignment.Left;
             row.Children.Add(g);
             var l = UiKit.Label(spec.Text, 14);
