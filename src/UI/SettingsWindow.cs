@@ -340,7 +340,6 @@ public sealed class SettingsWindow : Window
         var text = UiKit.Label(label, 14);
         var chevron = UiKit.Glyph("", 10);
         chevron.Margin = new Thickness(16, 0, 0, 0);
-        var row = UiKit.Row(text, chevron);
         var g = new Grid { MinWidth = 160 };
         g.Children.Add(text);
         chevron.HorizontalAlignment = HorizontalAlignment.Right;

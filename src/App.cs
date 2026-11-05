@@ -77,6 +77,10 @@ public static class Program
         };
         AppDomain.CurrentDomain.ProcessExit += (_, _) => NativeTaskbar.Restore();
 
+        // トレイメニュー（WinForms）経由の例外でも .NET のエラーダイアログを出さず、ログに記録して続行する
+        Forms.Application.SetUnhandledExceptionMode(Forms.UnhandledExceptionMode.CatchException);
+        Forms.Application.ThreadException += (_, e) => Log.Error("winforms", e.Exception);
+
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         app.DispatcherUnhandledException += (_, e) =>
         {
