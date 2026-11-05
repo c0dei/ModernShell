@@ -29,7 +29,7 @@ public static class Program
     private static WindowTracker _tracker = null!;
     private static InputHooks _hooks = null!;
     private static StartMenuWindow _start = null!;
-    private static TaskbarWindow? _taskbar;
+    private static TaskbarController? _taskbar;
     private static SettingsWindow? _settingsWindow;
     private static Forms.NotifyIcon? _tray;
     private static Timer? _startButtonWatcher;
@@ -138,19 +138,19 @@ public static class Program
         if (_settings.UseCustomTaskbar)
         {
             NativeTaskbar.Hide();
-            _taskbar = new TaskbarWindow(_settings, _catalog, _tracker);
+            _taskbar = new TaskbarController(_settings, _catalog, _tracker, Application.Current.Dispatcher);
             _taskbar.StartClicked += () => _start.Toggle();
             _taskbar.SearchClicked += () => _start.ShowMenu("");
             _taskbar.OpenSettingsRequested += ShowSettings;
             _taskbar.ExitRequested += Exit;
-            _taskbar.Show();
-            _enforceTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => NativeTaskbar.EnforceHidden(), _taskbar.Dispatcher);
+            _taskbar.Start();
+            _enforceTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => NativeTaskbar.EnforceHidden(), Application.Current.Dispatcher);
             _enforceTimer.Start();
         }
         else
         {
             _enforceTimer?.Stop();
-            _taskbar?.Close();
+            _taskbar?.Dispose();
             _taskbar = null;
             NativeTaskbar.Restore();
         }
@@ -160,7 +160,7 @@ public static class Program
     private static (Win32.RECT bar, bool top, bool center)? StartAnchor()
     {
         if (_taskbar != null)
-            return (_taskbar.BarRect, _taskbar.IsTop, _settings.TaskbarAlignment == TaskbarAlignment.Center);
+            return (_taskbar.BarRect, _taskbar.IsTop, _taskbar.StartCentered);
 
         if (NativeTaskbar.GetTaskbarRect() is not { } r) return null;
         bool center = true;
@@ -188,7 +188,7 @@ public static class Program
             if (_settings.UseCustomTaskbar)
             {
                 NativeTaskbar.Hide();
-                _taskbar?.RegisterAppBar();
+                _taskbar?.Reapply();
             }
             if (_tray != null) { _tray.Visible = false; _tray.Visible = true; }
         }
@@ -238,7 +238,7 @@ public static class Program
         try { _hooks?.Dispose(); } catch { }
         try { _tracker?.Dispose(); } catch { }
         try { _startButtonWatcher?.Dispose(); } catch { }
-        try { _taskbar?.UnregisterAppBar(); } catch { }
+        try { _taskbar?.Dispose(); } catch { }
         try { if (_tray != null) { _tray.Visible = false; _tray.Dispose(); } } catch { }
         NativeTaskbar.Restore();
     }

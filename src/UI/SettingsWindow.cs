@@ -46,6 +46,15 @@ public sealed class SettingsWindow : Window
         root.Children.Add(Section("タスクバー"));
         root.Children.Add(Toggle("純正タスクバーを隠して ModernShell のタスクバーを使う", _s.UseCustomTaskbar, v => _s.UseCustomTaskbar = v));
         root.Children.Add(Note("※ 現バージョンの独自タスクバーには通知領域（システムトレイ）アイコンがありません。クイック設定 (Win+A)・通知 (Win+N) は利用できます。"));
+        root.Children.Add(Choice("スタイル", new[] { "帯（画面端に密着）", "アイランド（浮いた島）" },
+            _s.TaskbarStyle == TaskbarStyle.Band ? "帯（画面端に密着）" : "アイランド（浮いた島）",
+            v => _s.TaskbarStyle = v.StartsWith("帯") ? TaskbarStyle.Band : TaskbarStyle.Floating));
+        root.Children.Add(Choice("レイアウト", new[] { "まとめる（スタート＋アプリ）", "3 分割（左・中央・右）" },
+            _s.TaskbarLayout == TaskbarLayout.Grouped ? "まとめる（スタート＋アプリ）" : "3 分割（左・中央・右）",
+            v => _s.TaskbarLayout = v.StartsWith("まとめる") ? TaskbarLayout.Grouped : TaskbarLayout.Split));
+        root.Children.Add(Note("3 分割: 左=スタート・検索・タスクビュー / 中央=アプリ / 右=システムアイコン・時計。下の「配置」は「まとめる」のときだけ有効です。"));
+        root.Children.Add(Choice("アイランドの余白", new[] { "4", "8", "12", "16" }, _s.IslandMargin.ToString(), v => _s.IslandMargin = int.Parse(v)));
+        root.Children.Add(Toggle("アイランド型でホバー時にアイコンを拡大", _s.MagnifyOnHover, v => _s.MagnifyOnHover = v));
         root.Children.Add(Choice("配置", new[] { "中央", "左" }, _s.TaskbarAlignment == TaskbarAlignment.Center ? "中央" : "左",
             v => _s.TaskbarAlignment = v == "中央" ? TaskbarAlignment.Center : TaskbarAlignment.Left));
         root.Children.Add(Choice("位置", new[] { "下", "上" }, _s.TaskbarEdge == TaskbarEdge.Bottom ? "下" : "上",

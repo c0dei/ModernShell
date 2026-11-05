@@ -10,6 +10,10 @@ public enum ThemeMode { System, Light, Dark }
 public enum BackdropKind { Mica, Acrylic, Solid }
 public enum TaskbarAlignment { Center, Left }
 public enum TaskbarEdge { Bottom, Top }
+/// <summary>Grouped: スタート＋アプリを 1 かたまり（中央/左寄せ） / Split: 左=スタート・中央=アプリ・右=トレイ の 3 分割</summary>
+public enum TaskbarLayout { Grouped, Split }
+/// <summary>Band: 画面端に密着した帯 / Floating: 画面端から浮いた島（アイランド、Mac のドック風）</summary>
+public enum TaskbarStyle { Band, Floating }
 
 public sealed class Settings
 {
@@ -28,6 +32,12 @@ public sealed class Settings
     public TaskbarAlignment TaskbarAlignment { get; set; } = TaskbarAlignment.Center;
     public TaskbarEdge TaskbarEdge { get; set; } = TaskbarEdge.Bottom;
     public int TaskbarHeight { get; set; } = 48;
+    public TaskbarLayout TaskbarLayout { get; set; } = TaskbarLayout.Grouped;
+    public TaskbarStyle TaskbarStyle { get; set; } = TaskbarStyle.Band;
+    /// <summary>アイランド型のとき画面端からの余白 (DIP)。</summary>
+    public int IslandMargin { get; set; } = 8;
+    /// <summary>アイランド型のときホバーでアイコンを拡大する。</summary>
+    public bool MagnifyOnHover { get; set; } = true;
     public bool GroupTaskbarButtons { get; set; } = true;
     public bool ShowTaskbarLabels { get; set; } = false;
     public bool ShowSeconds { get; set; } = false;
