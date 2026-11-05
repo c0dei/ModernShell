@@ -13,6 +13,8 @@ public enum TaskbarEdge { Bottom, Top }
 /// <summary>スタート・検索・タスクビューの位置。WithApps: アプリと一緒（中央 or 左） / LeftEdge: 常に左端（3 分割）</summary>
 public enum StartButtonPosition { WithApps, LeftEdge }
 public enum BackdropEngine { Auto, SystemBackdrop, AccentBlur }
+/// <summary>タスクバーのピン留めの出どころ。Windows: Windows のタスクバーと同じ内容・並び順（読み取り） / ModernShell: 独自に管理</summary>
+public enum TaskbarPinSource { Windows, ModernShell }
 /// <summary>Band: 画面端に密着した帯 / Floating: 画面端から浮いた島（アイランド、Mac のドック風）</summary>
 public enum TaskbarStyle { Band, Floating }
 
@@ -47,6 +49,9 @@ public sealed class Settings
     public bool ShowTaskbarLabels { get; set; } = false;
     public bool ShowSeconds { get; set; } = false;
     public List<string> PinnedTaskbar { get; set; } = new();
+    public TaskbarPinSource TaskbarPinSource { get; set; } = TaskbarPinSource.Windows;
+    /// <summary>タスクバーのアプリアイコンの大きさ (px)。</summary>
+    public int TaskbarIconSize { get; set; } = 24;
 
     // --- 外観 ---
     public ThemeMode Theme { get; set; } = ThemeMode.System;

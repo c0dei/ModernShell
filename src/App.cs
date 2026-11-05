@@ -283,6 +283,11 @@ public static class Program
         if (_settingsWindow == null)
         {
             _settingsWindow = new SettingsWindow(_settings);
+            _settingsWindow.ImportWindowsPins = () =>
+            {
+                using var pins = new WindowsPins(_catalog);
+                return pins.Apps.Select(x => x.Id).ToList();
+            };
             _settingsWindow.ExitRequested += Exit;
             _settingsWindow.Closed += (_, _) => _settingsWindow = null;
             _settingsWindow.Show();

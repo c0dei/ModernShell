@@ -581,9 +581,11 @@ public sealed class StartMenuWindow : Window
         };
         if (pinnedPage && pinned)
             items.Add(new("", "先頭に移動", () => { _settings.PinnedStart.Remove(app.Id); _settings.PinnedStart.Insert(0, app.Id); _settings.Save(); ShowPage(_page); }));
-        items.Add(onBar
-            ? new("", "タスクバーからピン留めを外す", () => { _settings.PinnedTaskbar.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
-            : new("", "タスクバーにピン留めする", () => { _settings.PinnedTaskbar.Add(app.Id); _settings.Save(); }));
+        // Windows と共有している場合、タスクバーのピン留めは Windows 側でしか変更できない
+        if (_settings.TaskbarPinSource == TaskbarPinSource.ModernShell)
+            items.Add(onBar
+                ? new("", "タスクバーからピン留めを外す", () => { _settings.PinnedTaskbar.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
+                : new("", "タスクバーにピン留めする", () => { _settings.PinnedTaskbar.Add(app.Id); _settings.Save(); }));
         if (app.ExePath != null)
         {
             items.Add(MenuItemSpec.Separator);

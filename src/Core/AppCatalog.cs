@@ -22,9 +22,11 @@ public sealed class AppEntry
     /// <summary>判明していれば実体 exe のフルパス（タスクバーでの実行中ウィンドウとの突き合わせに使う）。</summary>
     public string? ExePath { get; init; }
 
-    public string ShellPath => @"shell:AppsFolder\" + Id;
+    /// <summary>Id がファイルパス（Windows のタスクバーにピン留めされた .lnk など）か。</summary>
+    public bool IsFile => Path.IsPathRooted(Id);
+    public string ShellPath => IsFile ? Id : @"shell:AppsFolder\" + Id;
     public ImageSource? Icon(int size = 48) => IconHelper.Get(ShellPath, size);
-    public bool IsStoreApp => Id.Contains('!');
+    public bool IsStoreApp => !IsFile && Id.Contains('!');
 
     public void Launch(bool asAdmin = false)
     {
@@ -32,6 +34,8 @@ public sealed class AppEntry
         {
             if (asAdmin && ExePath != null)
                 Process.Start(new ProcessStartInfo(ExePath) { UseShellExecute = true, Verb = "runas" });
+            else if (IsFile)
+                Process.Start(new ProcessStartInfo(Id) { UseShellExecute = true });
             else
                 Process.Start(new ProcessStartInfo("explorer.exe", "\"" + ShellPath + "\"") { UseShellExecute = true });
         }

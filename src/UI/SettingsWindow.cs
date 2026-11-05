@@ -24,6 +24,8 @@ public sealed class SettingsWindow : Window
     private Page _page = Page.Taskbar;
     private ScrollViewer? _scroll;
     public event Action? ExitRequested;
+    /// <summary>Windows のタスクバーのピン留め（並び順どおりの ID 一覧）を返す。App が設定する。</summary>
+    public Func<List<string>>? ImportWindowsPins { get; set; }
 
     public SettingsWindow(Settings settings)
     {
@@ -192,13 +194,38 @@ public sealed class SettingsWindow : Window
                 () => _s.StartButtonPosition = StartButtonPosition.LeftEdge, Art.LeftEdge),
         }, on));
 
+        p.Children.Add(Section("ピン留めしたアプリ"));
+        p.Children.Add(ChoiceCards(new[]
+        {
+            ("Windows と共有", "Windows のタスクバーと同じアプリ・同じ並び順を表示（自動で追従）",
+                _s.TaskbarPinSource == TaskbarPinSource.Windows, (Action)(() => _s.TaskbarPinSource = TaskbarPinSource.Windows), Art.PinsWindows),
+            ("ModernShell で管理", "右クリックでピン留め、ドラッグで並べ替え",
+                _s.TaskbarPinSource == TaskbarPinSource.ModernShell, () => _s.TaskbarPinSource = TaskbarPinSource.ModernShell, Art.PinsOwn),
+        }, on));
+        if (_s.TaskbarPinSource == TaskbarPinSource.Windows)
+            p.Children.Add(Note("Windows はアプリからピン留めを変更する手段を提供していないため、共有は「Windows → ModernShell」の一方向です。" +
+                               "追加・削除・並べ替えは Windows 側（エクスプローラーでアプリを右クリック →「タスクバーにピン留めする」など）で行ってください。"));
+        else
+            p.Children.Add(ButtonRow("Windows のピン留めを取り込む", "Windows のタスクバーと同じ内容・並び順で置き換えます（その後は ModernShell で自由に変更できます）",
+                "取り込む", () =>
+                {
+                    var ids = ImportWindowsPins?.Invoke();
+                    if (ids == null || ids.Count == 0) return;
+                    _s.PinnedTaskbar = ids;
+                    Commit();
+                }));
+
         p.Children.Add(Section("配置と動作"));
         p.Children.Add(DropDownRow("アプリの配置", "アプリのボタン（「アプリと一緒」のときはスタートボタンも）の位置",
             new[] { ("Center", "中央"), ("Left", "左") }, _s.TaskbarAlignment.ToString(), v => _s.TaskbarAlignment = Enum.Parse<TaskbarAlignment>(v), on));
         p.Children.Add(DropDownRow("画面上の位置", "", new[] { ("Bottom", "下"), ("Top", "上") }, _s.TaskbarEdge.ToString(),
             v => _s.TaskbarEdge = Enum.Parse<TaskbarEdge>(v), on));
-        p.Children.Add(DropDownRow("高さ", "", new[] { ("40", "40 px"), ("44", "44 px"), ("48", "48 px（標準）"), ("56", "56 px"), ("64", "64 px") },
+        p.Children.Add(DropDownRow("高さ", "40 px 未満では時計の日付を省略します",
+            new[] { ("28", "28 px"), ("32", "32 px"), ("36", "36 px"), ("40", "40 px"), ("44", "44 px"), ("48", "48 px（標準）"), ("56", "56 px"), ("64", "64 px") },
             _s.TaskbarHeight.ToString(), v => _s.TaskbarHeight = int.Parse(v), on));
+        p.Children.Add(DropDownRow("アプリ アイコンの大きさ", "",
+            new[] { ("16", "16 px（小）"), ("20", "20 px"), ("24", "24 px（標準）"), ("28", "28 px"), ("32", "32 px（大）") },
+            _s.TaskbarIconSize.ToString(), v => _s.TaskbarIconSize = int.Parse(v), on));
         p.Children.Add(DropDownRow("アイランドの余白", "画面の端と島のあいだの距離", new[] { ("4", "4 px"), ("8", "8 px"), ("12", "12 px"), ("16", "16 px") },
             _s.IslandMargin.ToString(), v => _s.IslandMargin = int.Parse(v), on && floating));
         p.Children.Add(ToggleRow("検索ボタンを表示", "", _s.ShowSearchButton, v => _s.ShowSearchButton = v, on));
@@ -406,7 +433,7 @@ public sealed class SettingsWindow : Window
         };
     }
 
-    private enum Art { Band, Island, WithApps, LeftEdge, ThemeSystem, ThemeLight, ThemeDark }
+    private enum Art { Band, Island, WithApps, LeftEdge, ThemeSystem, ThemeLight, ThemeDark, PinsWindows, PinsOwn }
 
     /// <summary>図付きの選択カード（ラジオボタン相当）。</summary>
     private FrameworkElement ChoiceCards((string title, string desc, bool selected, Action select, Art art)[] items, bool enabled)
@@ -481,6 +508,29 @@ public sealed class SettingsWindow : Window
                 area.Children.Add(Isle(56, HorizontalAlignment.Right));
                 area.Children.Add(StartDot(HorizontalAlignment.Center, -66));
                 break;
+            case Art.PinsWindows:
+            case Art.PinsOwn:
+            {
+                var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                if (art == Art.PinsWindows)
+                {
+                    row.Children.Add(UiKit.StartLogo(28, Brushes.White));
+                    row.Children.Add(Spaced(UiKit.Glyph("\uE72A", 18, Brushes.White), 14));
+                    row.Children.Add(Spaced(UiKit.StartLogo(28, T.AccentBrush), 14));
+                }
+                else
+                {
+                    foreach (var c in new[] { 0x2F80ED, 0xF2C94C, 0x27AE60 })
+                        row.Children.Add(new Border
+                        {
+                            Width = 22, Height = 22, CornerRadius = new CornerRadius(5), Margin = new Thickness(5, 0, 5, 0),
+                            Background = new SolidColorBrush(Color.FromRgb((byte)(c >> 16), (byte)(c >> 8), (byte)c)),
+                        });
+                    row.Children.Add(Spaced(UiKit.Glyph("\uE7C2", 16, Brushes.White), 8));
+                }
+                area.Children.Add(row);
+                break;
+            }
             case Art.LeftEdge:
                 area.Children.Add(Isle(44, HorizontalAlignment.Left));
                 area.Children.Add(Isle(120, HorizontalAlignment.Center));

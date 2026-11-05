@@ -60,12 +60,26 @@ public sealed class TaskbarController : IDisposable
     /// <summary>スタートメニューを中央に出すか（スタートボタンが中央のかたまりにあるとき）。</summary>
     public bool StartCentered => !StartAtLeftEdge && _settings.TaskbarAlignment == TaskbarAlignment.Center;
 
+    private readonly WindowsPins _windowsPins;
+    private bool PinsFromWindows => _settings.TaskbarPinSource == TaskbarPinSource.Windows;
+
+    // ---- 大きさ（設定の高さ・アイコンサイズから算出）----
+    /// <summary>ボタンの高さ。バーの高さより少し小さくする。</summary>
+    private double TileH => Math.Max(22, Math.Min(40, _settings.TaskbarHeight - 6));
+    private double IconSz => Math.Clamp(_settings.TaskbarIconSize, 12, 40);
+    /// <summary>ボタンの幅（アイコンが大きいほど広く、バーが低いほど詰める）。</summary>
+    private double TileW => Math.Max(TileH, IconSz + 16);
+    private double GlyphSz => Math.Clamp(IconSz * 0.7, 11, 22);
+    private bool Compact => _settings.TaskbarHeight < 40;
+
     public TaskbarController(Settings settings, AppCatalog catalog, ShellHost shell, Dispatcher dispatcher)
     {
         _settings = settings;
         _catalog = catalog;
         _shell = shell;
         _dispatcher = dispatcher;
+        _windowsPins = new WindowsPins(catalog);
+        _windowsPins.Changed += OnPinsChanged;
 
         _clock = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Normal, (_, _) => UpdateClock(), dispatcher);
         _status = new DispatcherTimer(TimeSpan.FromSeconds(10), DispatcherPriority.Background, (_, _) => UpdateStatus(), dispatcher);
@@ -112,6 +126,7 @@ public sealed class TaskbarController : IDisposable
     }
     private void Watch(INotifyPropertyChanged o) { if (_watched.Add(o)) o.PropertyChanged += OnItemChanged; }
 
+    private void OnPinsChanged() => _dispatcher.BeginInvoke(() => { if (PinsFromWindows) Kick(_appsDebounce); });
     private void OnCatalogChanged() => _dispatcher.BeginInvoke(() => Kick(_appsDebounce));
     private void OnSettingsChanged() => _dispatcher.BeginInvoke(() => { if (!_disposed) Rebuild(); });
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e) => _dispatcher.BeginInvoke(UpdateStatus);
@@ -246,7 +261,7 @@ public sealed class TaskbarController : IDisposable
     private StackPanel StartGroup(Theme t)
     {
         var p = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var start = new Tile { Width = 44, Height = 40, Margin = new Thickness(2, 0, 2, 0), Child = UiKit.StartLogo(18, t.AccentBrush), ToolTip = "スタート" };
+        var start = new Tile { Width = TileW, Height = TileH, Margin = new Thickness(2, 0, 2, 0), Child = UiKit.StartLogo(Math.Round(IconSz * 0.75), t.AccentBrush), ToolTip = "スタート" };
         start.Click += _ => StartClicked?.Invoke();
         start.RightClick += x => Flyout.Show(x, new[]
         {
@@ -266,9 +281,9 @@ public sealed class TaskbarController : IDisposable
 
     private PlacementMode FlyoutPlacement => IsTop ? PlacementMode.Bottom : PlacementMode.Top;
 
-    private static Tile SmallButton(string glyph, string tip, Action onClick)
+    private Tile SmallButton(string glyph, string tip, Action onClick)
     {
-        var tile = new Tile { Width = 44, Height = 40, Margin = new Thickness(2, 0, 2, 0), Child = UiKit.Glyph(glyph, 17), ToolTip = tip };
+        var tile = new Tile { Width = TileW, Height = TileH, Margin = new Thickness(2, 0, 2, 0), Child = UiKit.Glyph(glyph, GlyphSz), ToolTip = tip };
         tile.Click += _ => onClick();
         return tile;
     }
@@ -282,7 +297,7 @@ public sealed class TaskbarController : IDisposable
 
         _overflowButton = new Tile
         {
-            Width = 28, Height = 40, Margin = new Thickness(2, 0, 0, 0),
+            Width = 28, Height = TileH, Margin = new Thickness(2, 0, 0, 0),
             Child = UiKit.Glyph(IsTop ? "" : "", 12), ToolTip = "隠れているインジケーターを表示",
         };
         _overflowButton.Click += ShowOverflow;
@@ -298,7 +313,7 @@ public sealed class TaskbarController : IDisposable
         volume.Margin = new Thickness(10, 0, 0, 0);
         var quick = new Tile
         {
-            Padding = new Thickness(10, 0, 10, 0), Height = 40, Margin = new Thickness(2, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            Padding = new Thickness(10, 0, 10, 0), Height = TileH, Margin = new Thickness(2, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
             Child = UiKit.Row(_network, volume, _battery), ToolTip = "クイック設定 (Win+A)",
         };
         quick.Click += _ => SystemActions.QuickSettings();
@@ -310,9 +325,10 @@ public sealed class TaskbarController : IDisposable
         var clockStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         clockStack.Children.Add(_time);
         clockStack.Children.Add(_date);
+        if (Compact) _date.Visibility = Visibility.Collapsed; // 低いバーでは日付を省略（ツールチップで確認）
         var clock = new Tile
         {
-            Padding = new Thickness(10, 0, 10, 0), Height = 40, Margin = new Thickness(2, 0, 2, 0),
+            Padding = new Thickness(10, 0, 10, 0), Height = TileH, Margin = new Thickness(2, 0, 2, 0),
             VerticalAlignment = VerticalAlignment.Center, Child = clockStack, ToolTip = "通知とカレンダー (Win+N)",
         };
         clock.Click += _ => SystemActions.NotificationCenter();
@@ -320,9 +336,9 @@ public sealed class TaskbarController : IDisposable
         return p;
     }
 
-    private static Tile ShowDesktopSliver()
+    private Tile ShowDesktopSliver()
     {
-        var desk = new Tile { Width = 10, Height = 40, CornerRadius = new CornerRadius(0), Margin = new Thickness(4, 0, 0, 0), ToolTip = "デスクトップの表示" };
+        var desk = new Tile { Width = 10, Height = TileH, CornerRadius = new CornerRadius(0), Margin = new Thickness(4, 0, 0, 0), ToolTip = "デスクトップの表示" };
         desk.Click += _ => SystemActions.ShowDesktop();
         return desk;
     }
@@ -337,7 +353,7 @@ public sealed class TaskbarController : IDisposable
     {
         if (_trayIcons == null || _overflowButton == null) return;
         _trayIcons.Children.Clear();
-        foreach (var icon in Icons(_shell.Tray?.PinnedIcons))
+        foreach (var icon in Icons(_shell.Tray?.PinnedIcons).OrderBy(i => i.PinOrder))
         {
             Watch(icon);
             _trayIcons.Children.Add(TrayIconTile(icon, editable: false));
@@ -360,7 +376,7 @@ public sealed class TaskbarController : IDisposable
                 Background = icon.IsPinned ? Theme.Current.AccentBrush : Theme.Current.TextSecondary, Margin = new Thickness(0, -4, -6, 0),
             });
         }
-        var tile = new Tile { Width = 32, Height = 36, Margin = new Thickness(1, 0, 1, 0), Child = grid, ToolTip = icon.Title };
+        var tile = new Tile { Width = Compact ? 26 : 32, Height = Math.Min(36, TileH), Margin = new Thickness(1, 0, 1, 0), Child = grid, ToolTip = icon.Title };
 
         if (editable && _trayEditMode)
         {
@@ -370,6 +386,27 @@ public sealed class TaskbarController : IDisposable
                 _shell.SavePinnedTray(_settings);
                 RebuildTray();
             };
+            if (icon.IsPinned)
+            {
+                // 常に表示するアイコン同士はドラッグで並べ替え
+                tile.AllowDrop = true;
+                Point start = default;
+                tile.PreviewMouseLeftButtonDown += (_, e) => start = e.GetPosition(null);
+                tile.PreviewMouseMove += (_, e) =>
+                {
+                    if (e.LeftButton != MouseButtonState.Pressed) return;
+                    var d = e.GetPosition(null) - start;
+                    if (Math.Abs(d.X) < 6 && Math.Abs(d.Y) < 6) return;
+                    DragDrop.DoDragDrop(tile, new DataObject("ModernShell.TrayIcon", icon), DragDropEffects.Move);
+                };
+                tile.Drop += (_, e) =>
+                {
+                    if (e.Data.GetData("ModernShell.TrayIcon") is not ManagedShell.WindowsTray.NotifyIcon dragged || ReferenceEquals(dragged, icon)) return;
+                    dragged.Pin(icon.PinOrder);
+                    _shell.SavePinnedTray(_settings);
+                    RebuildTray();
+                };
+            }
             return tile;
         }
 
@@ -422,26 +459,33 @@ public sealed class TaskbarController : IDisposable
     }
 
     // 「^」で開く隠れたアイコン一覧
-    private WrapPanel? _overflowPanel;
+    private StackPanel? _overflowPanel;
     private TextBlock? _overflowHint;
 
     private void ShowOverflow(Tile anchor)
     {
+        if (_overflowPopup?.IsOpen == true) { _overflowPopup.IsOpen = false; return; }
         var t = Theme.Current;
-        _overflowPanel = new WrapPanel { MaxWidth = 5 * 34, Margin = new Thickness(6) };
+        _overflowPanel = new StackPanel { MaxWidth = 6 * 34 + 12, Margin = new Thickness(6) };
         _overflowHint = UiKit.Label("", 11, t.TextSecondary);
         _overflowHint.TextWrapping = TextWrapping.Wrap;
-        _overflowHint.MaxWidth = 5 * 34;
+        _overflowHint.MaxWidth = 6 * 34;
         _overflowHint.Margin = new Thickness(8, 0, 8, 4);
 
         var edit = new Tile { Padding = new Thickness(8, 4, 8, 4), Margin = new Thickness(4), HorizontalAlignment = HorizontalAlignment.Right };
         void UpdateEdit()
         {
             edit.Child = UiKit.Row(UiKit.Glyph(_trayEditMode ? "" : "", 12), Spaced(UiKit.Label(_trayEditMode ? "完了" : "表示するアイコンを選ぶ", 12)));
-            _overflowHint!.Text = _trayEditMode ? "クリックで「タスクバーに常に表示」を切り替えます（青い点 = 表示中）" : "";
+            _overflowHint!.Text = _trayEditMode ? "クリックで表示/非表示を切り替え、「常に表示」の中はドラッグで並べ替えできます" : "";
             _overflowHint.Visibility = _trayEditMode ? Visibility.Visible : Visibility.Collapsed;
         }
-        edit.Click += _ => { _trayEditMode = !_trayEditMode; UpdateEdit(); FillOverflow(); RebuildTray(); };
+        edit.Click += _ =>
+        {
+            _trayEditMode = !_trayEditMode;
+            // 編集中はドラッグでマウスを奪っても閉じないよう固定表示（「完了」か「^」で閉じる）
+            if (_overflowPopup != null) _overflowPopup.StaysOpen = _trayEditMode;
+            UpdateEdit(); FillOverflow(); RebuildTray();
+        };
         UpdateEdit();
 
         var stack = new StackPanel();
@@ -468,16 +512,48 @@ public sealed class TaskbarController : IDisposable
     {
         if (_overflowPanel == null) return;
         _overflowPanel.Children.Clear();
-        var icons = _trayEditMode
-            ? Icons(_shell.Tray?.AllIcons)
-            : Icons(_shell.Tray?.UnpinnedIcons);
-        foreach (var icon in icons)
+        var t = Theme.Current;
+
+        WrapPanel Section(string? title)
+        {
+            if (title != null)
+            {
+                var h = UiKit.Label(title, 11, t.TextSecondary, FontWeights.SemiBold);
+                h.Margin = new Thickness(4, _overflowPanel!.Children.Count == 0 ? 0 : 8, 0, 4);
+                _overflowPanel!.Children.Add(h);
+            }
+            var w = new WrapPanel();
+            _overflowPanel!.Children.Add(w);
+            return w;
+        }
+
+        if (_trayEditMode)
+        {
+            var pinned = Section("常に表示（ドラッグで並べ替え）");
+            foreach (var icon in Icons(_shell.Tray?.PinnedIcons).OrderBy(i => i.PinOrder))
+            {
+                Watch(icon);
+                pinned.Children.Add(TrayIconTile(icon, editable: true));
+            }
+            if (pinned.Children.Count == 0) pinned.Children.Add(UiKit.Label("なし", 12, t.TextSecondary));
+            var others = Section("「^」の中に表示");
+            foreach (var icon in Icons(_shell.Tray?.UnpinnedIcons))
+            {
+                Watch(icon);
+                others.Children.Add(TrayIconTile(icon, editable: true));
+            }
+            if (others.Children.Count == 0) others.Children.Add(UiKit.Label("なし", 12, t.TextSecondary));
+            return;
+        }
+
+        var all = Section(null);
+        foreach (var icon in Icons(_shell.Tray?.UnpinnedIcons))
         {
             Watch(icon);
-            _overflowPanel.Children.Add(TrayIconTile(icon, editable: true));
+            all.Children.Add(TrayIconTile(icon, editable: true));
         }
-        if (_overflowPanel.Children.Count == 0)
-            _overflowPanel.Children.Add(new TextBlock { Text = "アイコンはありません", Margin = new Thickness(8), Foreground = Theme.Current.TextSecondary });
+        if (all.Children.Count == 0)
+            all.Children.Add(new TextBlock { Text = "アイコンはありません", Margin = new Thickness(8), Foreground = t.TextSecondary });
     }
 
     private static FrameworkElement Spaced(FrameworkElement e) { e.Margin = new Thickness(8, 0, 0, 0); return e; }
@@ -542,11 +618,8 @@ public sealed class TaskbarController : IDisposable
         if (_apps == null) return;
         var groups = new List<Group>();
 
-        foreach (var id in _settings.PinnedTaskbar)
-        {
-            var app = _catalog.Find(id);
-            if (app != null) groups.Add(new Group { Key = "pin:" + app.Id, Pinned = app });
-        }
+        foreach (var app in PinnedApps())
+            if (groups.All(x => x.Key != "pin:" + app.Id)) groups.Add(new Group { Key = "pin:" + app.Id, Pinned = app });
 
         foreach (var w in TaskWindows())
         {
@@ -577,7 +650,7 @@ public sealed class TaskbarController : IDisposable
         bool running = g.Windows.Count > 0;
         bool active = g.Windows.Any(w => w.State == ApplicationWindow.WindowState.Active);
         bool flashing = g.Windows.Any(w => w.State == ApplicationWindow.WindowState.Flashing);
-        var icon = UiKit.Icon(g.Windows.FirstOrDefault()?.Icon ?? g.Pinned?.Icon(48), 24);
+        var icon = UiKit.Icon(g.Windows.FirstOrDefault()?.Icon ?? g.Pinned?.Icon(64), IconSz);
 
         var content = new Grid();
         FrameworkElement main = icon;
@@ -600,13 +673,13 @@ public sealed class TaskbarController : IDisposable
             {
                 Height = 3, Width = active || flashing ? 16 : 6, CornerRadius = new CornerRadius(1.5), Background = indicator,
                 VerticalAlignment = IsTop ? VerticalAlignment.Top : VerticalAlignment.Bottom,
-                HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 2),
+                HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, Compact ? 0 : 2, 0, Compact ? 0 : 2),
             });
         }
 
         var tile = new Tile
         {
-            MinWidth = 44, Height = 40, Margin = new Thickness(2, 0, 2, 0), Child = content,
+            MinWidth = TileW, Height = TileH, Margin = new Thickness(2, 0, 2, 0), Child = content,
             Background = active ? t.Hover : Brushes.Transparent,
             ToolTip = running ? string.Join("\n", g.Windows.Select(w => w.Title)) : g.Pinned?.Name,
         };
@@ -621,7 +694,48 @@ public sealed class TaskbarController : IDisposable
         };
         tile.MiddleClick += _ => (g.Pinned ?? FindApp(g.Windows.FirstOrDefault()))?.Launch();
         tile.RightClick += x => Flyout.Show(x, GroupMenu(g), FlyoutPlacement);
+        if (g.Pinned != null && !PinsFromWindows) EnableReorder(tile, g.Pinned);
         return tile;
+    }
+
+    /// <summary>ピン留めアプリ（Windows と共有なら Windows のタスクバーと同じ内容・並び順）。</summary>
+    private IEnumerable<AppEntry> PinnedApps() => PinsFromWindows
+        ? _windowsPins.Apps
+        : _settings.PinnedTaskbar.Select(ResolvePinned).Where(a => a != null).Cast<AppEntry>();
+
+    /// <summary>ピン留め ID → アプリ。Windows から取り込んだショートカット (.lnk のパス) にも対応。</summary>
+    private AppEntry? ResolvePinned(string id)
+    {
+        if (_catalog.Find(id) is { } app) return app;
+        if (System.IO.Path.IsPathRooted(id) && System.IO.File.Exists(id))
+            return new AppEntry { Id = id, Name = System.IO.Path.GetFileNameWithoutExtension(id), ExePath = WindowsPins.ShortcutTarget(id) };
+        return null;
+    }
+
+    // ピン留めボタンのドラッグ並べ替え（ModernShell で管理しているときのみ。Windows のピン留めは書き換えられない）
+    private Point _dragStart;
+    private void EnableReorder(Tile tile, AppEntry app)
+    {
+        tile.AllowDrop = true;
+        tile.PreviewMouseLeftButtonDown += (_, e) => _dragStart = e.GetPosition(null);
+        tile.PreviewMouseMove += (_, e) =>
+        {
+            if (e.LeftButton != MouseButtonState.Pressed) return;
+            var d = e.GetPosition(null) - _dragStart;
+            if (Math.Abs(d.X) < 8 && Math.Abs(d.Y) < 8) return;
+            DragDrop.DoDragDrop(tile, new DataObject("ModernShell.TaskbarPin", app.Id), DragDropEffects.Move);
+        };
+        tile.Drop += (_, e) =>
+        {
+            if (e.Data.GetData("ModernShell.TaskbarPin") is not string dragged || dragged == app.Id) return;
+            var list = _settings.PinnedTaskbar;
+            int from = list.FindIndex(x => x.Equals(dragged, StringComparison.OrdinalIgnoreCase));
+            int to = list.FindIndex(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase));
+            if (from < 0 || to < 0) return;
+            list.RemoveAt(from);
+            list.Insert(to, dragged);
+            _settings.Save();
+        };
     }
 
     /// <summary>前面（アクティブ）なら最小化、それ以外は前面化（最小化中なら復元）。</summary>
@@ -666,10 +780,18 @@ public sealed class TaskbarController : IDisposable
         if (app != null)
         {
             items.Add(new MenuItemSpec("", app.Name, () => app.Launch()));
-            bool pinned = _settings.PinnedTaskbar.Contains(app.Id, StringComparer.OrdinalIgnoreCase);
-            items.Add(pinned
-                ? new MenuItemSpec("", "タスクバーからピン留めを外す", () => { _settings.PinnedTaskbar.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
-                : new MenuItemSpec("", "タスクバーにピン留めする", () => { _settings.PinnedTaskbar.Add(app.Id); _settings.Save(); }));
+            if (PinsFromWindows)
+            {
+                // Windows のピン留めはアプリから変更できない（Windows が API を提供していない）
+                items.Add(new MenuItemSpec("\uE946", "ピン留めは Windows のタスクバーと共有中", () => OpenSettingsRequested?.Invoke()));
+            }
+            else
+            {
+                bool pinned = _settings.PinnedTaskbar.Contains(app.Id, StringComparer.OrdinalIgnoreCase);
+                items.Add(pinned
+                    ? new MenuItemSpec("", "タスクバーからピン留めを外す", () => { _settings.PinnedTaskbar.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
+                    : new MenuItemSpec("", "タスクバーにピン留めする", () => { _settings.PinnedTaskbar.Add(app.Id); _settings.Save(); }));
+            }
         }
         if (g.Windows.Count > 0)
         {
@@ -700,6 +822,8 @@ public sealed class TaskbarController : IDisposable
         if (_shell.Tray?.UnpinnedIcons is INotifyCollectionChanged unpinned) unpinned.CollectionChanged -= OnTrayChanged;
         foreach (var o in _watched) o.PropertyChanged -= OnItemChanged;
         _watched.Clear();
+        _windowsPins.Changed -= OnPinsChanged;
+        _windowsPins.Dispose();
         _catalog.Changed -= OnCatalogChanged;
         _settings.Changed -= OnSettingsChanged;
         Theme.Changed -= OnSettingsChanged;
