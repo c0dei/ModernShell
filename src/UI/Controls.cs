@@ -25,7 +25,7 @@ public class Tile : Border
 
     public Tile()
     {
-        CornerRadius = new CornerRadius(Theme.Current.Radius / 2 + 2);
+        CornerRadius = Theme.Current.Corner(6);
         Background = Brushes.Transparent;
         BorderThickness = new Thickness(1);
         BorderBrush = Brushes.Transparent;

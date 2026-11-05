@@ -208,7 +208,7 @@ public sealed class StartMenuWindow : Window
         {
             Height = 38,
             Margin = new Thickness(28, 28, 28, 12),
-            CornerRadius = new CornerRadius(19),
+            CornerRadius = t.Corner(19),
             Background = t.Surface,
             BorderBrush = t.Stroke,
             BorderThickness = new Thickness(1),

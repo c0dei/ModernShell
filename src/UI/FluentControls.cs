@@ -47,7 +47,7 @@ public static class FluentSurface
 
         int dark = t.IsDark ? 1 : 0;
         Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
-        int corner = Win32.DWMWCP_ROUND;
+        int corner = t.WindowCorner;
         Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, ref corner, sizeof(int));
 
         if (!Theme.TranslucentPopups)
@@ -100,7 +100,7 @@ public sealed class FluentComboBox : Border
         var t = Theme.Current;
         MinWidth = 180;
         Height = 32;
-        CornerRadius = new CornerRadius(4);
+        CornerRadius = t.Corner(4);
         BorderThickness = new Thickness(1);
         BorderBrush = t.ControlBorder;
         Background = t.ControlFill;

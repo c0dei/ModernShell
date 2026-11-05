@@ -50,6 +50,15 @@ public sealed class Theme
             return b;
         }
     }
+    /// <summary>標準 (8px) のときに <paramref name="standard"/> px になる角丸を、設定の「角の丸み」に比例させて返す。</summary>
+    public CornerRadius Corner(double standard) => new(Radius <= 0 ? 0 : standard * Radius / 8);
+
+    /// <summary>
+    /// ウィンドウ外周の角の形（DWM に指定する値）。Windows が描けるのは「なし / 小 (4px) / 標準 (8px)」の 3 種類だけなので、
+    /// 設定の「大」はウィンドウ外周では標準と同じになり、内側のカードやボタンだけが大きく丸くなる。
+    /// </summary>
+    public int WindowCorner => Radius <= 0 ? Win32.DWMWCP_DONOTROUND : Radius <= 4 ? Win32.DWMWCP_ROUNDSMALL : Win32.DWMWCP_ROUND;
+
     /// <summary>メニュー/ドロップダウン一覧の Acrylic の地の色。</summary>
     public Color FlyoutColor => IsDark ? Color.FromRgb(0x2C, 0x2C, 0x2C) : Color.FromRgb(0xFC, 0xFC, 0xFC);
     /// <summary>ポップアップに Acrylic を使うか（背景効果「なし」のときは単色）。</summary>
@@ -171,7 +180,7 @@ public static class Backdrop
         Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
         if (IsWin11)
         {
-            int corner = Win32.DWMWCP_ROUND;
+            int corner = t.WindowCorner;
             Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, ref corner, sizeof(int));
         }
 

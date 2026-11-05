@@ -1,4 +1,6 @@
 using System;
+using System.Windows.Media.Animation;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
@@ -57,6 +59,8 @@ public sealed class WidgetPanel : ScrollViewer
     {
         var t = Theme.Current;
         var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 16) };
+        _stack = stack;
+        _cards.Clear();
         _cpu = _mem = _disk = null;
         _clockTime = _clockDate = null;
         foreach (var id in _settings.OrderedWidgets().Where(_settings.IsWidgetEnabled))
@@ -93,54 +97,125 @@ public sealed class WidgetPanel : ScrollViewer
 
     // ------------------------------------------------------------------
 
-    // ---- ドラッグで並べ替え（見出しをつかんで上下に移動。差し込み位置に線を表示） ----
-    private Point _dragStart;
+    // ---- ドラッグで並べ替え ----
+    // 見出しをつかむとカードがカーソルに付いてきて、他のカードの半分を越えた時点で
+    // そのカードがぬるっと移動して場所を空ける（OS のドラッグ＆ドロップは使わず自前で動かす）。
+    private StackPanel? _stack;
+    private readonly List<(Border card, string id)> _cards = new();
+    private Border? _dragCard;
+    private int _dragFrom, _dragTo;
+    private double _dragStartY;
+    private double[] _tops = Array.Empty<double>(), _heights = Array.Empty<double>();
+    private const double Gap = 8; // カード間の余白（Card の Margin.Bottom と同じ）
 
     private void EnableReorder(Border card, string id)
     {
-        var t = Theme.Current;
-        card.AllowDrop = true;
-        if (card.Child is StackPanel { Children.Count: > 0 } s && s.Children[0] is FrameworkElement header)
-        {
-            header.Cursor = Cursors.SizeAll;
-            header.ToolTip = "ドラッグで並べ替え";
-            header.PreviewMouseLeftButtonDown += (_, e) => { _dragStart = e.GetPosition(this); e.Handled = true; header.CaptureMouse(); };
-            header.PreviewMouseLeftButtonUp += (_, _) => header.ReleaseMouseCapture();
-            header.PreviewMouseMove += (_, e) =>
-            {
-                if (e.LeftButton != MouseButtonState.Pressed || !header.IsMouseCaptured) return;
-                var d = e.GetPosition(this) - _dragStart;
-                if (Math.Abs(d.Y) < 6 && Math.Abs(d.X) < 6) return;
-                header.ReleaseMouseCapture();
-                card.Opacity = 0.5;
-                DragDrop.DoDragDrop(card, new DataObject("ModernShell.Widget", id), DragDropEffects.Move);
-                card.Opacity = 1;
-            };
-        }
+        _cards.Add((card, id));
+        card.RenderTransform = new TranslateTransform();
+        if (card.Child is not StackPanel { Children.Count: > 0 } s || s.Children[0] is not FrameworkElement header) return;
+        header.Cursor = Cursors.SizeAll;
+        header.ToolTip = "ドラッグで並べ替え";
+        header.MouseLeftButtonDown += (_, e) => { BeginDrag(card, e); header.CaptureMouse(); e.Handled = true; };
+        header.MouseMove += (_, e) => { if (_dragCard == card) DragMove(e); };
+        header.MouseLeftButtonUp += (_, _) => { header.ReleaseMouseCapture(); EndDrag(); };
+        header.LostMouseCapture += (_, _) => EndDrag();
+    }
 
-        bool Below(DragEventArgs e) => e.GetPosition(card).Y > card.ActualHeight / 2;
-        void ShowLine(bool? below)
+    private void BeginDrag(Border card, MouseEventArgs e)
+    {
+        if (_stack == null) return;
+        _dragCard = card;
+        _dragFrom = _dragTo = _cards.FindIndex(c => c.card == card);
+        _dragStartY = e.GetPosition(_stack).Y;
+        _tops = _cards.Select(c => c.card.TranslatePoint(new Point(0, 0), _stack).Y).ToArray();
+        _heights = _cards.Select(c => c.card.ActualHeight).ToArray();
+        // つかんだカードを手前に出して少し浮かせる
+        Panel.SetZIndex(card, 10);
+        card.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 18, ShadowDepth = 4, Opacity = 0.35 };
+        card.Opacity = 0.96;
+    }
+
+    private void DragMove(MouseEventArgs e)
+    {
+        if (_dragCard == null || _stack == null) return;
+
+        // 端に近づいたら自動スクロール
+        var inView = e.GetPosition(this).Y;
+        if (inView < 30) ScrollToVerticalOffset(VerticalOffset - 8);
+        else if (inView > ActualHeight - 30) ScrollToVerticalOffset(VerticalOffset + 8);
+
+        double dy = e.GetPosition(_stack).Y - _dragStartY;
+        ((TranslateTransform)_dragCard.RenderTransform).Y = dy;
+
+        // つかんだカードの中心が、どのカードの半分を越えたかで差し込み先を決める
+        double center = _tops[_dragFrom] + _heights[_dragFrom] / 2 + dy;
+        int to = _dragFrom;
+        for (int k = _dragFrom + 1; k < _cards.Count; k++)
+            if (center > _tops[k] + _heights[k] / 2) to = k;
+        for (int k = _dragFrom - 1; k >= 0; k--)
+            if (center < _tops[k] + _heights[k] / 2) to = k;
+        if (to == _dragTo) return;
+        _dragTo = to;
+
+        // 間にあるカードを、つかんだカードの高さ分だけずらす
+        double shift = _heights[_dragFrom] + Gap;
+        for (int k = 0; k < _cards.Count; k++)
         {
-            card.BorderBrush = below == null ? t.Stroke : t.AccentBrush;
-            card.BorderThickness = below switch { true => new Thickness(1, 1, 1, 4), false => new Thickness(1, 4, 1, 1), _ => new Thickness(1) };
+            if (k == _dragFrom) continue;
+            double target = _dragFrom < to && k > _dragFrom && k <= to ? -shift
+                          : to < _dragFrom && k >= to && k < _dragFrom ? shift
+                          : 0;
+            Slide(_cards[k].card, target);
         }
-        card.DragOver += (_, e) =>
+    }
+
+    private static void Slide(Border card, double y)
+    {
+        var tt = (TranslateTransform)card.RenderTransform;
+        tt.BeginAnimation(TranslateTransform.YProperty,
+            new DoubleAnimation(y, TimeSpan.FromMilliseconds(180)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+    }
+
+    private void EndDrag()
+    {
+        var card = _dragCard;
+        if (card == null) return;
+        _dragCard = null;
+        int from = _dragFrom, to = _dragTo;
+
+        // つかんだカードを新しい位置へ吸い付かせてから、順番を保存して作り直す
+        double finalY = to == from ? 0
+            : to > from ? _tops[to] + _heights[to] - (_tops[from] + _heights[from])
+            : _tops[to] - _tops[from];
+        var tt = (TranslateTransform)card.RenderTransform;
+        var snap = new DoubleAnimation(tt.Y, finalY, TimeSpan.FromMilliseconds(140)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        snap.Completed += (_, _) =>
         {
-            bool ok = e.Data.GetData("ModernShell.Widget") is string d && d != id;
-            e.Effects = ok ? DragDropEffects.Move : DragDropEffects.None;
-            ShowLine(ok ? Below(e) : null);
-            e.Handled = true;
+            card.Effect = null;
+            card.Opacity = 1;
+            Panel.SetZIndex(card, 0);
+            if (to == from) { tt.BeginAnimation(TranslateTransform.YProperty, null); tt.Y = 0; return; }
+            ApplyOrder(from, to);
         };
-        card.DragLeave += (_, _) => ShowLine(null);
-        card.Drop += (_, e) =>
-        {
-            ShowLine(null);
-            if (e.Data.GetData("ModernShell.Widget") is not string dragged || dragged == id) return;
-            int index = _settings.OrderedWidgets().IndexOf(id) + (Below(e) ? 1 : 0);
-            _settings.MoveWidget(dragged, index);
-            _settings.SaveQuiet(); // スタートメニュー全体は作り直さず、ウィジェット列だけ更新
-            Open();
-        };
+        tt.BeginAnimation(TranslateTransform.YProperty, snap);
+    }
+
+    /// <summary>表示中のウィジェットの並びを変え、非表示のウィジェットの位置は保ったまま全体の順序に反映する。</summary>
+    private void ApplyOrder(int from, int to)
+    {
+        var visible = _cards.Select(c => c.id).ToList();
+        var moved = visible[from];
+        visible.RemoveAt(from);
+        visible.Insert(to, moved);
+        var full = _settings.OrderedWidgets();
+        int v = 0;
+        for (int i = 0; i < full.Count; i++)
+            if (visible.Contains(full[i])) full[i] = visible[v++];
+        _settings.WidgetOrder = full;
+        _settings.SaveQuiet(); // スタートメニュー全体は作り直さず、ウィジェット列だけ更新
+        double scroll = VerticalOffset;
+        Open();
+        ScrollToVerticalOffset(scroll);
     }
 
     private static Border Card(Theme t, string title, UIElement body)

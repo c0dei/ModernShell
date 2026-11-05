@@ -271,7 +271,7 @@ public sealed class SettingsWindow : Window
         {
             var b = new Tile
             {
-                Width = 32, Height = 32, CornerRadius = new CornerRadius(4), Child = UiKit.Glyph(glyph, 12), ToolTip = tip,
+                Width = 32, Height = 32, CornerRadius = T.Corner(4), Child = UiKit.Glyph(glyph, 12), ToolTip = tip,
                 IsEnabled = can, Opacity = can ? 1 : 0.3, Margin = new Thickness(0, 0, 4, 0),
             };
             b.Click += _ => { _s.MoveWidget(id, to); Commit(); };
@@ -367,7 +367,7 @@ public sealed class SettingsWindow : Window
         }
         return new Border
         {
-            Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6),
+            Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6),
             Padding = new Thickness(20, 12, 16, 12), Margin = new Thickness(0, 2, 0, 2), Child = g,
             IsEnabled = enabled, Opacity = enabled ? 1 : 0.45,
         };
@@ -420,7 +420,7 @@ public sealed class SettingsWindow : Window
         var normal = accent ? T.AccentBrush : T.ControlFill;
         var b = new Tile
         {
-            Padding = new Thickness(16, 5, 16, 6), CornerRadius = new CornerRadius(4), MinWidth = 120,
+            Padding = new Thickness(16, 5, 16, 6), CornerRadius = T.Corner(4), MinWidth = 120,
             Background = normal, BorderBrush = T.ControlBorder, BorderThickness = new Thickness(1),
             Child = UiKit.Label(buttonText, 14, accent ? T.OnAccent : T.Text),
         };
@@ -451,7 +451,7 @@ public sealed class SettingsWindow : Window
         g.Children.Add(texts);
         return new Border
         {
-            Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8),
+            Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(8),
             Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(0, 20, 0, 0), Child = g,
         };
     }
@@ -490,7 +490,7 @@ public sealed class SettingsWindow : Window
             stack.Children.Add(bottom);
             var card = new Tile
             {
-                Margin = new Thickness(it.selected ? 3 : 4), Child = stack, CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(it.selected ? 3 : 4), Child = stack, CornerRadius = T.Corner(8),
                 BorderThickness = new Thickness(it.selected ? 2 : 1), BorderBrush = it.selected ? T.AccentBrush : T.Stroke, Background = T.Surface,
                 ClipToBounds = true,
             };
@@ -663,9 +663,9 @@ public sealed class SettingsWindow : Window
         }
         return new Border
         {
-            Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8),
+            Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(8),
             Padding = new Thickness(16), Margin = new Thickness(0, 0, 0, 6),
-            Child = new Border { CornerRadius = new CornerRadius(6), ClipToBounds = true, Child = area },
+            Child = new Border { CornerRadius = T.Corner(6), ClipToBounds = true, Child = area },
         };
     }
 
@@ -683,7 +683,7 @@ public sealed class SettingsWindow : Window
             foreach (UIElement c in inner.Children) if (c is FrameworkElement fe) { fe.HorizontalAlignment = HorizontalAlignment.Center; fe.VerticalAlignment = VerticalAlignment.Center; }
             var tile = new Tile
             {
-                Width = 44, Height = 44, Margin = new Thickness(0, 0, 8, 8), CornerRadius = new CornerRadius(4), Background = fill,
+                Width = 44, Height = 44, Margin = new Thickness(0, 0, 8, 8), CornerRadius = T.Corner(4), Background = fill,
                 BorderThickness = new Thickness(2), BorderBrush = sel ? T.Text : Brushes.Transparent, Child = inner,
                 ToolTip = hex.Length == 0 ? "Windows のアクセント カラー" : hex,
             };
@@ -695,7 +695,7 @@ public sealed class SettingsWindow : Window
         }
         var card = new Border
         {
-            Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6),
+            Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6),
             Padding = new Thickness(20, 14, 12, 6), Child = wrap,
         };
         return card;
