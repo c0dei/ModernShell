@@ -331,6 +331,7 @@ public static class Program
                 return pins.Apps.Select(x => x.Id).ToList();
             };
             _settingsWindow.ExitRequested += Exit;
+            _settingsWindow.RestartRequested += () => Restart(openSettings: true);
             _settingsWindow.Closed += (_, _) => _settingsWindow = null;
             _settingsWindow.Show();
         }

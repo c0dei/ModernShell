@@ -15,7 +15,7 @@ public enum TaskbarEdge { Bottom, Top }
 public enum StartButtonPosition { WithApps, LeftEdge }
 public enum BackdropEngine { Auto, SystemBackdrop, AccentBlur }
 /// <summary>タスクバーの下地。Acrylic: Windows 11 のすりガラス（明るさの層とノイズ入り） / Blur: ぼかしのみ / Clear: 完全に透明</summary>
-public enum TaskbarMaterial { Acrylic, Blur, Clear, Solid }
+public enum TaskbarMaterial { Acrylic, Blur, Clear, Solid, MicaLike }
 /// <summary>スタートメニューを開く位置。Auto: スタートボタンの位置に合わせる</summary>
 public enum StartMenuPosition { Auto, Left, Center }
 /// <summary>タスクバーのピン留めの出どころ。Windows: Windows のタスクバーと同じ内容・並び順（読み取り） / ModernShell: 独自に管理</summary>
@@ -198,6 +198,7 @@ public sealed class Settings
     /// <summary>保存のみ（UI を作り直さない。トレイのピン留めなど細かい変更用）。</summary>
     public void SaveQuiet()
     {
+        if (_frozen) return;
         try
         {
             System.IO.Directory.CreateDirectory(Directory);
@@ -206,6 +207,27 @@ public sealed class Settings
             File.Move(tmp, FilePath, overwrite: true);
         }
         catch (Exception ex) { Log.Error("settings save", ex); }
+    }
+
+    private static bool _frozen;
+
+    /// <summary>ModernShell の設定として読める JSON か。</summary>
+    public static bool IsValid(string json)
+    {
+        try { return json.TrimStart().StartsWith("{") && JsonSerializer.Deserialize<Settings>(json, Json) != null; }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// 設定ファイルを置き換える（null なら削除して初期状態に戻す）。このあと再起動して読み込み直す前提なので、
+    /// 終了処理などで今の設定が上書き保存されないよう、以降の保存を止める。
+    /// </summary>
+    public static void Replace(string? json)
+    {
+        _frozen = true;
+        System.IO.Directory.CreateDirectory(Directory);
+        if (json == null) { if (File.Exists(FilePath)) File.Delete(FilePath); }
+        else File.WriteAllText(FilePath, json);
     }
 
     public static IReadOnlyList<string> DefaultPinnedStart => Defaults.PinnedStart;
