@@ -248,6 +248,37 @@ public static class Backdrop
     /// 「角丸を強制する」がオンのとき、ウィンドウの形そのものを角丸に切り抜く（Windows が角丸を描かない
     /// 仮想マシン・リモートデスクトップ等のため）。オフなら切り抜きを外して Windows の角丸に任せる。
     /// </summary>
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateRectRgn(int x1, int y1, int x2, int y2);
+    [DllImport("user32.dll")] private static extern int GetWindowRgn(IntPtr hwnd, IntPtr rgn);
+    [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr obj);
+
+    /// <summary>
+    /// 「角丸を強制する」の切り抜きを保ち続ける。WPF の WindowChrome はウィンドウが動くたびに
+    /// ウィンドウの領域を消してしまう（DWM 有効時の仕様）ので、消されたら付け直す。
+    /// </summary>
+    public static void KeepRegion(Window w, Settings s)
+    {
+        var hwnd = new WindowInteropHelper(w).EnsureHandle();
+        var src = HwndSource.FromHwnd(hwnd);
+        src?.AddHook((IntPtr h, int msg, IntPtr wp, IntPtr lp, ref bool handled) =>
+        {
+            if (msg is 0x0047 /*WM_WINDOWPOSCHANGED*/ or 0x0005 /*WM_SIZE*/ && s.ForceRoundCorners && s.CornerRadius > 0)
+            {
+                w.Dispatcher.BeginInvoke(() =>
+                {
+                    if (!Win32.GetWindowRect(hwnd, out var r) || r.Width <= 0) return;
+                    // 領域が付いていない（消された）ときだけ付け直す。付け直しで再び通知が来ても、2 回目は何もしない
+                    var probe = CreateRectRgn(0, 0, 0, 0);
+                    int kind = GetWindowRgn(hwnd, probe);
+                    DeleteObject(probe);
+                    if (kind == 0 /*ERROR = 領域なし*/)
+                        UpdateRegion(hwnd, r.Width, r.Height, s, Win32.GetDpiForWindow(hwnd) / 96.0);
+                }, System.Windows.Threading.DispatcherPriority.Background);
+            }
+            return IntPtr.Zero;
+        });
+    }
+
     public static void UpdateRegion(IntPtr hwnd, int widthPx, int heightPx, Settings s, double dpiScale)
     {
         try

@@ -58,6 +58,7 @@ public sealed class BarSurface : Window
         HwndSource.FromHwnd(hwnd)!.AddHook(WndProc);
 
         SizeChanged += (_, _) => ContentSizeChanged?.Invoke();
+        Backdrop.KeepRegion(this, settings);
     }
 
     private const int WM_MOUSEACTIVATE = 0x0021, MA_NOACTIVATE = 3;

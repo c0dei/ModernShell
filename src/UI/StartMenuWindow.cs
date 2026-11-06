@@ -85,6 +85,7 @@ public sealed class StartMenuWindow : Window
         var hwnd = new WindowInteropHelper(this).EnsureHandle();
         long ex = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE);
         Win32.SetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE, (IntPtr)(ex | Win32.WS_EX_TOOLWINDOW));
+        Backdrop.KeepRegion(this, _settings);
         // 枠付きウィンドウにしたため、DWM が右上に閉じる/最小化ボタンを描かないようシステムメニューを外す
         long style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
         Win32.SetWindowLongPtr(hwnd, Win32.GWL_STYLE, (IntPtr)(style & ~(0x00080000L /*WS_SYSMENU*/ | 0x00020000L /*WS_MINIMIZEBOX*/ | 0x00010000L /*WS_MAXIMIZEBOX*/)));
