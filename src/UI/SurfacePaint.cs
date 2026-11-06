@@ -79,26 +79,64 @@ public static class SurfacePaint
         if (!shadow) return new Painted { Root = root, Blur = blur };
 
         // 影: Windows のメニューと同じく、周りに薄く広がる影で手前に浮いて見せる。
-        // 透過・ぼかしの背景の下に塗りつぶしを置くと透けて見えてしまうので、外側に細い輪を何重にも重ねて描く（中は空）。
-        // ぼかし効果（DropShadowEffect）は CPU で描くと重いので使わない
-        var host = new Grid { IsHitTestVisible = false, RenderTransform = new TranslateTransform(0, 2) };
-        const int rings = 10;
-        double strength = t.IsDark ? 0.30 : 0.16;
-        for (int i = 1; i <= rings; i++)
-        {
-            double a = strength * Math.Pow(1 - (i - 1) / (double)rings, 2.2);
-            var brush = new SolidColorBrush(Color.FromArgb((byte)Math.Round(a * 255), 0, 0, 0));
-            brush.Freeze();
-            host.Children.Add(new Border
-            {
-                Margin = new Thickness(ShadowPad - i), BorderThickness = new Thickness(1), BorderBrush = brush,
-                CornerRadius = new CornerRadius(corner.TopLeft + i, corner.TopRight + i, corner.BottomRight + i, corner.BottomLeft + i),
-            });
-        }
+        // 透過・ぼかしの背景の下に塗りつぶしを置くと透けて見えてしまうので、背景の外側だけにグラデーションで描く
+        // （辺は直線のグラデーション、角は円形のグラデーション）。ぼかし効果（DropShadowEffect）は CPU で描くと重いので使わない
+        var host = BuildShadow(corner.TopLeft, t.IsDark ? 0.30 : 0.14);
         root.Margin = new Thickness(ShadowPad);
         var outer = new Grid();
         outer.Children.Add(host);
         outer.Children.Add(root);
         return new Painted { Root = outer, Blur = blur, Inset = ShadowPad };
+    }
+
+    /// <summary>
+    /// 影の部分だけを描く 3×3 のグリッド（四隅・四辺）。中央（背景の部分）は空なので、透過の背景の下に影が透けない。
+    /// 濃さは背景の縁で一番濃く、外へ向かってなめらかに薄くなる。
+    /// </summary>
+    private static Grid BuildShadow(double radius, double strength)
+    {
+        double r = Math.Max(0, radius), pad = ShadowPad, size = pad + r;
+        var g = new Grid { IsHitTestVisible = false };
+        g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(size) });
+        g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(size) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(size) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(size) });
+
+        // 縁からの距離 t (0–1) での濃さ。外へ向かって二乗で薄くなる
+        GradientStopCollection Stops(double start, bool reverse)
+        {
+            var stops = new GradientStopCollection();
+            for (int i = 0; i <= 6; i++)
+            {
+                double t = i / 6.0;
+                byte a = (byte)Math.Round(strength * Math.Pow(1 - t, 2) * 255);
+                double offset = start + (1 - start) * t;
+                stops.Add(new GradientStop(Color.FromArgb(a, 0, 0, 0), reverse ? 1 - offset : offset));
+            }
+            if (start > 0) stops.Add(new GradientStop(Colors.Transparent, Math.Max(0, start - 0.001))); // 背景の内側は描かない
+            return stops;
+        }
+
+        void Add(UIElement e, int row, int col) { Grid.SetRow(e, row); Grid.SetColumn(e, col); g.Children.Add(e); }
+
+        // 四辺: 背景の外側（幅 pad）だけ。縁で濃く、外で透明
+        Add(new Border { Height = pad, VerticalAlignment = VerticalAlignment.Top, Background = new LinearGradientBrush(Stops(0, true), 90) }, 0, 1);
+        Add(new Border { Height = pad, VerticalAlignment = VerticalAlignment.Bottom, Background = new LinearGradientBrush(Stops(0, false), 90) }, 2, 1);
+        Add(new Border { Width = pad, HorizontalAlignment = HorizontalAlignment.Left, Background = new LinearGradientBrush(Stops(0, true), 0) }, 1, 0);
+        Add(new Border { Width = pad, HorizontalAlignment = HorizontalAlignment.Right, Background = new LinearGradientBrush(Stops(0, false), 0) }, 1, 2);
+
+        // 四隅: 背景の角の丸みの中心から円形に。丸みの内側（背景の部分）は透明
+        double inner = size > 0 ? r / size : 0;
+        foreach (var (row, col, cx, cy) in new[] { (0, 0, 1.0, 1.0), (0, 2, 0.0, 1.0), (2, 0, 1.0, 0.0), (2, 2, 0.0, 0.0) })
+        {
+            var brush = new RadialGradientBrush(Stops(inner, false))
+            {
+                Center = new Point(cx, cy), GradientOrigin = new Point(cx, cy), RadiusX = 1, RadiusY = 1,
+            };
+            Add(new Border { Background = brush }, row, col);
+        }
+        return g;
     }
 }
