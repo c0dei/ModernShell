@@ -294,6 +294,15 @@ internal static class Log
     private static string PathName => System.IO.Path.Combine(Settings.Directory, "modernshell.log");
 
     public static void Info(string msg) => Write("INFO ", msg);
+
+    /// <summary>起動からの経過時間付きで記録する（どこで時間がかかっているかを調べるため）。</summary>
+    public static void Timing(string phase)
+    {
+        double ms;
+        try { using var p = System.Diagnostics.Process.GetCurrentProcess(); ms = (DateTime.Now - p.StartTime).TotalMilliseconds; }
+        catch { ms = -1; }
+        Write("INFO ", $"timing: {phase} (+{ms:0} ms from launch)");
+    }
     public static void Error(string where, Exception ex) => Write("ERROR", $"{where}: {ex}");
 
     private static void Write(string level, string msg)

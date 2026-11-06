@@ -107,6 +107,9 @@ public sealed class StartMenuWindow : Window
 
     public void ShowMenu(string? initialSearch = null)
     {
+        var clock = Stopwatch.StartNew();
+        bool first = !_shownOnce;
+        _shownOnce = true;
         _search.Text = initialSearch ?? "";
         if (_search.Text.Length == 0) ShowPage(_settings.ShowAllAppsFirst ? Page.AllApps : Page.Pinned);
         _widgets?.Open();
@@ -124,6 +127,7 @@ public sealed class StartMenuWindow : Window
         Left = x / scale;
         Top = (y + slide) / scale;
         UpdateLayout();
+        long layoutMs = clock.ElapsedMilliseconds;
         // 隠したウィンドウを表示し直すと、新しい内容が描かれるまでの一瞬、前回閉じたときの画面が出てちらつく。
         // 見えない状態（DWM のクローク）で表示して、新しい内容を描き終えてから見せる
         Cloak(true);
@@ -137,6 +141,7 @@ public sealed class StartMenuWindow : Window
         {
             if (!IsVisible) return;
             Cloak(false);
+            Log.Info($"timing: start menu {(first ? "first " : "")}open: built+layout {layoutMs} ms, shown after {clock.ElapsedMilliseconds} ms");
             if (animate) SlideIn(x, y, slide);
         });
     }
@@ -167,6 +172,8 @@ public sealed class StartMenuWindow : Window
     }
 
     private EventHandler? _slide;
+    private bool _shownOnce;
+    private int _slideFrames;
 
     /// <summary>
     /// ウィンドウごと（背景も一緒に）下から滑り込ませる。プレビューやトレイの展開と同じ動き。
@@ -175,6 +182,7 @@ public sealed class StartMenuWindow : Window
     private void SlideIn(int x, int y, int from)
     {
         StopSlide();
+        _slideFrames = 0;
         const double ms = 220;
         Stopwatch? clock = null;
         _slide = (_, _) =>
@@ -185,7 +193,9 @@ public sealed class StartMenuWindow : Window
                 _root.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
                 return;
             }
+            _slideFrames++;
             double p = Math.Min(1, clock.Elapsed.TotalMilliseconds / ms);
+            if (p >= 1) Log.Info($"timing: start menu slide {_slideFrames} frames in {clock.ElapsedMilliseconds} ms");
             double eased = 1 - Math.Pow(1 - p, 3);
             int dy = (int)Math.Round(from * (1 - eased));
             Win32.SetWindowPos(Handle, IntPtr.Zero, x, y + dy, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);

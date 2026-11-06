@@ -106,6 +106,7 @@ public static class Program
     private static void Start(Application app)
     {
         Log.Info("start");
+        Log.Timing("start");
         _settings = Settings.Load();
         // 「サインイン時に起動」の登録を今の exe の場所に合わせる（単一 exe 版から zip 版へ移したときなど、古い場所を指したままにしない）
         if (_settings.RunAtStartup) SystemActions.SetRunAtStartup(true);
@@ -122,7 +123,9 @@ public static class Program
             InterceptStartButton = () => _settings.InterceptNativeStartButton,
         };
 
+        Log.Timing("before start menu");
         CreateStartMenu();
+        Log.Timing("start menu created");
         // 緊急用ホットキー: Ctrl+Alt+Shift+F12 で純正タスクバーに戻して終了
         _hotkeyRegistered = RegisterHotKey(_start.Handle, HotkeyEmergencyId, 0x0001 | 0x0002 | 0x0004 | 0x4000 /*ALT|CTRL|SHIFT|NOREPEAT*/, 0x7B /*F12*/);
         if (!_hotkeyRegistered)
@@ -235,7 +238,9 @@ public static class Program
             _taskbar.SearchClicked += () => _start.ShowMenu("");
             _taskbar.OpenSettingsRequested += ShowSettings;
             _taskbar.ExitRequested += Exit;
+            Log.Timing("before taskbar");
             _taskbar.Start();
+            Log.Timing("taskbar built");
             SyncNativeStartAlignment();
         }
         else
@@ -356,14 +361,37 @@ public static class Program
     {
         try
         {
-            Process.Start(new ProcessStartInfo(Environment.ProcessPath!, $"--watchdog {Environment.ProcessId}")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            });
+            // Windows は起動したアプリが画面を出すまで「起動中」のカーソル（砂時計付き矢印）を出す。
+            // ウォッチドッグは画面を出さないので、そのままだとタスクバーの上で砂時計が数十秒出続ける。
+            // STARTF_FORCEOFFFEEDBACK で、この起動中の表示をしないように起動する
+            var si = new STARTUPINFO { cb = Marshal.SizeOf<STARTUPINFO>(), dwFlags = 0x80 /*STARTF_FORCEOFFFEEDBACK*/ };
+            var cmd = $"\"{Environment.ProcessPath}\" --watchdog {Environment.ProcessId}";
+            if (!CreateProcess(null, cmd, IntPtr.Zero, IntPtr.Zero, false, 0x08000000 /*CREATE_NO_WINDOW*/, IntPtr.Zero, null, ref si, out var pi))
+                throw new System.ComponentModel.Win32Exception();
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
         }
         catch (Exception ex) { Log.Error("watchdog start", ex); }
     }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct STARTUPINFO
+    {
+        public int cb;
+        public string? lpReserved, lpDesktop, lpTitle;
+        public int dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags;
+        public short wShowWindow, cbReserved2;
+        public IntPtr lpReserved2, hStdInput, hStdOutput, hStdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PROCESS_INFORMATION { public IntPtr hProcess, hThread; public int dwProcessId, dwThreadId; }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool CreateProcess(string? app, string cmd, IntPtr pa, IntPtr ta, bool inherit, uint flags,
+        IntPtr env, string? dir, ref STARTUPINFO si, out PROCESS_INFORMATION pi);
+
+    [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr h);
 
     private static void RunWatchdog(int parentPid)
     {

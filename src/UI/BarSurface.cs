@@ -58,6 +58,7 @@ public sealed class BarSurface : Window
         HwndSource.FromHwnd(hwnd)!.AddHook(WndProc);
 
         SizeChanged += (_, _) => { ContentSizeChanged?.Invoke(); PlaceBlur(); };
+        ContentRendered += (_, _) => Log.Timing($"taskbar surface first drawn ({placement})");
         LocationChanged += (_, _) => PlaceBlur();
         if (settings.TaskbarBackground == SurfaceStyle.Blur)
         {

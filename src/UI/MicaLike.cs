@@ -77,6 +77,7 @@ public static class MicaLike
         _loading = true;
         var dispatcher = Dispatcher.CurrentDispatcher;
         int h = Math.Max(1, (int)Math.Round(CanvasWidth * (double)screen.Height / Math.Max(1, screen.Width)));
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         Task.Run(() => Build(wall, style, tile, fill, CanvasWidth, h)).ContinueWith(r =>
         {
             dispatcher.BeginInvoke(() =>
@@ -84,6 +85,7 @@ public static class MicaLike
                 _loading = false;
                 if (r.Exception != null) Log.Error("mica-like", r.Exception);
                 _image = r.Exception == null ? r.Result : null;
+                Log.Info($"timing: blur background built in {sw.ElapsedMilliseconds} ms ({System.IO.Path.GetFileName(wall ?? "-")})");
                 ChangedCore?.Invoke();
             });
         }, TaskScheduler.Default);

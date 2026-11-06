@@ -110,6 +110,7 @@ public sealed class AppCatalog
                 // まとめて消えた重複エントリの ID でも、残したエントリが見つかるようにする（ピン留めが消えないように）
                 _byId = aliases;
                 Log.Info($"apps loaded: {list.Count}");
+                Log.Timing("apps loaded");
                 MemoryHousekeeping.CompactLater("startup");
                 tcs.SetResult();
             }
