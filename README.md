@@ -71,8 +71,8 @@ dotnet publish ModernShell.csproj -c Release -r win-x64 --self-contained false -
 
 ### GitHub Actions（自動ビルド / リリース）
 
-- `main` への push・PR ごとに windows-latest でビルドし、Actions の Artifacts に exe を置きます。
-- `v` から始まるタグを push すると、**Releases にランタイム込みの単一 exe（x64 / ARM64）を自動で添付**します。
+- `main` への push・PR ごとに windows-latest でビルドし、Actions の Artifacts に置きます。
+- `v` から始まるタグを push すると、**Releases にランタイム込みの zip と単一 exe（x64 / ARM64）を自動で添付**します。
 
 ```bash
 git tag v0.1.0
@@ -82,7 +82,10 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-exe は .NET ランタイム同梱なので、インストール不要でそのまま起動できます。
+どちらも .NET ランタイム同梱なので、インストール不要でそのまま起動できます。
+
+- **zip（おすすめ）**: 好きな場所に展開して、中の `ModernShell.exe` を起動します。常駐時の使用メモリが少なくなります（実測 約 70 MB）。
+- **単一 exe（`-single.exe`）**: 1 ファイルで持ち運べますが、中の DLL をメモリへ写して使うため、使用メモリが倍以上になります（実測 約 150 MB）。
 
 設定ファイル: `%AppData%\ModernShell\settings.json` / ログ: `%AppData%\ModernShell\modernshell.log`
 
