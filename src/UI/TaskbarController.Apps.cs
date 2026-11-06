@@ -90,6 +90,7 @@ public sealed partial class TaskbarController
             }
         }
         _apps.Visibility = _apps.Children.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        PruneWatched();
     }
 
     private Tile AppButton(Group g)

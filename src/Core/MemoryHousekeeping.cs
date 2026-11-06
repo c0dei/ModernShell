@@ -14,6 +14,23 @@ namespace ModernShell.Core;
 public static class MemoryHousekeeping
 {
     private static bool _scheduled;
+    private static System.Threading.Timer? _monitor;
+
+    /// <summary>常駐中の使用量を 30 分ごとにログに残す（少しずつ増えていないかを確かめるため。GC は強制しない）。</summary>
+    public static void StartMonitoring()
+    {
+        _monitor ??= new System.Threading.Timer(_ =>
+        {
+            try
+            {
+                using var p = Process.GetCurrentProcess();
+                Log.Info($"memory (periodic): private {p.PrivateMemorySize64 / 1048576} MB, working set {p.WorkingSet64 / 1048576} MB, " +
+                         $"managed heap {GC.GetTotalMemory(false) / 1048576} MB, handles {p.HandleCount}, " +
+                         $"GDI {GetGuiResources(p.Handle, 0)}, USER {GetGuiResources(p.Handle, 1)}");
+            }
+            catch { }
+        }, null, TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30));
+    }
 
     /// <summary>少し待ってから（起動直後の処理が落ち着いてから）詰める。</summary>
     public static void CompactLater(string reason, int delayMs = 8000)

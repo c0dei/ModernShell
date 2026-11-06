@@ -106,6 +106,7 @@ public sealed partial class TaskbarController
         }
         _overflowButton.Visibility = Icons(_shell.Tray?.UnpinnedIcons).Any() || _trayEditMode ? Visibility.Visible : Visibility.Collapsed;
         if (_overflowPopup?.IsOpen == true) FillOverflow();
+        PruneWatched();
     }
 
     /// <summary>トレイアイコン 1 個。マウス操作はそのままアプリへ転送する（右クリックメニューもアプリ自身が出す）。</summary>

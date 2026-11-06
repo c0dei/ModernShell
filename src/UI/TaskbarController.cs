@@ -130,6 +130,24 @@ public sealed partial class TaskbarController : IDisposable
     }
     private void Watch(INotifyPropertyChanged o) { if (_watched.Add(o)) o.PropertyChanged += OnItemChanged; }
 
+    /// <summary>
+    /// 閉じたウィンドウ・消えたトレイアイコンの購読を外す。外さないと、閉じたウィンドウ（アイコンの画像なども）が
+    /// 購読を通して残り続け、常駐しているうちに少しずつメモリが増えていく。
+    /// </summary>
+    private void PruneWatched()
+    {
+        var alive = new HashSet<INotifyPropertyChanged>();
+        if (_shell.Tasks?.GroupedWindows is { } windows) foreach (var w in windows.Cast<INotifyPropertyChanged>()) alive.Add(w);
+        if (_shell.Tray?.PinnedIcons is { } p) foreach (var i in p.Cast<INotifyPropertyChanged>()) alive.Add(i);
+        if (_shell.Tray?.UnpinnedIcons is { } u) foreach (var i in u.Cast<INotifyPropertyChanged>()) alive.Add(i);
+        _watched.RemoveWhere(o =>
+        {
+            if (alive.Contains(o)) return false;
+            o.PropertyChanged -= OnItemChanged;
+            return true;
+        });
+    }
+
     private void OnPinsChanged() => _dispatcher.BeginInvoke(() => { if (PinsFromWindows) Kick(_appsDebounce); });
     private void OnCatalogChanged() => _dispatcher.BeginInvoke(() => Kick(_appsDebounce));
     /// <summary>

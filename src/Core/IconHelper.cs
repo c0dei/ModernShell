@@ -16,6 +16,17 @@ namespace ModernShell.Core;
 internal static class IconHelper
 {
     private static readonly ConcurrentDictionary<string, ImageSource?> Cache = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// アイコンの作り置きの上限。ジャンプリストやウィジェットの「最近使ったファイル」は開くたびに別のファイルが並ぶので、
+    /// 上限なしだと常駐中に増え続ける。超えたら一度捨てる（よく使うものはすぐ作り直される）。
+    /// </summary>
+    private const int CacheLimit = 1000;
+
+    private static ImageSource? Cached(string key, Func<string, ImageSource?> load)
+    {
+        if (Cache.Count > CacheLimit && !Cache.ContainsKey(key)) Cache.Clear();
+        return Cache.GetOrAdd(key, load);
+    }
 
     [ComImport, Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IShellItemImageFactory
@@ -35,7 +46,7 @@ internal static class IconHelper
     public static ImageSource? Get(string parsingName, int size = 48)
     {
         var key = parsingName + "|" + size;
-        return Cache.GetOrAdd(key, _ => Load(parsingName, size));
+        return Cached(key, _ => Load(parsingName, size));
     }
 
     private static ImageSource? Load(string parsingName, int size)
@@ -95,7 +106,7 @@ internal static class IconHelper
     {
         if (string.IsNullOrEmpty(file) || !System.IO.File.Exists(file)) return null;
         var key = "res|" + file + "|" + index;
-        return Cache.GetOrAdd(key, _ =>
+        return Cached(key, _ =>
         {
             var large = new IntPtr[1];
             try
@@ -122,7 +133,7 @@ internal static class IconHelper
     {
         if (string.IsNullOrEmpty(file) || !System.IO.File.Exists(file)) return null;
         var key = "exact|" + file + "|" + index + "|" + sizePx;
-        return Cache.GetOrAdd(key, _ =>
+        return Cached(key, _ =>
         {
             var icons = new IntPtr[1];
             try
