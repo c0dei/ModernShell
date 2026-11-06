@@ -504,6 +504,14 @@ public sealed class SettingsWindow : Window
     {
         p.Children.Add(ToggleRow("サインイン時に起動", "Windows にサインインすると自動で常駐します",
             _s.RunAtStartup, v => { _s.RunAtStartup = v; SystemActions.SetRunAtStartup(v); }));
+        p.Children.Add(ToggleRow("描画に GPU を使う",
+            "オフにすると GPU ドライバーを読み込まないので、使用メモリが減ります（アニメーションは CPU で描画）。背景のぼかしは Windows が描くので変わりません。変更すると ModernShell を再起動します",
+            _s.UseGpuRendering, v =>
+            {
+                _s.UseGpuRendering = v;
+                _s.SaveQuiet();
+                if (Confirm("ModernShell を再起動して反映しますか？")) RestartRequested?.Invoke();
+            }));
 
         p.Children.Add(Section("設定の管理"));
         Group(p, "", "バックアップ", "設定（ピン留め・並び順・アイコンを含む）を 1 つのファイルに保存して、別の PC に移したり元に戻したりできます",

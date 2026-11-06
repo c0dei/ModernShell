@@ -153,6 +153,11 @@ public sealed class Settings
 
     // --- 一般 ---
     public bool RunAtStartup { get; set; } = false;
+    /// <summary>
+    /// WPF の描画に GPU を使うか。オフにすると GPU ドライバー（NVIDIA なら 100 MB 超の DLL 群）を読み込まないので
+    /// 使用メモリが減る。背景のぼかし（Acrylic / Mica）は Windows が描くので影響しない。変更は再起動で反映。
+    /// </summary>
+    public bool UseGpuRendering { get; set; } = true;
 
     // ---------------------------------------------------------------
     [JsonIgnore]

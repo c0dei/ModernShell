@@ -24,7 +24,7 @@ public static class MemoryHousekeeping
             try
             {
                 using var p = Process.GetCurrentProcess();
-                Log.Info($"memory (periodic): private {p.PrivateMemorySize64 / 1048576} MB, working set {p.WorkingSet64 / 1048576} MB, " +
+                Log.Info($"memory (periodic): task manager {TaskManagerMB(p)} MB, private {p.PrivateMemorySize64 / 1048576} MB, working set {p.WorkingSet64 / 1048576} MB, " +
                          $"managed heap {GC.GetTotalMemory(false) / 1048576} MB, handles {p.HandleCount}, " +
                          $"GDI {GetGuiResources(p.Handle, 0)}, USER {GetGuiResources(p.Handle, 1)}");
             }
@@ -57,6 +57,25 @@ public static class MemoryHousekeeping
 
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int GetGuiResources(IntPtr process, int flags);
 
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct PROCESS_MEMORY_COUNTERS_EX2
+    {
+        public uint cb, PageFaultCount;
+        public UIntPtr PeakWorkingSetSize, WorkingSetSize, QuotaPeakPagedPoolUsage, QuotaPagedPoolUsage,
+            QuotaPeakNonPagedPoolUsage, QuotaNonPagedPoolUsage, PagefileUsage, PeakPagefileUsage, PrivateUsage,
+            PrivateWorkingSetSize, SharedCommitUsage;
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "K32GetProcessMemoryInfo")]
+    private static extern bool GetProcessMemoryInfo(IntPtr process, ref PROCESS_MEMORY_COUNTERS_EX2 counters, uint size);
+
+    /// <summary>タスク マネージャーの「メモリ」列と同じ値（プライベート ワーキング セット、MB）。取れなければ -1。</summary>
+    private static long TaskManagerMB(Process p)
+    {
+        var c = new PROCESS_MEMORY_COUNTERS_EX2 { cb = (uint)System.Runtime.InteropServices.Marshal.SizeOf<PROCESS_MEMORY_COUNTERS_EX2>() };
+        return GetProcessMemoryInfo(p.Handle, ref c, c.cb) ? (long)(c.PrivateWorkingSetSize.ToUInt64() / 1048576) : -1;
+    }
+
     /// <summary>
     /// 内訳をログに残す（どこを減らせばよいかの手がかり）。読み込んだ DLL の大きさ（上位）、GC が確保している量、
     /// ワーキングセット、スレッド数、GDI/USER オブジェクト数。DLL 名だけで、内容は書かない。
@@ -77,7 +96,7 @@ public static class MemoryHousekeeping
         }
         catch { }
         var biggest = string.Join(", ", top.OrderByDescending(x => x.size).Take(12).Select(x => $"{x.name} {x.size / 1048576.0:0.0}"));
-        Log.Info($"memory detail: working set {p.WorkingSet64 / 1048576} MB, GC committed {info.TotalCommittedBytes / 1048576} MB, " +
+        Log.Info($"memory detail: task manager {TaskManagerMB(p)} MB, working set {p.WorkingSet64 / 1048576} MB, GC committed {info.TotalCommittedBytes / 1048576} MB, " +
                  $"modules {top.Count} = {modules / 1048576} MB, threads {p.Threads.Count}, GDI {GetGuiResources(p.Handle, 0)}, USER {GetGuiResources(p.Handle, 1)}");
         Log.Info("memory detail: largest modules (MB): " + biggest);
     }
