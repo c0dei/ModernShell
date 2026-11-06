@@ -457,13 +457,22 @@ public sealed class SettingsWindow : Window
                 _s.BackdropEngine.ToString(), v => _s.BackdropEngine = Enum.Parse<BackdropEngine>(v)));
 
         Group(p, "", "タスクバー", "ModernShell のタスクバーの素材",
-            DropDownRow("タスクバーの背景", "「Mica 風」は壁紙を強くぼかした色を下地にします（本物の Mica は常に非アクティブなタスクバーでは単色になるため）",
-                new[]
-                {
-                    ("Blur", "ぼかしのみ"), ("MicaLike", "Mica 風（壁紙をぼかす）"), ("Acrylic", "Acrylic（すりガラス）"),
-                    ("Clear", "完全に透明（ぼかしなし）"), ("Solid", "なし（単色）"),
-                },
-                _s.TaskbarMaterial.ToString(), v => _s.TaskbarMaterial = Enum.Parse<TaskbarMaterial>(v), _s.UseCustomTaskbar),
+            _s.ForceRoundCorners
+                // 自前で描く方式では Windows のぼかし（ぼかしのみ / Acrylic）は使えない。選べるのは自分で描けるものだけ
+                ? DropDownRow("タスクバーの背景", "「角丸と透過を ModernShell で描く」がオンのため、Windows のぼかし（ぼかしのみ・Acrylic）は使えません。" +
+                        "ぼかした見た目にしたいときは「Mica 風」を選んでください",
+                    new[] { ("MicaLike", "Mica 風（壁紙をぼかす）"), ("Clear", "透明（ぼかしなし）") },
+                    _s.TaskbarMaterial == TaskbarMaterial.MicaLike ? "MicaLike" : "Clear",
+                    v => _s.TaskbarMaterial = Enum.Parse<TaskbarMaterial>(v), _s.UseCustomTaskbar)
+                : DropDownRow("タスクバーの背景",
+                    "ぼかしのみ: 後ろをそのままぼかす。Acrylic: ぼかしに細かい粒子と白っぽい明るさの層が加わり、すりガラスのように見える" +
+                    "（違いは不透明度を 0〜20% にすると分かりやすい）。Mica 風: 後ろのウィンドウではなく壁紙を強くぼかす",
+                    new[]
+                    {
+                        ("Blur", "ぼかしのみ"), ("Acrylic", "Acrylic（すりガラス・粒子あり）"), ("MicaLike", "Mica 風（壁紙をぼかす）"),
+                        ("Clear", "完全に透明（ぼかしなし）"), ("Solid", "なし（単色）"),
+                    },
+                    _s.TaskbarMaterial.ToString(), v => _s.TaskbarMaterial = Enum.Parse<TaskbarMaterial>(v), _s.UseCustomTaskbar),
             SliderRow("タスクバーの不透明度", "背景の上に重ねる色の濃さ。0 で背景のまま、100 で不透明",
                 _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.UseCustomTaskbar && (_s.TaskbarMaterial != TaskbarMaterial.Solid || _s.ForceRoundCorners)));
 
