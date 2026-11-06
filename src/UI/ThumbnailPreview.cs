@@ -46,9 +46,19 @@ public sealed class ThumbnailPreview
     private FrameworkElement? _anchor, _pendingAnchor;
     private Func<IReadOnlyList<ApplicationWindow>>? _pendingWindows;
     private bool _top;
-    private readonly List<(IntPtr thumb, Border slot)> _thumbs = new();
-    private UIElement? _layoutOwner;
-    private EventHandler? _layoutHandler;
+    /// <summary>
+    /// 開いているプレビュー 1 回分の状態。プレビューを開き直したとき、古いプレビューの後片付け（Closed は遅れて来る）が
+    /// 新しいプレビューのサムネイルまで消してしまわないよう、プレビューごとに別々に持つ。
+    /// </summary>
+    private sealed class Session
+    {
+        public readonly List<(IntPtr thumb, Border slot)> Thumbs = new();
+        public HwndSource? Source;
+        public UIElement? LayoutOwner;
+        public EventHandler? LayoutHandler;
+        public DispatcherTimer? Retry;
+        public bool Closed;
+    }
 
     public bool IsOpen => _popup?.IsOpen == true;
 
@@ -161,20 +171,26 @@ public sealed class ThumbnailPreview
         };
         row.MouseEnter += (_, _) => _hideTimer.Stop();
         row.MouseLeave += (_, _) => { _hideTimer.Stop(); _hideTimer.Start(); };
-        _popup.Opened += (_, _) => RegisterThumbnails(row);
-        _popup.Closed += (_, _) => UnregisterThumbnails();
+        var session = new Session();
+        _popup.Opened += (_, _) => RegisterThumbnails(row, session);
+        _popup.Closed += (_, _) => Unregister(session);
         _popup.IsOpen = true;
     }
 
     /// <summary>ポップアップが開いたら、各カードの位置に DWM サムネイルを登録する。</summary>
-    private void RegisterThumbnails(StackPanel row)
+    private void RegisterThumbnails(StackPanel row, Session session)
     {
-        if (PresentationSource.FromVisual(row) is not HwndSource src) return;
+        if (session.Closed || PresentationSource.FromVisual(row) is not HwndSource src) return;
+        session.Source = src;
         var (maxW, maxH) = MaxSize;
         foreach (var card in row.Children.OfType<Tile>())
         {
             if (card.Tag is not Border slot || slot.Tag is not IntPtr hwnd) continue;
-            if (DwmRegisterThumbnail(src.Handle, hwnd, out var thumb) != 0 || thumb == IntPtr.Zero) continue;
+            if (DwmRegisterThumbnail(src.Handle, hwnd, out var thumb) != 0 || thumb == IntPtr.Zero)
+            {
+                Log.Info($"thumbnail register failed: {hwnd}");
+                continue;
+            }
             // 元のウィンドウの縦横比に合わせて枠の大きさを決める
             if (DwmQueryThumbnailSourceSize(thumb, out var size) == 0 && size.cx > 0 && size.cy > 0)
             {
@@ -182,23 +198,33 @@ public sealed class ThumbnailPreview
                 slot.Width = Math.Max(80, size.cx * scale);
                 slot.Height = Math.Max(50, size.cy * scale);
             }
-            _thumbs.Add((thumb, slot));
+            session.Thumbs.Add((thumb, slot));
         }
-        // 大きさが決まって配置し直されたあとに描画位置を設定する
-        row.Dispatcher.BeginInvoke(() => UpdateRects(src), DispatcherPriority.Loaded);
-        // ポップアップの位置や大きさが変わったら描画位置を追従させる（閉じるときに必ず外す）
-        _layoutOwner = row;
-        _layoutHandler = (_, _) => UpdateRects(src);
-        row.LayoutUpdated += _layoutHandler;
+
+        // 描画位置の設定: 枠の大きさが決まって配置し直されるたびに更新する。
+        // 準備が整う前に 1 回きりで終わると描かれないままになるので、念のため少しの間は繰り返し設定する
+        session.LayoutOwner = row;
+        session.LayoutHandler = (_, _) => UpdateRects(session);
+        row.LayoutUpdated += session.LayoutHandler;
+        int tries = 0;
+        session.Retry = new DispatcherTimer(TimeSpan.FromMilliseconds(50), DispatcherPriority.Background, (_, _) =>
+        {
+            UpdateRects(session);
+            if (++tries >= 10) session.Retry?.Stop();
+        }, row.Dispatcher);
+        session.Retry.Start();
+        row.Dispatcher.BeginInvoke(() => UpdateRects(session), DispatcherPriority.Loaded);
     }
 
-    private void UpdateRects(HwndSource src)
+    private static void UpdateRects(Session session)
     {
-        if (src.RootVisual == null || src.CompositionTarget == null) return;
+        var src = session.Source;
+        if (session.Closed || src == null || src.IsDisposed || src.RootVisual == null || src.CompositionTarget == null) return;
         var m = src.CompositionTarget.TransformToDevice;
-        foreach (var (thumb, slot) in _thumbs)
+        foreach (var (thumb, slot) in session.Thumbs)
         {
-            if (!slot.IsLoaded) continue;
+            // IsLoaded を待つと、最後の配置のあとに Loaded が来て設定されないままになることがあるので、実際の大きさで判断する
+            if (slot.ActualWidth <= 0 || slot.ActualHeight <= 0) continue;
             Point tl, br;
             try
             {
@@ -217,20 +243,20 @@ public sealed class ThumbnailPreview
         }
     }
 
-    private void UnregisterThumbnails()
+    private static void Unregister(Session session)
     {
-        if (_layoutOwner != null && _layoutHandler != null) _layoutOwner.LayoutUpdated -= _layoutHandler;
-        _layoutOwner = null;
-        _layoutHandler = null;
-        foreach (var (thumb, _) in _thumbs) DwmUnregisterThumbnail(thumb);
-        _thumbs.Clear();
+        if (session.Closed) return;
+        session.Closed = true;
+        session.Retry?.Stop();
+        if (session.LayoutOwner != null && session.LayoutHandler != null) session.LayoutOwner.LayoutUpdated -= session.LayoutHandler;
+        foreach (var (thumb, _) in session.Thumbs) DwmUnregisterThumbnail(thumb);
+        session.Thumbs.Clear();
     }
 
     private void Close()
     {
         _hideTimer.Stop();
-        if (_popup != null) { _popup.IsOpen = false; _popup = null; }
-        UnregisterThumbnails();
+        if (_popup != null) { _popup.IsOpen = false; _popup = null; } // サムネイルの解除はそのプレビューの Closed で行う
         _anchor = null;
     }
 }

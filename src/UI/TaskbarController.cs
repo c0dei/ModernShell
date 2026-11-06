@@ -893,7 +893,7 @@ public sealed class TaskbarController : IDisposable
         bool running = g.Windows.Count > 0;
         bool active = g.Windows.Any(w => w.State == ApplicationWindow.WindowState.Active);
         bool flashing = g.Windows.Any(w => w.State == ApplicationWindow.WindowState.Flashing);
-        var icon = UiKit.Icon(CustomIcon(g) ?? g.Windows.FirstOrDefault()?.Icon ?? g.Pinned?.Icon(64), IconSz);
+        var icon = UiKit.Icon(CustomIcon(g) ?? ButtonIcon(g), IconSz);
 
         var content = new Grid();
         FrameworkElement main = icon;
@@ -1091,7 +1091,7 @@ public sealed class TaskbarController : IDisposable
 
         if (app != null)
         {
-            items.Add(new MenuItemSpec("", app.Name, () => app.Launch()) { Icon = w0?.Icon ?? app.Icon(32), SubMenu = () => AppItemMenu(app) });
+            items.Add(new MenuItemSpec("", app.Name, () => app.Launch()) { Icon = CustomIcon(g) ?? app.Icon(32) ?? w0?.Icon, SubMenu = () => AppItemMenu(app) });
             if (IsWindowsPin(app))
             {
                 // Windows のピン留めはアプリから変更できない（Windows が API を提供していない）
@@ -1119,6 +1119,29 @@ public sealed class TaskbarController : IDisposable
                 () => { foreach (var w in g.Windows) w.Close(); }, Danger: true));
         }
         return items;
+    }
+
+    /// <summary>
+    /// ボタンのアイコン。Windows のタスクバーと同じく、まとめて表示するボタンは「アプリのアイコン」を使う
+    /// （ウィンドウのアイコンは中身で変わることがある: エクスプローラーは開いている場所のアイコンになる）。
+    /// まとめない設定のときは、ウィンドウごとのアイコンを優先する。
+    /// </summary>
+    private ImageSource? ButtonIcon(Group g)
+    {
+        var w0 = g.Windows.FirstOrDefault();
+        var windowIcon = w0?.Icon;
+        return _settings.GroupTaskbarButtons ? AppIcon(g) ?? windowIcon : windowIcon ?? AppIcon(g);
+    }
+
+    private ImageSource? AppIcon(Group g)
+    {
+        if (g.Pinned?.Icon(64) is { } pinned) return pinned;
+        var w0 = g.Windows.FirstOrDefault();
+        if (w0 == null) return null;
+        if (FindApp(w0)?.Icon(64) is { } app) return app;
+        var exe = ExePath(w0);
+        return exe != null && !exe.EndsWith("ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase)
+            ? ModernShell.Core.IconHelper.Get(exe, 64) : null;
     }
 
     // ---- アイコンの差し替え ----
