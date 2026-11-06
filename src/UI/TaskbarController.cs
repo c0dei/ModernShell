@@ -61,6 +61,7 @@ public sealed class TaskbarController : IDisposable
     public bool StartCentered => !StartAtLeftEdge && _settings.TaskbarAlignment == TaskbarAlignment.Center;
 
     private readonly WindowsPins _windowsPins;
+    private readonly ThumbnailPreview _preview;
     private bool PinsFromWindows => _settings.TaskbarPinSource == TaskbarPinSource.Windows;
 
     // ---- 大きさ（設定の高さ・アイコンサイズから算出）----
@@ -79,6 +80,7 @@ public sealed class TaskbarController : IDisposable
         _shell = shell;
         _dispatcher = dispatcher;
         _windowsPins = new WindowsPins(catalog);
+        _preview = new ThumbnailPreview(settings, dispatcher);
         _windowsPins.Changed += OnPinsChanged;
 
         _clock = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Normal, (_, _) => UpdateClock(), dispatcher);
@@ -918,6 +920,14 @@ public sealed class TaskbarController : IDisposable
         tile.MouseLeave += (_, _) => { if (active) tile.Background = t.Hover; };
         if (Floating && _settings.MagnifyOnHover) AddMagnify(tile, icon);
 
+        // カーソルを置くとウィンドウのプレビュー（実行中のときだけ）。クリック・右クリック・ドラッグで閉じる
+        if (running)
+        {
+            tile.MouseEnter += (_, _) => _preview.Hover(tile, () => g.Windows, IsTop);
+            tile.MouseLeave += (_, _) => _preview.Leave();
+        }
+        tile.PreviewMouseDown += (_, _) => _preview.Cancel();
+
         tile.Click += x =>
         {
             if (g.Windows.Count == 0) g.Pinned?.Launch();
@@ -1207,6 +1217,7 @@ public sealed class TaskbarController : IDisposable
         Theme.Changed -= OnThemeChanged;
         NetworkChange.NetworkAvailabilityChanged -= OnNetworkChanged;
         if (_overflowPopup != null) _overflowPopup.IsOpen = false;
+        _preview.Cancel();
         foreach (var s in _surfaces) s.Close();
         _surfaces.Clear();
         _reservation.Dispose();

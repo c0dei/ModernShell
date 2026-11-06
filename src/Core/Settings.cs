@@ -51,6 +51,12 @@ public sealed class Settings
     public bool GroupTaskbarButtons { get; set; } = true;
     public bool ShowTaskbarLabels { get; set; } = false;
     public bool ShowSeconds { get; set; } = false;
+    /// <summary>タスクバーのボタンにカーソルを置くとウィンドウのプレビューを表示する。</summary>
+    public bool ShowThumbnailPreview { get; set; } = true;
+    /// <summary>プレビューを表示するまでの待ち時間 (ミリ秒)。</summary>
+    public int PreviewDelayMs { get; set; } = 400;
+    /// <summary>プレビューの大きさ（Small / Medium / Large）。</summary>
+    public string PreviewSize { get; set; } = "Medium";
     public List<string> PinnedTaskbar { get; set; } = new();
     public TaskbarPinSource TaskbarPinSource { get; set; } = TaskbarPinSource.Windows;
     /// <summary>「Windows と共有」のとき、Windows のピン留めの後ろに ModernShell 側で追加したピン留め。</summary>

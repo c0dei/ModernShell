@@ -237,6 +237,16 @@ public sealed class SettingsWindow : Window
         p.Children.Add(ToggleRow("ボタンにウィンドウ名を表示", "", _s.ShowTaskbarLabels, v => _s.ShowTaskbarLabels = v, on));
         p.Children.Add(ToggleRow("時計に秒を表示", "", _s.ShowSeconds, v => _s.ShowSeconds = v, on));
 
+        p.Children.Add(Section("ウィンドウのプレビュー"));
+        p.Children.Add(ToggleRow("カーソルを置いたときにプレビューを表示", "実行中のアプリのボタンに置くと、ウィンドウの中身を縮小表示します。クリックで切り替え、× で閉じます",
+            _s.ShowThumbnailPreview, v => _s.ShowThumbnailPreview = v, on));
+        p.Children.Add(DropDownRow("表示までの待ち時間", "",
+            new[] { ("0", "すぐ"), ("200", "0.2 秒"), ("400", "0.4 秒（標準）"), ("700", "0.7 秒"), ("1000", "1 秒") },
+            _s.PreviewDelayMs.ToString(), v => _s.PreviewDelayMs = int.Parse(v), on && _s.ShowThumbnailPreview));
+        p.Children.Add(DropDownRow("プレビューの大きさ", "",
+            new[] { ("Small", "小"), ("Medium", "中（標準）"), ("Large", "大") },
+            _s.PreviewSize, v => _s.PreviewSize = v, on && _s.ShowThumbnailPreview));
+
         p.Children.Add(InfoBar("困ったときは Ctrl + Alt + Shift + F12",
             "いつでも ModernShell を終了して純正タスクバーに戻せます。トレイの「^」→ ModernShell アイコンの右クリック、スタートの電源メニューからも終了できます。"));
     }
