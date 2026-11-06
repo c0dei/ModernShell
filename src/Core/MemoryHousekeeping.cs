@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime;
 using System.Threading.Tasks;
 
@@ -32,8 +33,36 @@ public static class MemoryHousekeeping
             GC.WaitForPendingFinalizers();
             GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
             Log.Info($"memory ({reason}): private {before} MB -> {Private()} MB, managed heap {GC.GetTotalMemory(false) / 1048576} MB");
+            LogBreakdown();
         }
         catch (Exception ex) { Log.Error("memory compact", ex); }
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int GetGuiResources(IntPtr process, int flags);
+
+    /// <summary>
+    /// 内訳をログに残す（どこを減らせばよいかの手がかり）。読み込んだ DLL の大きさ（上位）、GC が確保している量、
+    /// ワーキングセット、スレッド数、GDI/USER オブジェクト数。DLL 名だけで、内容は書かない。
+    /// </summary>
+    private static void LogBreakdown()
+    {
+        using var p = Process.GetCurrentProcess();
+        var info = GC.GetGCMemoryInfo();
+        long modules = 0;
+        var top = new System.Collections.Generic.List<(string name, long size)>();
+        try
+        {
+            foreach (ProcessModule m in p.Modules)
+            {
+                modules += m.ModuleMemorySize;
+                top.Add((m.ModuleName, m.ModuleMemorySize));
+            }
+        }
+        catch { }
+        var biggest = string.Join(", ", top.OrderByDescending(x => x.size).Take(12).Select(x => $"{x.name} {x.size / 1048576.0:0.0}"));
+        Log.Info($"memory detail: working set {p.WorkingSet64 / 1048576} MB, GC committed {info.TotalCommittedBytes / 1048576} MB, " +
+                 $"modules {top.Count} = {modules / 1048576} MB, threads {p.Threads.Count}, GDI {GetGuiResources(p.Handle, 0)}, USER {GetGuiResources(p.Handle, 1)}");
+        Log.Info("memory detail: largest modules (MB): " + biggest);
     }
 
     private static long Private()

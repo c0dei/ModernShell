@@ -57,6 +57,22 @@ jobs:
           name: ModernShell-${{ matrix.rid }}
           path: publish/*.exe
 
+      # 比較用: 単一 exe にしないフォルダー版（DLL をそのまま置く）。単一 exe は DLL を exe の中から
+      # メモリへ写して使うため、フォルダー版のほうが使用メモリが少なくなることがある
+      - name: Publish (folder)
+        shell: bash
+        run: >
+          dotnet publish ModernShell.csproj -c Release -r ${{ matrix.rid }}
+          --self-contained true
+          -p:DebugType=none
+          -p:Version=${{ steps.ver.outputs.version }}
+          -o publish-folder
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ModernShell-${{ matrix.rid }}-folder
+          path: publish-folder/
+
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
