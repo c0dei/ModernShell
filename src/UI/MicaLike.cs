@@ -161,12 +161,13 @@ public static class MicaLike
     {
         try
         {
-            // 同じパスのファイルが差し替えられる（スライドショー・TranscodedWallpaper）ので、キャッシュを使わずに読む
+            // 同じパスのファイルが差し替えられる（スライドショー・TranscodedWallpaper）ので、パスではなく中身（ストリーム）から読む。
+            // ストリームから読む画像は WPF のキャッシュに入らない。IgnoreImageCache を付けると WPF の不具合で例外になる（URI が無いため）
             using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             var bmp = new BitmapImage();
             bmp.BeginInit();
             bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache | BitmapCreateOptions.IgnoreColorProfile;
+            bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
             bmp.StreamSource = fs;
             bmp.DecodePixelWidth = decodeWidth;
             bmp.EndInit();
