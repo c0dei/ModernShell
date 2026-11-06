@@ -62,6 +62,7 @@ public sealed class TaskbarController : IDisposable
 
     private readonly WindowsPins _windowsPins;
     private readonly ThumbnailPreview _preview;
+    private readonly DesktopsFlyout _desktops;
     private bool PinsFromWindows => _settings.TaskbarPinSource == TaskbarPinSource.Windows;
 
     // ---- 大きさ（設定の高さ・アイコンサイズから算出）----
@@ -81,6 +82,7 @@ public sealed class TaskbarController : IDisposable
         _dispatcher = dispatcher;
         _windowsPins = new WindowsPins(catalog);
         _preview = new ThumbnailPreview(settings, dispatcher);
+        _desktops = new DesktopsFlyout(settings, dispatcher);
         _windowsPins.Changed += OnPinsChanged;
 
         _clock = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Normal, (_, _) => UpdateClock(), dispatcher);
@@ -244,7 +246,8 @@ public sealed class TaskbarController : IDisposable
     {
         // 空いている場所でも右クリックを受け取れるよう、透明の背景を付ける
         if (content is Panel panel && panel.Background == null) panel.Background = Brushes.Transparent;
-        var s = new BarSurface(anchor, h, _settings) { Content = content, Foreground = Theme.Current.Text };
+        var s = new BarSurface(anchor, h, _settings) { Foreground = Theme.Current.Text };
+        s.SetBody(content);
         s.ContentSizeChanged += Arrange;
         s.Loaded += (_, _) => Arrange();
         _surfaces.Add(s);
@@ -307,17 +310,27 @@ public sealed class TaskbarController : IDisposable
         }, FlyoutPlacement);
         p.Children.Add(start);
         if (_settings.ShowSearchButton) p.Children.Add(SmallButton("", "検索", () => SearchClicked?.Invoke()));
-        if (_settings.ShowTaskViewButton) p.Children.Add(SmallButton("", "タスク ビュー", SystemActions.TaskView));
+        if (_settings.ShowTaskViewButton) p.Children.Add(SmallButton("", "タスク ビュー", SystemActions.TaskView, HookDesktops));
         return p;
     }
 
     private PlacementMode FlyoutPlacement => IsTop ? PlacementMode.Bottom : PlacementMode.Top;
 
-    private Tile SmallButton(string glyph, string tip, Action onClick)
+    private Tile SmallButton(string glyph, string tip, Action onClick, Action<Tile>? configure = null)
     {
         var tile = new Tile { Width = TileW, Height = TileH, Margin = new Thickness(2, 0, 2, 0), Child = UiKit.Glyph(glyph, GlyphSz), ToolTip = tip };
         tile.Click += _ => onClick();
+        configure?.Invoke(tile);
         return tile;
+    }
+
+    /// <summary>タスクビューボタン: カーソルを置くと仮想デスクトップの一覧（Windows 11 と同じ）。</summary>
+    private void HookDesktops(Tile tv)
+    {
+        tv.ToolTip = null; // 一覧と重なるのでツールチップは出さない
+        tv.MouseEnter += (_, _) => _desktops.Hover(tv, IsTop);
+        tv.MouseLeave += (_, _) => _desktops.Leave();
+        tv.PreviewMouseDown += (_, _) => _desktops.Cancel();
     }
 
     // ------------------------------------------------------------------
@@ -1294,6 +1307,7 @@ public sealed class TaskbarController : IDisposable
         NetworkChange.NetworkAvailabilityChanged -= OnNetworkChanged;
         if (_overflowPopup != null) _overflowPopup.IsOpen = false;
         _preview.Cancel();
+        _desktops.Cancel();
         foreach (var s in _surfaces) s.Close();
         _surfaces.Clear();
         _reservation.Dispose();

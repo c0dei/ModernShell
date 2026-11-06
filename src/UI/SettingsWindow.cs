@@ -246,6 +246,8 @@ public sealed class SettingsWindow : Window
         p.Children.Add(Section("ウィンドウのプレビュー"));
         p.Children.Add(ToggleRow("カーソルを置いたときにプレビューを表示", "実行中のアプリのボタンに置くと、ウィンドウの中身を縮小表示します。クリックで切り替え、× で閉じます",
             _s.ShowThumbnailPreview, v => _s.ShowThumbnailPreview = v, on));
+        p.Children.Add(ToggleRow("タスク ビュー ボタンで仮想デスクトップを表示", "カーソルを置くとデスクトップの一覧を表示し、クリックで切り替え、＋ で追加します",
+            _s.ShowDesktopsOnTaskView, v => _s.ShowDesktopsOnTaskView = v, on && _s.ShowTaskViewButton));
         p.Children.Add(DropDownRow("表示までの待ち時間", "",
             new[] { ("0", "すぐ"), ("200", "0.2 秒"), ("400", "0.4 秒（標準）"), ("700", "0.7 秒"), ("1000", "1 秒") },
             _s.PreviewDelayMs.ToString(), v => _s.PreviewDelayMs = int.Parse(v), on && _s.ShowThumbnailPreview));
@@ -336,7 +338,7 @@ public sealed class SettingsWindow : Window
             _s.MenuFontSize.ToString(), v => _s.MenuFontSize = int.Parse(v)));
         p.Children.Add(DropDownRow("角の丸み", "", new[] { ("0", "なし"), ("4", "小"), ("8", "標準"), ("12", "大") },
             ((int)_s.CornerRadius).ToString(), v => _s.CornerRadius = double.Parse(v)));
-        p.Children.Add(ToggleRow("角丸を強制する", "仮想マシンやリモートデスクトップなど、Windows 自体が角丸を描かない環境でもスタートメニューとタスクバーを角丸に切り抜きます（ふちは少し粗くなります）",
+        p.Children.Add(ToggleRow("角丸と透過を ModernShell で描く", "GPU が無い PC・仮想マシン・リモートデスクトップなど、Windows が角丸や透過を描かない環境向け。タスクバーは ModernShell が自分で角丸と透明度を描きます（ぼかしは無し）。スタートメニューは角丸に切り抜きます",
             _s.ForceRoundCorners, v => _s.ForceRoundCorners = v, _s.CornerRadius > 0));
         p.Children.Add(InfoBar("透けて見えないときは",
             "Windows の「設定 → 個人用設定 → 色 → 透明効果」がオンになっているか確認してください。オフだとどの方式でも不透明になります。"));

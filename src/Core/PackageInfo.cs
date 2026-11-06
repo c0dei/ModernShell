@@ -82,7 +82,7 @@ public static class PackageInfo
     }
 
     /// <summary>png / jpg / ico などの画像ファイルを読み込む。</summary>
-    public static ImageSource? LoadImage(string file)
+    public static ImageSource? LoadImage(string file, int decodeWidth = 64)
     {
         try
         {
@@ -90,7 +90,7 @@ public static class PackageInfo
             bmp.BeginInit();
             bmp.CacheOption = BitmapCacheOption.OnLoad;
             bmp.UriSource = new Uri(file);
-            bmp.DecodePixelWidth = 64;
+            bmp.DecodePixelWidth = decodeWidth;
             bmp.EndInit();
             bmp.Freeze();
             return bmp;

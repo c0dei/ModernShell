@@ -61,6 +61,8 @@ public sealed class Settings
     public bool ShowSeconds { get; set; } = false;
     /// <summary>タスクバーのボタンにカーソルを置くとウィンドウのプレビューを表示する。</summary>
     public bool ShowThumbnailPreview { get; set; } = true;
+    /// <summary>タスクビューボタンにカーソルを置くと仮想デスクトップの一覧を表示する。</summary>
+    public bool ShowDesktopsOnTaskView { get; set; } = true;
     /// <summary>プレビューを表示するまでの待ち時間 (ミリ秒)。</summary>
     public int PreviewDelayMs { get; set; } = 400;
     /// <summary>プレビューの大きさ（Small / Medium / Large）。</summary>

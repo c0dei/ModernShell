@@ -30,9 +30,16 @@ public sealed class AppEntry
     /// <summary>このアプリのショートカット (.lnk)。右クリックメニューを Windows のタスクバーと同じ内容（プロパティ等）にするのに使う。</summary>
     public string? ShortcutPath { get; init; }
 
-    public AppEntry WithShortcut(string lnk) => new()
+    /// <summary>
+    /// ピン留めのショートカットを持たせた複製。一覧側で実行ファイルが分からないアプリ（ID が AUMID だけのもの）でも、
+    /// ショートカットのリンク先・引数を引き継いで、実行中のウィンドウと照合できるようにする。
+    /// </summary>
+    public AppEntry WithShortcut(string lnk, ShortcutInfo? info = null) => new()
     {
-        Id = Id, Name = Name, ExePath = ExePath, Folder = Folder, Aumid = Aumid, LaunchArgs = LaunchArgs, ShortcutPath = lnk,
+        Id = Id, Name = Name, Folder = Folder, ShortcutPath = lnk,
+        ExePath = ExePath ?? (info?.Target is { } t && t.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? t : null),
+        Aumid = Aumid ?? info?.Aumid,
+        LaunchArgs = LaunchArgs ?? info?.Arguments,
     };
 
     /// <summary>Id がファイルパス（Windows のタスクバーにピン留めされた .lnk など）か。</summary>
