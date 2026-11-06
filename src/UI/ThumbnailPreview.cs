@@ -148,7 +148,7 @@ public sealed class ThumbnailPreview
         FluentSurface.PlaceCentered(_popup, anchor, top);
         _gate.Attach(row);
         var session = new Session();
-        FluentSurface.SlideIn(_popup, fromBelow: !top);
+        if (_settings.AnimatePreviews) FluentSurface.SlideIn(_popup, fromBelow: !top);
         _popup.Opened += (_, _) => RegisterThumbnails(row, session);
         _popup.Closed += (_, _) => Unregister(session);
         _popup.IsOpen = true;

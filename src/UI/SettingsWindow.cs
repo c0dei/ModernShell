@@ -476,6 +476,12 @@ public sealed class SettingsWindow : Window
             SliderRow("タスクバーの不透明度", "背景の上に重ねる色の濃さ。0 で背景のまま、100 で不透明",
                 _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.UseCustomTaskbar && (_s.TaskbarMaterial != TaskbarMaterial.Solid || _s.ForceRoundCorners)));
 
+        Group(p, "\uE916", "アニメーション", "開くときに滑り込ませるか、パッと表示するか",
+            ToggleRow("スタート メニュー", "下から滑り込みながら表示します（フォルダーを開くときの拡大も）", _s.AnimateStartMenu, v => _s.AnimateStartMenu = v),
+            ToggleRow("ウィンドウのプレビューと仮想デスクトップの一覧", "", _s.AnimatePreviews, v => _s.AnimatePreviews = v),
+            ToggleRow("通知領域（「^」）の展開", "", _s.AnimateTrayOverflow, v => _s.AnimateTrayOverflow = v),
+            ToggleRow("右クリック メニュー・ジャンプリスト・ドロップダウン", "", _s.AnimateMenus, v => _s.AnimateMenus = v));
+
         Group(p, "", "形と文字", "",
             DropDownRow("角の丸み", "", new[] { ("0", "なし"), ("4", "小"), ("8", "標準"), ("12", "大") },
                 ((int)_s.CornerRadius).ToString(), v => _s.CornerRadius = double.Parse(v)),

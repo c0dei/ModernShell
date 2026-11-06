@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -126,15 +127,68 @@ public sealed class StartMenuWindow : Window
     {
         _search.Text = initialSearch ?? "";
         if (_search.Text.Length == 0) ShowPage(_settings.ShowAllAppsFirst ? Page.AllApps : Page.Pinned);
-        _root.Opacity = 0;
-        Show();          // WPF は Show 時に自前の Left/Top を適用するので、位置決めは Show の後に行う
-        PositionMenu();
+        _widgets?.Open();
+        bool animate = _settings.AnimateStartMenu;
+        bool top = AnchorProvider?.Invoke()?.top == true;
+        // 表示する前に位置と中身の配置を済ませておく。表示してから動かしたり配置し直したりすると、
+        // 一瞬ずれた位置に出てから跳ねて見える
+        var (x, y, scale) = PositionMenu();
+        int slide = animate ? (int)Math.Round((top ? -1 : 1) * 40 * scale) : 0;
+        if (slide != 0) Win32.SetWindowPos(Handle, IntPtr.Zero, x, y + slide, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        _root.BeginAnimation(OpacityProperty, null);
+        _root.RenderTransform = null;
+        _root.Opacity = animate ? 0 : 1;
+        // WPF は Show のときに自分の Left/Top を当て直すので、同じ値にしておく
+        Left = x / scale;
+        Top = (y + slide) / scale;
+        UpdateLayout();
+        Show();
+        Win32.SetWindowPos(Handle, IntPtr.Zero, x, y + slide, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
         Foregrounder.Force(Handle);
         Activate();
-        _widgets?.Open();
         _search.Focus();
         _search.CaretIndex = _search.Text.Length;
-        UiKit.FadeSlideIn(_root, AnchorProvider?.Invoke()?.top == true ? -24 : 24);
+        if (animate) SlideIn(x, y, slide);
+    }
+
+    private EventHandler? _slide;
+
+    /// <summary>
+    /// ウィンドウごと（背景の Acrylic / Mica も一緒に）下から滑り込ませる。プレビューやトレイの展開と同じ動き。
+    /// 描画のフレームに合わせて位置を動かし、最初のフレームが描かれてから時間を数え始める（表示直後の重い 1 フレームで飛ばないように）。
+    /// </summary>
+    private void SlideIn(int x, int y, int from)
+    {
+        StopSlide();
+        const double ms = 220;
+        Stopwatch? clock = null;
+        _slide = (_, _) =>
+        {
+            if (clock == null)
+            {
+                clock = Stopwatch.StartNew();
+                _root.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
+                return;
+            }
+            double p = Math.Min(1, clock.Elapsed.TotalMilliseconds / ms);
+            double eased = 1 - Math.Pow(1 - p, 3);
+            int dy = (int)Math.Round(from * (1 - eased));
+            Win32.SetWindowPos(Handle, IntPtr.Zero, x, y + dy, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+            if (p >= 1) StopSlide();
+        };
+        CompositionTarget.Rendering += _slide;
+        _slideTarget = (x, y);
+    }
+
+    private (int x, int y)? _slideTarget;
+
+    private void StopSlide()
+    {
+        if (_slide != null) CompositionTarget.Rendering -= _slide;
+        _slide = null;
+        if (_slideTarget is { } t)
+            Win32.SetWindowPos(Handle, IntPtr.Zero, t.x, t.y, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        _slideTarget = null;
     }
 
     public void HideMenu()
@@ -142,17 +196,21 @@ public sealed class StartMenuWindow : Window
         if (!IsVisible) return;
         if (_openFlyout?.IsOpen == true) return; // 右クリックメニュー表示中は閉じない
         _hiddenAt = DateTime.Now;
+        StopSlide();
+        _root.BeginAnimation(OpacityProperty, null);
+        _root.Opacity = 1;
         _widgets?.Close();
         CloseFolder();
         Hide();
     }
 
-    private void PositionMenu()
+    /// <summary>スタートボタンの位置に合わせて置く（物理 px）。表示前でも呼べる。</summary>
+    private (int x, int y, double scale) PositionMenu()
     {
         var src = PresentationSource.FromVisual(this);
         double scale = src?.CompositionTarget?.TransformToDevice.M11 ?? Win32.GetDpiForWindow(Handle) / 96.0;
         if (scale <= 0) scale = 1;
-        int w = (int)(MenuWidth * scale), h = (int)(MenuHeight * scale);
+        int w = (int)Math.Round(MenuWidth * scale), h = (int)Math.Round(MenuHeight * scale);
         int gap = (int)(12 * scale);
 
         var anchor = AnchorProvider?.Invoke();
@@ -170,6 +228,7 @@ public sealed class StartMenuWindow : Window
         }
         Win32.SetWindowPos(Handle, Win32.HWND_TOPMOST, x, y, w, h, Win32.SWP_NOACTIVATE);
         if (!SelfDrawn) Backdrop.UpdateRegion(Handle, w, h, _settings, scale);
+        return (x, y, scale);
     }
 
     // ------------------------------------------------------------------
@@ -551,6 +610,7 @@ public sealed class StartMenuWindow : Window
         _main.Children.Add(overlay);
         _folderOverlay = overlay;
 
+        if (!_settings.AnimateStartMenu) return;
         var scale = new ScaleTransform(0.94, 0.94);
         panel.RenderTransformOrigin = new Point(0.5, 0.5);
         panel.RenderTransform = scale;

@@ -12,6 +12,8 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using ModernShell.Native;
 
+using ModernShell.Core;
+
 namespace ModernShell.UI;
 
 /// <summary>
@@ -283,7 +285,7 @@ public sealed class FluentComboBox : Border
         Flyout.ToggleGuard(_popup, this);
 
         double total = ListPadding * 2 + _options.Length * ItemPitch;
-        FluentSurface.AnimateOpen(list, (ListPadding + index * ItemPitch + ItemPitch / 2) / total);
+        if (Settings.Current?.AnimateMenus != false) FluentSurface.AnimateOpen(list, (ListPadding + index * ItemPitch + ItemPitch / 2) / total);
         selectedTile?.Focus();
     }
 }

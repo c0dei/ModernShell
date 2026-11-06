@@ -418,7 +418,7 @@ public sealed partial class TaskbarController
         FluentSurface.PlaceCentered(_overflowPopup, anchor, IsTop);
         _overflowPopup.Closed += (_, _) => { if (_trayEditMode) { _trayEditMode = false; RebuildTray(); } };
         FillOverflow();
-        FluentSurface.SlideIn(_overflowPopup, fromBelow: !IsTop);
+        if (_settings.AnimateTrayOverflow) FluentSurface.SlideIn(_overflowPopup, fromBelow: !IsTop);
         _overflowPopup.IsOpen = true;
         Flyout.ToggleGuard(_overflowPopup, anchor);
     }

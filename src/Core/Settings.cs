@@ -56,6 +56,11 @@ public sealed class Settings
     public bool ForceRoundCorners { get; set; } = false;
     /// <summary>アイランド型のときホバーでアイコンを拡大する。</summary>
     public bool MagnifyOnHover { get; set; } = true;
+    /// <summary>開くときのアニメーション（それぞれ切り替えられる）。</summary>
+    public bool AnimateStartMenu { get; set; } = true;
+    public bool AnimatePreviews { get; set; } = true;
+    public bool AnimateTrayOverflow { get; set; } = true;
+    public bool AnimateMenus { get; set; } = true;
     public bool GroupTaskbarButtons { get; set; } = true;
     public bool ShowTaskbarLabels { get; set; } = false;
     public bool ShowSeconds { get; set; } = false;

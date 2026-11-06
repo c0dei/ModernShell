@@ -98,7 +98,7 @@ public sealed class DesktopsFlyout
         _popup.StaysOpen = true;
         FluentSurface.PlaceCentered(_popup, anchor, top);
         _gate.Attach(row);
-        FluentSurface.SlideIn(_popup, fromBelow: !top);
+        if (_settings.AnimatePreviews) FluentSurface.SlideIn(_popup, fromBelow: !top);
         _popup.IsOpen = true;
     }
 }
