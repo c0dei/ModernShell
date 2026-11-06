@@ -97,6 +97,25 @@ public static class FluentSurface
 
     /// <summary>開くときの動き（WinUI 風: 少し伸びながらフェードイン）。originY は伸び始める位置 (0–1)。</summary>
     /// <summary>
+    /// ボタンの真上（タスクバーが上にあるときは真下）の左右中央に出す。画面端では Windows が内側へずらす。
+    /// 「^」の一覧・ウィンドウのプレビュー・デスクトップ一覧で共通。
+    /// </summary>
+    public static void PlaceCentered(Popup popup, FrameworkElement anchor, bool barAtTop, double gapDip = 8)
+    {
+        popup.PlacementTarget = anchor;
+        popup.Placement = PlacementMode.Custom;
+        popup.VerticalOffset = 0;
+        double gap = gapDip * VisualTreeHelper.GetDpi(anchor).DpiScaleY;
+        popup.CustomPopupPlacementCallback = (popupSize, targetSize, _) =>
+        {
+            double x = (targetSize.Width - popupSize.Width) / 2;
+            var above = new CustomPopupPlacement(new Point(x, -popupSize.Height - gap), PopupPrimaryAxis.Horizontal);
+            var below = new CustomPopupPlacement(new Point(x, targetSize.Height + gap), PopupPrimaryAxis.Horizontal);
+            return barAtTop ? new[] { below, above } : new[] { above, below };
+        };
+    }
+
+    /// <summary>
     /// Windows のタスクバーのフライアウトと同じく、少し下（上に出すときは上）からスライドしながら現れる。
     /// ポップアップの位置そのものを動かすので、Acrylic の背景ごと動く。
     /// </summary>

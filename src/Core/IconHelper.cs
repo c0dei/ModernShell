@@ -137,6 +137,23 @@ internal static class IconHelper
         });
     }
 
+    /// <summary>
+    /// 「ファイル＋番号」で指定されたアイコンを読む。.exe / .dll / .ico は番号のアイコン、
+    /// .png などの画像はそのまま、"ms-appx:///…" はパッケージ内の画像（packageRoot が必要）。
+    /// アイコンの差し替えとジャンプリストのアイコンで共通。
+    /// </summary>
+    public static ImageSource? FromSpec(string? file, int index, string? packageRoot = null)
+    {
+        if (string.IsNullOrEmpty(file)) return null;
+        if (file.StartsWith("ms-appx:///", StringComparison.OrdinalIgnoreCase))
+            return PackageInfo.ResolveAsset(file, packageRoot) is { } asset ? PackageInfo.LoadImage(asset) : null;
+        if (!System.IO.File.Exists(file)) return null;
+        var ext = System.IO.Path.GetExtension(file).ToLowerInvariant();
+        return ext is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" or ".ico"
+            ? PackageInfo.LoadImage(file)
+            : FromFile(file, index);
+    }
+
     /// <summary>ショートカットのアイコン（指定があればそれ、なければリンク先の exe）を表示サイズで取り出す。</summary>
     public static ImageSource? ForShortcut(string lnk, int sizePx)
     {

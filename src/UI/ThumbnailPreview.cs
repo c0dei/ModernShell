@@ -41,11 +41,9 @@ public sealed class ThumbnailPreview
     [DllImport("dwmapi.dll")] private static extern int DwmQueryThumbnailSourceSize(IntPtr thumb, out SIZE size);
 
     private readonly Settings _settings;
-    private readonly DispatcherTimer _showTimer, _hideTimer;
+    private readonly HoverGate _gate;
     private Popup? _popup;
-    private FrameworkElement? _anchor, _pendingAnchor;
-    private Func<IReadOnlyList<ApplicationWindow>>? _pendingWindows;
-    private bool _top;
+    private FrameworkElement? _anchor;
     /// <summary>
     /// 開いているプレビュー 1 回分の状態。プレビューを開き直したとき、古いプレビューの後片付け（Closed は遅れて来る）が
     /// 新しいプレビューのサムネイルまで消してしまわないよう、プレビューごとに別々に持つ。
@@ -65,10 +63,7 @@ public sealed class ThumbnailPreview
     public ThumbnailPreview(Settings settings, Dispatcher dispatcher)
     {
         _settings = settings;
-        _showTimer = new DispatcherTimer(DispatcherPriority.Normal, dispatcher);
-        _showTimer.Tick += (_, _) => { _showTimer.Stop(); if (_pendingAnchor != null && _pendingWindows != null) Show(_pendingAnchor, _pendingWindows(), _top); };
-        _hideTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Normal, (_, _) => { _hideTimer!.Stop(); Close(); }, dispatcher);
-        _hideTimer.Stop();
+        _gate = new HoverGate(dispatcher, Close);
     }
 
     private (double w, double h) MaxSize => _settings.PreviewSize switch
@@ -82,33 +77,22 @@ public sealed class ThumbnailPreview
     public void Hover(FrameworkElement anchor, Func<IReadOnlyList<ApplicationWindow>> windows, bool top)
     {
         if (!_settings.ShowThumbnailPreview) return;
-        _hideTimer.Stop();
-        _pendingAnchor = anchor;
-        _pendingWindows = windows;
-        _top = top;
         if (IsOpen)
         {
+            _gate.KeepOpen();
             if (!ReferenceEquals(_anchor, anchor)) Show(anchor, windows(), top);
             return;
         }
-        _showTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, _settings.PreviewDelayMs));
-        _showTimer.Stop();
-        _showTimer.Start();
+        _gate.ShowAfter(_settings.PreviewDelayMs, () => Show(anchor, windows(), top));
     }
 
     /// <summary>ボタンからカーソルが出た。プレビューの上に移らなければ少し後に閉じる。</summary>
-    public void Leave()
-    {
-        _showTimer.Stop();
-        _pendingAnchor = null;
-        if (IsOpen) { _hideTimer.Stop(); _hideTimer.Start(); }
-    }
+    public void Leave() => _gate.Leave(IsOpen);
 
     /// <summary>クリックやドラッグを始めたときなど、すぐ閉じる。</summary>
     public void Cancel()
     {
-        _showTimer.Stop();
-        _pendingAnchor = null;
+        _gate.Stop();
         Close();
     }
 
@@ -161,16 +145,8 @@ public sealed class ThumbnailPreview
 
         _popup = FluentSurface.Create(row, anchor, PlacementMode.Custom);
         _popup.StaysOpen = true; // ホバーで開閉するので、マウスを捕まえない
-        double gap = 8 * VisualTreeHelper.GetDpi(anchor).DpiScaleY;
-        _popup.CustomPopupPlacementCallback = (popupSize, targetSize, _) =>
-        {
-            double x = (targetSize.Width - popupSize.Width) / 2;
-            var above = new CustomPopupPlacement(new Point(x, -popupSize.Height - gap), PopupPrimaryAxis.Horizontal);
-            var below = new CustomPopupPlacement(new Point(x, targetSize.Height + gap), PopupPrimaryAxis.Horizontal);
-            return top ? new[] { below, above } : new[] { above, below };
-        };
-        row.MouseEnter += (_, _) => _hideTimer.Stop();
-        row.MouseLeave += (_, _) => { _hideTimer.Stop(); _hideTimer.Start(); };
+        FluentSurface.PlaceCentered(_popup, anchor, top);
+        _gate.Attach(row);
         var session = new Session();
         FluentSurface.SlideIn(_popup, fromBelow: !top);
         _popup.Opened += (_, _) => RegisterThumbnails(row, session);
@@ -256,7 +232,7 @@ public sealed class ThumbnailPreview
 
     private void Close()
     {
-        _hideTimer.Stop();
+        _gate.Stop();
         if (_popup != null) { _popup.IsOpen = false; _popup = null; } // サムネイルの解除はそのプレビューの Closed で行う
         _anchor = null;
     }

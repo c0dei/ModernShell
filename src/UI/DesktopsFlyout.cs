@@ -17,47 +17,33 @@ namespace ModernShell.UI;
 public sealed class DesktopsFlyout
 {
     private readonly Settings _settings;
-    private readonly DispatcherTimer _showTimer, _hideTimer;
+    private readonly HoverGate _gate;
     private Popup? _popup;
-    private FrameworkElement? _anchor;
-    private bool _top;
 
     public DesktopsFlyout(Settings settings, Dispatcher dispatcher)
     {
         _settings = settings;
-        _showTimer = new DispatcherTimer(DispatcherPriority.Normal, dispatcher);
-        _showTimer.Tick += (_, _) => { _showTimer.Stop(); if (_anchor != null) Show(_anchor, _top); };
-        _hideTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Normal, (_, _) => { _hideTimer!.Stop(); Close(); }, dispatcher);
-        _hideTimer.Stop();
+        _gate = new HoverGate(dispatcher, Close);
     }
 
     public void Hover(FrameworkElement anchor, bool top)
     {
         if (!_settings.ShowDesktopsOnTaskView) return;
-        _hideTimer.Stop();
-        if (_popup?.IsOpen == true) return;
-        _anchor = anchor;
-        _top = top;
-        _showTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, _settings.PreviewDelayMs));
-        _showTimer.Stop();
-        _showTimer.Start();
+        if (_popup?.IsOpen == true) { _gate.KeepOpen(); return; }
+        _gate.ShowAfter(_settings.PreviewDelayMs, () => Show(anchor, top));
     }
 
-    public void Leave()
-    {
-        _showTimer.Stop();
-        if (_popup?.IsOpen == true) { _hideTimer.Stop(); _hideTimer.Start(); }
-    }
+    public void Leave() => _gate.Leave(_popup?.IsOpen == true);
 
     public void Cancel()
     {
-        _showTimer.Stop();
+        _gate.Stop();
         Close();
     }
 
     private void Close()
     {
-        _hideTimer.Stop();
+        _gate.Stop();
         if (_popup != null) { _popup.IsOpen = false; _popup = null; }
     }
 
@@ -110,16 +96,8 @@ public sealed class DesktopsFlyout
 
         _popup = FluentSurface.Create(row, anchor, PlacementMode.Custom);
         _popup.StaysOpen = true;
-        double gap = 8 * VisualTreeHelper.GetDpi(anchor).DpiScaleY;
-        _popup.CustomPopupPlacementCallback = (popupSize, targetSize, _) =>
-        {
-            double x = (targetSize.Width - popupSize.Width) / 2;
-            var above = new CustomPopupPlacement(new Point(x, -popupSize.Height - gap), PopupPrimaryAxis.Horizontal);
-            var below = new CustomPopupPlacement(new Point(x, targetSize.Height + gap), PopupPrimaryAxis.Horizontal);
-            return top ? new[] { below, above } : new[] { above, below };
-        };
-        row.MouseEnter += (_, _) => _hideTimer.Stop();
-        row.MouseLeave += (_, _) => { _hideTimer.Stop(); _hideTimer.Start(); };
+        FluentSurface.PlaceCentered(_popup, anchor, top);
+        _gate.Attach(row);
         FluentSurface.SlideIn(_popup, fromBelow: !top);
         _popup.IsOpen = true;
     }
