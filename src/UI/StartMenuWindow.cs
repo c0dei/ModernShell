@@ -51,12 +51,25 @@ public sealed class StartMenuWindow : Window
     {
         _settings = settings;
         _catalog = catalog;
+        SelfDrawn = settings.ForceRoundCorners;
 
         Title = "ModernShell Start";
-        // 公式の背景効果 (Mica/Acrylic) は枠付きウィンドウでしか描かれないので SingleBorderWindow にし、
-        // WindowChrome で枠とタイトルバーを見えなくする（WindowStyle=None だと不透明になる）
-        WindowStyle = WindowStyle.SingleBorderWindow;
-        ResizeMode = ResizeMode.CanResize;
+        if (SelfDrawn)
+        {
+            // 自前で描く方式: 透過ウィンドウにして角丸と背景を WPF で描く（GPU が無く Windows が角丸・透過を描かない環境向け。
+            // 枠付きウィンドウを切り抜くと Windows の四角い影と枠が残るため）
+            WindowStyle = WindowStyle.None;
+            ResizeMode = ResizeMode.NoResize;
+            AllowsTransparency = true;
+            Background = Brushes.Transparent;
+        }
+        else
+        {
+            // 公式の背景効果 (Mica/Acrylic) は枠付きウィンドウでしか描かれないので SingleBorderWindow にし、
+            // WindowChrome で枠とタイトルバーを見えなくする（WindowStyle=None だと不透明になる）
+            WindowStyle = WindowStyle.SingleBorderWindow;
+            ResizeMode = ResizeMode.CanResize;
+        }
         ShowInTaskbar = false;
         Topmost = true;
         Width = MenuWidth;
@@ -64,7 +77,7 @@ public sealed class StartMenuWindow : Window
         WindowStartupLocation = WindowStartupLocation.Manual;
         FontFamily = Theme.TextFont;
         UseLayoutRounding = true;
-        WindowChrome.SetWindowChrome(this, new WindowChrome
+        if (!SelfDrawn) WindowChrome.SetWindowChrome(this, new WindowChrome
         {
             CaptionHeight = 0,
             ResizeBorderThickness = new Thickness(0),
@@ -74,6 +87,7 @@ public sealed class StartMenuWindow : Window
             NonClientFrameEdges = NonClientFrameEdges.None,
         });
 
+        Closed += (_, _) => _closed = true;
         Deactivated += (_, _) => HideMenu();
         PreviewKeyDown += OnPreviewKeyDown;
         Theme.Changed += () => Dispatcher.BeginInvoke(Rebuild);
@@ -85,7 +99,7 @@ public sealed class StartMenuWindow : Window
         var hwnd = new WindowInteropHelper(this).EnsureHandle();
         long ex = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE);
         Win32.SetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE, (IntPtr)(ex | Win32.WS_EX_TOOLWINDOW));
-        Backdrop.KeepRegion(this, _settings);
+        if (!SelfDrawn) Backdrop.KeepRegion(this, _settings);
         // 枠付きウィンドウにしたため、DWM が右上に閉じる/最小化ボタンを描かないようシステムメニューを外す
         long style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
         Win32.SetWindowLongPtr(hwnd, Win32.GWL_STYLE, (IntPtr)(style & ~(0x00080000L /*WS_SYSMENU*/ | 0x00020000L /*WS_MINIMIZEBOX*/ | 0x00010000L /*WS_MAXIMIZEBOX*/)));
@@ -93,6 +107,9 @@ public sealed class StartMenuWindow : Window
     }
 
     public IntPtr Handle => new WindowInteropHelper(this).Handle;
+
+    /// <summary>自前で描く方式で作ったか（設定が変わったら App が作り直す）。</summary>
+    public bool SelfDrawn { get; }
 
     // ------------------------------------------------------------------
     // 表示制御
@@ -152,18 +169,22 @@ public sealed class StartMenuWindow : Window
             y = (int)(work.Bottom * scale) - h - gap;
         }
         Win32.SetWindowPos(Handle, Win32.HWND_TOPMOST, x, y, w, h, Win32.SWP_NOACTIVATE);
-        Backdrop.UpdateRegion(Handle, w, h, _settings, scale);
+        if (!SelfDrawn) Backdrop.UpdateRegion(Handle, w, h, _settings, scale);
     }
 
     // ------------------------------------------------------------------
     // UI 構築
 
+    private bool _closed;
+
     private void Rebuild()
     {
+        if (_closed) return; // 描画方式の切り替えで作り直したあとの古いウィンドウには何もしない
         var t = Theme.Current;
         // 0 のときは標準の濃さ（Acrylic ぼかし方式でも既定値）にする
-        Backdrop.Apply(this, _settings.Backdrop, _settings.BackdropEngine, t, alwaysInactive: false,
-            tint: _settings.StartMenuOpacity > 0 ? _settings.StartMenuOpacity / 100.0 : null);
+        if (!SelfDrawn)
+            Backdrop.Apply(this, _settings.Backdrop, _settings.BackdropEngine, t, alwaysInactive: false,
+                tint: _settings.StartMenuOpacity > 0 ? _settings.StartMenuOpacity / 100.0 : null);
         Foreground = t.Text;
 
         Width = MenuWidth;
@@ -235,8 +256,27 @@ public sealed class StartMenuWindow : Window
         Grid.SetColumnSpan(footer, 2);
         _root.Children.Add(footer);
 
-        Content = _root;
+        Content = SelfDrawn ? SelfDrawnFrame(_root, t) : _root;
         ShowPage(_page == Page.Search ? Page.Pinned : _page);
+    }
+
+    /// <summary>自前で描く方式の外枠: 角丸・半透明の背景・枠線。中身（フッターの帯など）も角丸で切り抜く。</summary>
+    private FrameworkElement SelfDrawnFrame(FrameworkElement content, Theme t)
+    {
+        // ぼかしが無いので、「0 = 標準」のときは読みやすい濃さにする
+        double opacity = _settings.StartMenuOpacity > 0 ? _settings.StartMenuOpacity / 100.0 : 0.94;
+        var c = t.SolidColor;
+        double radius = Math.Max(0, _settings.CornerRadius);
+        var frame = new Border
+        {
+            CornerRadius = new CornerRadius(radius),
+            Background = new SolidColorBrush(Color.FromArgb((byte)Math.Round(opacity * 255), c.R, c.G, c.B)),
+            BorderBrush = t.Stroke,
+            BorderThickness = new Thickness(1),
+            Child = content,
+        };
+        frame.SizeChanged += (_, e) => frame.Clip = new RectangleGeometry(new Rect(e.NewSize), radius, radius);
+        return frame;
     }
 
     private FrameworkElement BuildFooter(Theme t)

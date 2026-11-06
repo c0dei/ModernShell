@@ -117,12 +117,10 @@ public static class Program
             InterceptStartButton = () => _settings.InterceptNativeStartButton,
         };
 
-        _start = new StartMenuWindow(_settings, _catalog) { AnchorProvider = StartAnchor };
-        _start.OpenSettingsRequested += ShowSettings;
-        _start.ExitRequested += Exit;
-        HwndSource.FromHwnd(_start.Handle)!.AddHook(BroadcastHook);
+        CreateStartMenu();
         // 緊急用ホットキー: Ctrl+Alt+Shift+F12 で純正タスクバーに戻して終了
-        if (!RegisterHotKey(_start.Handle, HotkeyEmergencyId, 0x0001 | 0x0002 | 0x0004 | 0x4000 /*ALT|CTRL|SHIFT|NOREPEAT*/, 0x7B /*F12*/))
+        _hotkeyRegistered = RegisterHotKey(_start.Handle, HotkeyEmergencyId, 0x0001 | 0x0002 | 0x0004 | 0x4000 /*ALT|CTRL|SHIFT|NOREPEAT*/, 0x7B /*F12*/);
+        if (!_hotkeyRegistered)
             Log.Info("emergency hotkey registration failed");
 
         _hooks.StartRequested += () => _start.Toggle();
@@ -169,12 +167,31 @@ public static class Program
         catch (Exception ex) { Log.Error("restart", ex); }
     }
 
+    /// <summary>スタートメニューを作る（描画方式の設定が変わったときは作り直す）。</summary>
+    private static void CreateStartMenu()
+    {
+        if (_start != null)
+        {
+            try { UnregisterHotKey(_start.Handle, HotkeyEmergencyId); } catch { }
+            _start.Close();
+        }
+        _start = new StartMenuWindow(_settings, _catalog) { AnchorProvider = StartAnchor };
+        _start.OpenSettingsRequested += ShowSettings;
+        _start.ExitRequested += Exit;
+        HwndSource.FromHwnd(_start.Handle)!.AddHook(BroadcastHook);
+        if (_hotkeyRegistered)
+            RegisterHotKey(_start.Handle, HotkeyEmergencyId, 0x0001 | 0x0002 | 0x0004 | 0x4000, 0x7B);
+    }
+
+    private static bool _hotkeyRegistered;
+
     private static string ThemeKey() => $"{_settings.Theme}|{_settings.Backdrop}|{_settings.AccentColor}|{_settings.CornerRadius}";
 
     private static void OnSettingsChanged()
     {
         ApplyTaskbarMode();
         SyncNativeStartAlignment();
+        if (_start.SelfDrawn != _settings.ForceRoundCorners && !_start.IsVisible) CreateStartMenu();
         var key = ThemeKey();
         if (key != _themeKey) { _themeKey = key; Theme.Apply(_settings); }
     }
