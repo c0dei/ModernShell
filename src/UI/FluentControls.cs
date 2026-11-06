@@ -46,9 +46,12 @@ public static class FluentSurface
         _looks.Add(popup, state);
         var s = Settings.Current ?? new Settings();
         Paint(popup, state, s.StartMenuBackground, s.StartMenuOpacity);
-        // タスクバー等に重ならないよう、上下に出すときは少し離す（Windows のメニューと同じくらいの間隔）
-        if (placement == PlacementMode.Top) popup.VerticalOffset = -8;
-        else if (placement == PlacementMode.Bottom) popup.VerticalOffset = 8;
+        // タスクバー等に重ならないよう、上下に出すときは少し離す（Windows のメニューと同じくらいの間隔）。
+        // 周りに影の余白があるので、その分ずらして見た目の位置を合わせる
+        const double pad = SurfacePaint.ShadowPad;
+        if (placement == PlacementMode.Top) { popup.VerticalOffset = -8 + pad; popup.HorizontalOffset = -pad; }
+        else if (placement == PlacementMode.Bottom) { popup.VerticalOffset = 8 - pad; popup.HorizontalOffset = -pad; }
+        else if (placement == PlacementMode.MousePoint) { popup.VerticalOffset = -pad; popup.HorizontalOffset = -pad; }
         popup.Opened += (_, _) => { _openList.Add(popup); FollowBlur(popup, state); };
         popup.Closed += (_, _) =>
         {
@@ -95,7 +98,7 @@ public static class FluentSurface
         // 前の背景から中身を外して包み直す
         if (state.Content.Parent is Border old) old.Child = null;
         popup.Child = null;
-        state.Painted = SurfacePaint.Wrap(state.Content, style, opacity, new CornerRadius(Math.Max(0, Theme.Current.Radius)));
+        state.Painted = SurfacePaint.Wrap(state.Content, style, opacity, new CornerRadius(Math.Max(0, Theme.Current.Radius)), shadow: true);
         popup.Child = state.Painted.Root;
     }
 
@@ -134,7 +137,9 @@ public static class FluentSurface
         popup.PlacementTarget = anchor;
         popup.Placement = PlacementMode.Custom;
         popup.VerticalOffset = 0;
-        double gap = gapDip * VisualTreeHelper.GetDpi(anchor).DpiScaleY;
+        popup.HorizontalOffset = 0; // 左右は中央合わせなので、影の余白のずらしは要らない
+        // 影の余白の分だけ近づけて、見た目の間隔を gapDip にする
+        double gap = (gapDip - SurfacePaint.ShadowPad) * VisualTreeHelper.GetDpi(anchor).DpiScaleY;
         popup.CustomPopupPlacementCallback = (popupSize, targetSize, _) =>
         {
             double x = (targetSize.Width - popupSize.Width) / 2;
@@ -303,9 +308,11 @@ public sealed class FluentComboBox : Border
 
         // 選択中の項目がボタンの上にぴったり重なる位置に出す（WinUI の ComboBox と同じ）
         _popup = FluentSurface.Create(list, this, PlacementMode.Relative);
-        _popup.Width = ActualWidth;
-        _popup.HorizontalOffset = 0;
-        _popup.VerticalOffset = (ActualHeight - ItemHeight) / 2 - (ListPadding + 2 + index * ItemPitch);
+        // 周りに影の余白があるので、その分広げてずらし、一覧がボタンにぴったり重なるようにする
+        const double pad = SurfacePaint.ShadowPad;
+        _popup.Width = ActualWidth + pad * 2;
+        _popup.HorizontalOffset = -pad;
+        _popup.VerticalOffset = (ActualHeight - ItemHeight) / 2 - (ListPadding + 2 + index * ItemPitch) - pad;
         _popup.KeyDown += (_, e) => { if (e.Key == Key.Escape) _popup.IsOpen = false; };
         _popup.Closed += (_, _) => Focus();
         _popup.IsOpen = true;

@@ -61,8 +61,8 @@ public sealed class StartMenuWindow : Window
         Background = Brushes.Transparent;
         ShowInTaskbar = false;
         Topmost = true;
-        Width = MenuWidth;
-        Height = MenuHeight;
+        Width = MenuWidth + SurfacePaint.ShadowPad * 2;
+        Height = MenuHeight + SurfacePaint.ShadowPad * 2;
         WindowStartupLocation = WindowStartupLocation.Manual;
         FontFamily = Theme.TextFont;
         UseLayoutRounding = true;
@@ -226,6 +226,7 @@ public sealed class StartMenuWindow : Window
         double scale = src?.CompositionTarget?.TransformToDevice.M11 ?? Win32.GetDpiForWindow(Handle) / 96.0;
         if (scale <= 0) scale = 1;
         int w = (int)Math.Round(MenuWidth * scale), h = (int)Math.Round(MenuHeight * scale);
+        int pad = (int)Math.Round(SurfacePaint.ShadowPad * scale); // 影の余白（ウィンドウはその分大きく、見た目の位置は変えない）
         int gap = (int)(12 * scale);
 
         var anchor = AnchorProvider?.Invoke();
@@ -241,7 +242,9 @@ public sealed class StartMenuWindow : Window
             x = (int)((work.Left + (work.Width - MenuWidth) / 2) * scale);
             y = (int)(work.Bottom * scale) - h - gap;
         }
-        Win32.SetWindowPos(Handle, Win32.HWND_TOPMOST, x, y, w, h, Win32.SWP_NOACTIVATE);
+        x -= pad;
+        y -= pad;
+        Win32.SetWindowPos(Handle, Win32.HWND_TOPMOST, x, y, w + pad * 2, h + pad * 2, Win32.SWP_NOACTIVATE);
         PlaceBlur();
         return (x, y, scale);
     }
@@ -257,7 +260,7 @@ public sealed class StartMenuWindow : Window
         var t = Theme.Current;
         Foreground = t.Text;
 
-        Width = MenuWidth;
+        Width = MenuWidth + SurfacePaint.ShadowPad * 2;
         // 外枠: [メイン列 | ウィジェット列] の下にフッター
         _root = new Grid();
         _root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -327,7 +330,7 @@ public sealed class StartMenuWindow : Window
         _root.Children.Add(footer);
 
         // 背景（透過なし / 透過 / ぼかし）・角丸・枠線を自分で描く
-        _painted = SurfacePaint.Wrap(_root, _settings.StartMenuBackground, _settings.StartMenuOpacity, new CornerRadius(Math.Max(0, _settings.CornerRadius)));
+        _painted = SurfacePaint.Wrap(_root, _settings.StartMenuBackground, _settings.StartMenuOpacity, new CornerRadius(Math.Max(0, _settings.CornerRadius)), shadow: true);
         Content = _painted.Root;
         PlaceBlur();
         ShowPage(_page == Page.Search ? Page.Pinned : _page);
