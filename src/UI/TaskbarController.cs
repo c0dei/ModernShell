@@ -724,6 +724,7 @@ public sealed class TaskbarController : IDisposable
         };
         _overflowPopup.Closed += (_, _) => { if (_trayEditMode) { _trayEditMode = false; RebuildTray(); } };
         FillOverflow();
+        FluentSurface.SlideIn(_overflowPopup, fromBelow: !IsTop);
         _overflowPopup.IsOpen = true;
         Flyout.ToggleGuard(_overflowPopup, anchor);
     }
@@ -1133,15 +1134,20 @@ public sealed class TaskbarController : IDisposable
         return _settings.GroupTaskbarButtons ? AppIcon(g) ?? windowIcon : windowIcon ?? AppIcon(g);
     }
 
+    /// <summary>
+    /// アプリのアイコン。Windows のタスクバーと同じく ショートカットのアイコン → 実行ファイルのアイコン を優先し、
+    /// どちらも無いとき（ストアアプリ等）だけアプリ一覧のアイコンを使う。表示サイズに合う絵を直接取り出す。
+    /// </summary>
     private ImageSource? AppIcon(Group g)
     {
-        if (g.Pinned?.Icon(64) is { } pinned) return pinned;
+        int px = (int)Math.Round(IconSz * (_surfaces.FirstOrDefault()?.Scale ?? 1.0));
         var w0 = g.Windows.FirstOrDefault();
-        if (w0 == null) return null;
-        if (FindApp(w0)?.Icon(64) is { } app) return app;
-        var exe = ExePath(w0);
-        return exe != null && !exe.EndsWith("ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase)
-            ? ModernShell.Core.IconHelper.Get(exe, 64) : null;
+        var app = g.Pinned ?? (w0 != null ? FindApp(w0) : null);
+        if (app?.ShortcutPath is { } lnk && System.IO.File.Exists(lnk) && ModernShell.Core.IconHelper.ForShortcut(lnk, px) is { } fromLnk) return fromLnk;
+        var exe = app?.ExePath ?? (w0 != null ? ExePath(w0) : null);
+        if (exe != null && !exe.EndsWith("ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase)
+            && ModernShell.Core.IconHelper.Exact(exe, 0, px) is { } fromExe) return fromExe;
+        return app?.Icon(64);
     }
 
     // ---- アイコンの差し替え ----

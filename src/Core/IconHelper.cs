@@ -110,6 +110,42 @@ internal static class IconHelper
         });
     }
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern uint PrivateExtractIcons(string file, int index, int cx, int cy, IntPtr[] icons, uint[]? ids, uint count, uint flags);
+
+    /// <summary>
+    /// exe / dll / ico から、指定サイズにいちばん合うアイコンを直接取り出す（アルファ付き）。
+    /// シェルに大きいサイズを頼むと、その大きさの絵を持たないアプリでは「小さいアイコンを枠付きの台紙に載せた画像」が返り、
+    /// 白い枠線のように見えることがあるため、タスクバーのボタンにはこちらを使う。
+    /// </summary>
+    public static ImageSource? Exact(string file, int index, int sizePx)
+    {
+        if (string.IsNullOrEmpty(file) || !System.IO.File.Exists(file)) return null;
+        var key = "exact|" + file + "|" + index + "|" + sizePx;
+        return Cache.GetOrAdd(key, _ =>
+        {
+            var icons = new IntPtr[1];
+            try
+            {
+                if (PrivateExtractIcons(file, index, sizePx, sizePx, icons, null, 1, 0) == 0 || icons[0] == IntPtr.Zero) return null;
+                var src = Imaging.CreateBitmapSourceFromHIcon(icons[0], Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+                src.Freeze();
+                return src;
+            }
+            catch { return null; }
+            finally { if (icons[0] != IntPtr.Zero) Win32.DestroyIcon(icons[0]); }
+        });
+    }
+
+    /// <summary>ショートカットのアイコン（指定があればそれ、なければリンク先の exe）を表示サイズで取り出す。</summary>
+    public static ImageSource? ForShortcut(string lnk, int sizePx)
+    {
+        var info = Shortcut.Read(lnk);
+        if (info == null) return null;
+        if (info.IconFile != null && Exact(info.IconFile, info.IconIndex, sizePx) is { } custom) return custom;
+        return info.Target != null && info.Target.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? Exact(info.Target, 0, sizePx) : null;
+    }
+
     /// <summary>ウィンドウ自身が持つアイコン（UWP の ApplicationFrameHost 等のフォールバック用）。</summary>
     public static ImageSource? FromWindow(IntPtr hwnd)
     {

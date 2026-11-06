@@ -172,6 +172,7 @@ public sealed class ThumbnailPreview
         row.MouseEnter += (_, _) => _hideTimer.Stop();
         row.MouseLeave += (_, _) => { _hideTimer.Stop(); _hideTimer.Start(); };
         var session = new Session();
+        FluentSurface.SlideIn(_popup, fromBelow: !top);
         _popup.Opened += (_, _) => RegisterThumbnails(row, session);
         _popup.Closed += (_, _) => Unregister(session);
         _popup.IsOpen = true;

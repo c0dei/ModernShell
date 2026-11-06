@@ -275,9 +275,10 @@ public static class Flyout
             panel.Children.Add(tile);
         }
 
+        if (placement is PlacementMode.Top or PlacementMode.Bottom) FluentSurface.SlideIn(popup, fromBelow: placement == PlacementMode.Top);
         popup.IsOpen = true;
         ToggleGuard(popup, target);
-        FluentSurface.AnimateOpen(panel, placement == PlacementMode.Top ? 1 : 0);
+        if (placement is not (PlacementMode.Top or PlacementMode.Bottom)) FluentSurface.AnimateOpen(panel, 0);
         if (panel.Children.Count > 0 && panel.Children[0] is Tile first) first.Focus();
         return popup;
     }

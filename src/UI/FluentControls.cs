@@ -96,6 +96,24 @@ public static class FluentSurface
     }
 
     /// <summary>開くときの動き（WinUI 風: 少し伸びながらフェードイン）。originY は伸び始める位置 (0–1)。</summary>
+    /// <summary>
+    /// Windows のタスクバーのフライアウトと同じく、少し下（上に出すときは上）からスライドしながら現れる。
+    /// ポップアップの位置そのものを動かすので、Acrylic の背景ごと動く。
+    /// </summary>
+    public static void SlideIn(Popup popup, bool fromBelow, double distance = 24)
+    {
+        popup.Opened += (_, _) =>
+        {
+            double baseOffset = popup.VerticalOffset;
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            popup.BeginAnimation(Popup.VerticalOffsetProperty,
+                new DoubleAnimation(baseOffset + (fromBelow ? distance : -distance), baseOffset, TimeSpan.FromMilliseconds(220))
+                { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
+            if (popup.Child is UIElement child)
+                child.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
+        };
+    }
+
     public static void AnimateOpen(FrameworkElement content, double originY)
     {
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };

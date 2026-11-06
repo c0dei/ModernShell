@@ -7,6 +7,9 @@ namespace ModernShell.Core;
 /// <summary>ショートカット (.lnk) の中身。</summary>
 public sealed record ShortcutInfo(string? Target, string? Arguments, string? Aumid)
 {
+    /// <summary>ショートカットに指定されたアイコン（ファイルと番号）。未指定なら null（リンク先のアイコンを使う）。</summary>
+    public string? IconFile { get; init; }
+    public int IconIndex { get; init; }
     /// <summary>.lnk ファイル自体のパス。</summary>
     public string? Path { get; init; }
 }
@@ -32,6 +35,12 @@ public static class Shortcut
         void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder dir, int cch);
         void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string dir);
         void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder args, int cch);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string args);
+        void GetHotkey(out short hotkey);
+        void SetHotkey(short hotkey);
+        void GetShowCmd(out int cmd);
+        void SetShowCmd(int cmd);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder path, int cch, out int index);
     }
 
     [ComImport, Guid("0000010B-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -71,6 +80,10 @@ public static class Shortcut
             sl.GetPath(path, path.Capacity, IntPtr.Zero, 0);
             var args = new StringBuilder(2048);
             try { sl.GetArguments(args, args.Capacity); } catch { }
+            var iconPath = new StringBuilder(1024);
+            int iconIndex = 0;
+            try { sl.GetIconLocation(iconPath, iconPath.Capacity, out iconIndex); } catch { }
+            var iconFile = iconPath.Length > 0 ? Environment.ExpandEnvironmentVariables(iconPath.ToString()) : null;
 
             string? aumid = null;
             if (link is IPropertyStore store)
@@ -85,7 +98,7 @@ public static class Shortcut
 
             var target = Environment.ExpandEnvironmentVariables(path.ToString());
             return new ShortcutInfo(target.Length > 0 ? target : null, args.Length > 0 ? args.ToString() : null,
-                string.IsNullOrEmpty(aumid) ? null : aumid) { Path = lnk };
+                string.IsNullOrEmpty(aumid) ? null : aumid) { Path = lnk, IconFile = iconFile, IconIndex = iconIndex };
         }
         catch { return null; }
         finally { if (link != null) Marshal.ReleaseComObject(link); }
