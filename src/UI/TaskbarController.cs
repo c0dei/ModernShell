@@ -128,7 +128,47 @@ public sealed partial class TaskbarController : IDisposable
         else if (s is ManagedShell.WindowsTray.NotifyIcon && e.PropertyName is "Icon" or "Title" or "IsHidden")
             _dispatcher.BeginInvoke(() => Kick(_trayDebounce));
     }
-    private void Watch(INotifyPropertyChanged o) { if (_watched.Add(o)) o.PropertyChanged += OnItemChanged; }
+    private void Watch(INotifyPropertyChanged o)
+    {
+        if (!_watched.Add(o)) return;
+        o.PropertyChanged += OnItemChanged;
+        if (o is ApplicationWindow w) w.GetButtonRect += OnGetButtonRect(w);
+    }
+
+    /// <summary>ウィンドウ → 今それを表しているタスクバーのボタン（最小化・元に戻すアニメーションの行き先に使う）。</summary>
+    private readonly Dictionary<IntPtr, FrameworkElement> _buttonFor = new();
+    private readonly Dictionary<ApplicationWindow, ApplicationWindow.GetButtonRectEventHandler> _rectHandlers = new();
+
+    /// <summary>
+    /// Windows はウィンドウを最小化・元に戻すとき、「タスクバーのボタンの位置」へ縮む／から広がるアニメーションをする。
+    /// その位置をシェル（ManagedShell の HSHELL_GETMINRECT）経由で問い合わせてくるので、ModernShell のボタンの位置を答える。
+    /// 答えないと、隠れている純正タスクバーのボタンの位置が使われ、見当違いの場所へ縮んで見える。
+    /// </summary>
+    private ApplicationWindow.GetButtonRectEventHandler OnGetButtonRect(ApplicationWindow w)
+    {
+        ApplicationWindow.GetButtonRectEventHandler h = (ref NativeMethods.ShortRect rect) =>
+        {
+            if (_disposed || !_buttonFor.TryGetValue(w.Handle, out var button)) return;
+            Rect? Measure()
+            {
+                if (!button.IsVisible || PresentationSource.FromVisual(button) == null) return null;
+                var tl = button.PointToScreen(new Point(0, 0));
+                var br = button.PointToScreen(new Point(button.ActualWidth, button.ActualHeight));
+                return new Rect(tl, br);
+            }
+            var r = button.Dispatcher.CheckAccess() ? Measure() : button.Dispatcher.Invoke(Measure);
+            if (r is not { } b || b.Width <= 0) return;
+            rect = new NativeMethods.ShortRect((short)b.Left, (short)b.Top, (short)b.Right, (short)b.Bottom);
+        };
+        _rectHandlers[w] = h;
+        return h;
+    }
+
+    private void Unwatch(INotifyPropertyChanged o)
+    {
+        o.PropertyChanged -= OnItemChanged;
+        if (o is ApplicationWindow w && _rectHandlers.Remove(w, out var h)) w.GetButtonRect -= h;
+    }
 
     /// <summary>
     /// 閉じたウィンドウ・消えたトレイアイコンの購読を外す。外さないと、閉じたウィンドウ（アイコンの画像なども）が
@@ -143,7 +183,7 @@ public sealed partial class TaskbarController : IDisposable
         _watched.RemoveWhere(o =>
         {
             if (alive.Contains(o)) return false;
-            o.PropertyChanged -= OnItemChanged;
+            Unwatch(o);
             return true;
         });
     }
@@ -266,6 +306,18 @@ public sealed partial class TaskbarController : IDisposable
         if (content is Panel panel && panel.Background == null) panel.Background = Brushes.Transparent;
         var s = new BarSurface(anchor, h, _settings) { Foreground = Theme.Current.Text };
         s.SetBody(content);
+        // ボタン以外の場所を右クリック → Windows のタスクバーと同じく「タスク マネージャー」「タスクバーの設定」
+        s.MouseRightButtonUp += (_, e) =>
+        {
+            if (e.Handled) return;
+            e.Handled = true;
+            Flyout.Show(content, new[]
+            {
+                new MenuItemSpec("\uE9D9", "タスク マネージャー", SystemActions.OpenTaskManager),
+                MenuItemSpec.Separator,
+                new MenuItemSpec("\uE713", "タスクバーの設定", () => OpenSettingsRequested?.Invoke()),
+            }, PlacementMode.MousePoint);
+        };
         s.ContentSizeChanged += Arrange;
         s.Loaded += (_, _) => Arrange();
         _surfaces.Add(s);
@@ -367,8 +419,9 @@ public sealed partial class TaskbarController : IDisposable
         if (_shell.Tasks?.GroupedWindows is INotifyCollectionChanged tasks) tasks.CollectionChanged -= OnTasksChanged;
         if (_shell.Tray?.PinnedIcons is INotifyCollectionChanged pinned) pinned.CollectionChanged -= OnTrayChanged;
         if (_shell.Tray?.UnpinnedIcons is INotifyCollectionChanged unpinned) unpinned.CollectionChanged -= OnTrayChanged;
-        foreach (var o in _watched) o.PropertyChanged -= OnItemChanged;
+        foreach (var o in _watched) Unwatch(o);
         _watched.Clear();
+        _buttonFor.Clear();
         _windowsPins.Changed -= OnPinsChanged;
         _windowsPins.Dispose();
         _catalog.Changed -= OnCatalogChanged;

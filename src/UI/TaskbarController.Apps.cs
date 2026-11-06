@@ -74,6 +74,7 @@ public sealed partial class TaskbarController
             .Concat(groups.Where(g => g.Pinned == null).OrderBy(g => _order.IndexOf(g.Key)));
 
         _apps.Children.Clear();
+        _buttonFor.Clear();
         var pinnedIds = new List<string>();
         LiveReorder? reorder = null;
         if (!PinsFromWindows)
@@ -81,6 +82,7 @@ public sealed partial class TaskbarController
         foreach (var g in ordered)
         {
             var tile = AppButton(g);
+            foreach (var w in g.Windows) _buttonFor[w.Handle] = tile;
             _apps.Children.Add(tile);
             // ピン留めボタンはドラッグで並べ替え（つかむとカーソルに付いてきて、他のボタンがよける）
             if (reorder != null && g.Pinned != null)
