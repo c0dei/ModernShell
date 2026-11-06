@@ -67,7 +67,7 @@ public sealed class SettingsWindow : Window
 
     private void Build()
     {
-        Backdrop.Apply(this, BackdropKind.Mica, _s.BackdropEngine, T, alwaysInactive: false);
+        Backdrop.ApplyMica(this, T);
         Foreground = T.Text;
 
         var root = new Grid();
@@ -450,34 +450,18 @@ public sealed class SettingsWindow : Window
         p.Children.Add(Swatches());
 
         p.Children.Add(Section("背景と効果"));
-        Group(p, "", "スタート メニュー", "スタート メニューと設定画面の素材",
-            DropDownRow("スタート メニューの背景", "",
-                new[] { ("Acrylic", "Acrylic"), ("Mica", "Mica"), ("Solid", "なし（単色）") }, _s.Backdrop.ToString(), v => _s.Backdrop = Enum.Parse<BackdropKind>(v)),
-            SliderRow("スタート メニューの不透明度", "0 で標準の Acrylic / Mica。上げるほど濃くなります",
-                _s.StartMenuOpacity, v => _s.StartMenuOpacity = v, _s.Backdrop != BackdropKind.Solid),
-            DropDownRow("背景効果の描画方式", "透けない場合は「Acrylic ぼかし」を試してください",
-                new[] { ("Auto", "自動"), ("SystemBackdrop", "Windows 11 標準（22H2 以降）"), ("AccentBlur", "Acrylic ぼかし（互換）") },
-                _s.BackdropEngine.ToString(), v => _s.BackdropEngine = Enum.Parse<BackdropEngine>(v)));
+        // 3 択はどれも ModernShell が自分で描くので、GPU が無い PC でも同じ見た目になる
+        Group(p, "\uE8FC", "スタート メニュー", "スタート メニューと、そこから開くメニューの背景",
+            DropDownRow("背景", "透過なし: テーマの色（ライト/ダーク）。透過: テーマの色を半透明で。ぼかし: 壁紙を強くぼかした下地にテーマの色を重ねる",
+                new[] { ("Solid", "透過なし"), ("Transparent", "透過"), ("Blur", "ぼかし") }, _s.StartMenuBackground.ToString(), v => _s.StartMenuBackground = Enum.Parse<SurfaceStyle>(v)),
+            SliderRow("不透明度", "重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ",
+                _s.StartMenuOpacity, v => _s.StartMenuOpacity = v, _s.StartMenuBackground != SurfaceStyle.Solid));
 
-        Group(p, "", "タスクバー", "ModernShell のタスクバーの素材",
-            _s.ForceRoundCorners
-                // 自前で描く方式では Windows のぼかし（ぼかしのみ / Acrylic）は使えない。選べるのは自分で描けるものだけ
-                ? DropDownRow("タスクバーの背景", "「角丸と透過を ModernShell で描く」がオンのため、Windows のぼかし（ぼかしのみ・Acrylic）は使えません。" +
-                        "ぼかした見た目にしたいときは「Mica 風」を選んでください",
-                    new[] { ("MicaLike", "Mica 風（壁紙をぼかす）"), ("Clear", "透明（ぼかしなし）") },
-                    _s.TaskbarMaterial == TaskbarMaterial.MicaLike ? "MicaLike" : "Clear",
-                    v => _s.TaskbarMaterial = Enum.Parse<TaskbarMaterial>(v), _s.UseCustomTaskbar)
-                : DropDownRow("タスクバーの背景",
-                    "Mica 風: 壁紙を強くぼかした色を下地にする（GPU が無くても描ける）。" +
-                    "ぼかしのみ・Acrylic は後ろのウィンドウを Windows がぼかすので、GPU が無い PC では単色になります",
-                    new[]
-                    {
-                        ("MicaLike", "Mica 風（壁紙をぼかす）"), ("Clear", "完全に透明（ぼかしなし）"), ("Solid", "なし（単色）"),
-                        ("Blur", "ぼかしのみ（GPU が必要）"), ("Acrylic", "Acrylic（GPU が必要）"),
-                    },
-                    _s.TaskbarMaterial.ToString(), v => _s.TaskbarMaterial = Enum.Parse<TaskbarMaterial>(v), _s.UseCustomTaskbar),
-            SliderRow("タスクバーの不透明度", "背景の上に重ねる色の濃さ。0 で背景のまま、100 で不透明",
-                _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.UseCustomTaskbar && (_s.TaskbarMaterial != TaskbarMaterial.Solid || _s.ForceRoundCorners)));
+        Group(p, "\uE75B", "タスクバー", "タスクバーと、そこから開くプレビュー・一覧・メニューの背景",
+            DropDownRow("背景", "透過なし: テーマの色（ライト/ダーク）。透過: テーマの色を半透明で。ぼかし: 壁紙を強くぼかした下地にテーマの色を重ねる",
+                new[] { ("Solid", "透過なし"), ("Transparent", "透過"), ("Blur", "ぼかし") }, _s.TaskbarBackground.ToString(), v => _s.TaskbarBackground = Enum.Parse<SurfaceStyle>(v), _s.UseCustomTaskbar),
+            SliderRow("不透明度", "重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ",
+                _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.UseCustomTaskbar && _s.TaskbarBackground != SurfaceStyle.Solid));
 
         Group(p, "\uE916", "アニメーション", "開くときに滑り込ませるか、パッと表示するか",
             ToggleRow("スタート メニュー", "下から滑り込みながら表示します（フォルダーを開くときの拡大も）", _s.AnimateStartMenu, v => _s.AnimateStartMenu = v),
@@ -488,16 +472,14 @@ public sealed class SettingsWindow : Window
         Group(p, "", "形と文字", "",
             DropDownRow("角の丸み", "", new[] { ("0", "なし"), ("4", "小"), ("8", "標準"), ("12", "大") },
                 ((int)_s.CornerRadius).ToString(), v => _s.CornerRadius = double.Parse(v)),
-            ToggleRow("角丸と透過を ModernShell で描く", "GPU が無い PC・仮想マシン・リモートデスクトップなど、Windows が角丸や透過を描かない環境向け。タスクバーは ModernShell が自分で角丸と透明度を描きます（ぼかしは無し）。スタートメニューは角丸に切り抜きます",
-                _s.ForceRoundCorners, v => _s.ForceRoundCorners = v, _s.CornerRadius > 0),
             DropDownRow("メニューの文字サイズ", "右クリックメニュー・ジャンプリスト・サブメニュー共通",
                 new[] { ("12", "12 px（小）"), ("13", "13 px"), ("14", "14 px（標準）"), ("15", "15 px"), ("16", "16 px（大）") },
                 _s.MenuFontSize.ToString(), v => _s.MenuFontSize = int.Parse(v)));
 
         if (!_flat)
-            p.Children.Add(InfoBar("透けて見えないときは",
-                "Windows の「設定 → 個人用設定 → 色 → 透明効果」がオンになっているか確認してください。オフだとどの方式でも不透明になります。" +
-                "GPU の無い PC では「角丸と透過を ModernShell で描く」をオンにしてください。"));
+            p.Children.Add(InfoBar("ぼかしについて",
+                "「ぼかし」は、後ろのウィンドウではなく壁紙をぼかした色を下地にします（Windows 11 の Mica と同じ考え方）。" +
+                "GPU を使わずに描けて、画面共有やスクリーンショットにもそのまま写ります。"));
     }
 
     private void GeneralPage(StackPanel p)
@@ -505,7 +487,7 @@ public sealed class SettingsWindow : Window
         p.Children.Add(ToggleRow("サインイン時に起動", "Windows にサインインすると自動で常駐します",
             _s.RunAtStartup, v => { _s.RunAtStartup = v; SystemActions.SetRunAtStartup(v); }));
         p.Children.Add(ToggleRow("描画に GPU を使う",
-            "オフにすると GPU ドライバーを読み込まないので、使用メモリが減ります（アニメーションは CPU で描画）。背景のぼかしは Windows が描くので変わりません。変更すると ModernShell を再起動します",
+            "オフにすると GPU ドライバーを読み込まないので、使用メモリが減ります（アニメーションは CPU で描画）。見た目は変わりません。変更すると ModernShell を再起動します",
             _s.UseGpuRendering, v =>
             {
                 _s.UseGpuRendering = v;

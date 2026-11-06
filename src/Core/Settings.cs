@@ -8,14 +8,15 @@ using System.Text.Json.Serialization;
 namespace ModernShell.Core;
 
 public enum ThemeMode { System, Light, Dark }
-public enum BackdropKind { Mica, Acrylic, Solid }
 public enum TaskbarAlignment { Center, Left }
 public enum TaskbarEdge { Bottom, Top }
 /// <summary>スタート・検索・タスクビューの位置。WithApps: アプリと一緒（中央 or 左） / LeftEdge: 常に左端（3 分割）</summary>
 public enum StartButtonPosition { WithApps, LeftEdge }
-public enum BackdropEngine { Auto, SystemBackdrop, AccentBlur }
-/// <summary>タスクバーの下地。Acrylic: Windows 11 のすりガラス（明るさの層とノイズ入り） / Blur: ぼかしのみ / Clear: 完全に透明</summary>
-public enum TaskbarMaterial { Acrylic, Blur, Clear, Solid, MicaLike }
+/// <summary>
+/// タスクバー・スタートメニューの背景。どれも ModernShell が自分で描くので、GPU が無い PC でも同じ見た目になる。
+/// Solid: テーマ色（ライト/ダーク）の単色 / Transparent: テーマ色を半透明で（ぼかし無し） / Blur: 壁紙を強くぼかした下地にテーマ色を重ねる（Mica と同じ考え方）
+/// </summary>
+public enum SurfaceStyle { Solid, Transparent, Blur }
 /// <summary>スタートメニューを開く位置。Auto: スタートボタンの位置に合わせる</summary>
 public enum StartMenuPosition { Auto, Left, Center }
 /// <summary>タスクバーのピン留めの出どころ。Windows: Windows のタスクバーと同じ内容・並び順（読み取り） / ModernShell: 独自に管理</summary>
@@ -52,9 +53,6 @@ public sealed class Settings
     public int IslandMargin { get; set; } = 8;
     /// <summary>帯型のとき画面の端（左右と下/上）から離す距離 (DIP)。0 より大きいと角丸になる。</summary>
     public int BandMargin { get; set; } = 0;
-    /// <summary>Windows が角丸を描かない環境（仮想マシン、リモートデスクトップ等）でも、ウィンドウを角丸に切り抜く。</summary>
-    // GPU の無い PC（Windows がぼかし・透過・角丸を描かない）を前提に、初期状態は ModernShell が自分で描く
-    public bool ForceRoundCorners { get; set; } = true;
     /// <summary>アイランド型のときホバーでアイコンを拡大する。</summary>
     public bool MagnifyOnHover { get; set; } = true;
     /// <summary>開くときのアニメーション（それぞれ切り替えられる）。</summary>
@@ -84,19 +82,19 @@ public sealed class Settings
 
     // --- 外観 ---
     public ThemeMode Theme { get; set; } = ThemeMode.System;
-    public BackdropKind Backdrop { get; set; } = BackdropKind.Acrylic;
     /// <summary>空ならシステムのアクセントカラー。#RRGGBB 形式。</summary>
     public string AccentColor { get; set; } = "";
     public double CornerRadius { get; set; } = 8;
     /// <summary>メニュー（右クリック・ジャンプリスト・サブメニュー）の文字サイズ (px)。</summary>
     public int MenuFontSize { get; set; } = 14;
-    /// <summary>タスクバー背景の不透明度 (0 = ぼかしだけ ～ 100 = 不透明)。</summary>
+    /// <summary>タスクバー（とそこから開くプレビュー・一覧・メニュー）の背景。</summary>
+    public SurfaceStyle TaskbarBackground { get; set; } = SurfaceStyle.Blur;
+    /// <summary>タスクバー背景の上に重ねるテーマ色の濃さ (0 = 下地のまま ～ 100 = 不透明)。透過・ぼかしのとき有効。</summary>
     public int TaskbarOpacity { get; set; } = 60;
-    public TaskbarMaterial TaskbarMaterial { get; set; } = TaskbarMaterial.MicaLike;
-    /// <summary>スタートメニュー背景の不透明度 (0 = 標準の Acrylic/Mica のまま ～ 100 = 不透明)。</summary>
-    public int StartMenuOpacity { get; set; } = 0;
-    /// <summary>背景効果の描画方式。Auto: Win11 22H2 以降は公式 API、それ以外は Acrylic ぼかし。</summary>
-    public BackdropEngine BackdropEngine { get; set; } = BackdropEngine.Auto;
+    /// <summary>スタートメニュー（とそこから開くメニュー）の背景。</summary>
+    public SurfaceStyle StartMenuBackground { get; set; } = SurfaceStyle.Blur;
+    /// <summary>スタートメニュー背景の上に重ねるテーマ色の濃さ (0–100)。</summary>
+    public int StartMenuOpacity { get; set; } = 70;
 
     // --- ウィジェット（スタートメニュー右側） ---
     public bool ShowWidgets { get; set; } = true;
@@ -156,7 +154,7 @@ public sealed class Settings
     public bool RunAtStartup { get; set; } = false;
     /// <summary>
     /// WPF の描画に GPU を使うか。オフにすると GPU ドライバー（NVIDIA なら 100 MB 超の DLL 群）を読み込まないので
-    /// 使用メモリが減る。背景のぼかし（Acrylic / Mica）は Windows が描くので影響しない。変更は再起動で反映。
+    /// 使用メモリが減る。背景（透過・ぼかし）は CPU で描いているので見た目は変わらない。変更は再起動で反映。
     /// </summary>
     public bool UseGpuRendering { get; set; } = false;
 
@@ -189,7 +187,12 @@ public sealed class Settings
         try
         {
             if (File.Exists(FilePath))
-                return JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath), Json) ?? new Settings();
+            {
+                var text = File.ReadAllText(FilePath);
+                var loaded = JsonSerializer.Deserialize<Settings>(text, Json) ?? new Settings();
+                Migrate(loaded, text);
+                return loaded;
+            }
         }
         catch (Exception ex) { Log.Error("settings load", ex); }
 
@@ -221,6 +224,28 @@ public sealed class Settings
     }
 
     private static bool _frozen;
+
+    /// <summary>
+    /// 古い背景の設定（Windows の背景効果を使っていた頃の「素材」）を、今の 3 択に読み替える。
+    /// 新しい項目がまだ保存されていないときだけ行う。
+    /// </summary>
+    private static void Migrate(Settings s, string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            string? Old(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+            if (!root.TryGetProperty(nameof(TaskbarBackground), out _) && Old("TaskbarMaterial") is { } material)
+                s.TaskbarBackground = material switch { "Solid" => SurfaceStyle.Solid, "Clear" => SurfaceStyle.Transparent, _ => SurfaceStyle.Blur };
+            if (!root.TryGetProperty(nameof(StartMenuBackground), out _))
+            {
+                if (Old("Backdrop") == "Solid") s.StartMenuBackground = SurfaceStyle.Solid;
+                if (s.StartMenuOpacity == 0) s.StartMenuOpacity = 70; // 以前の 0 は「Windows 標準の濃さ」という意味だった
+            }
+        }
+        catch (Exception ex) { Log.Error("settings migrate", ex); }
+    }
 
     /// <summary>ModernShell の設定として読める JSON か。</summary>
     public static bool IsValid(string json)

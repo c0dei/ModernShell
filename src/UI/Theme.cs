@@ -59,10 +59,8 @@ public sealed class Theme
     /// </summary>
     public int WindowCorner => Radius <= 0 ? Win32.DWMWCP_DONOTROUND : Radius <= 4 ? Win32.DWMWCP_ROUNDSMALL : Win32.DWMWCP_ROUND;
 
-    /// <summary>メニュー/ドロップダウン一覧の Acrylic の地の色。</summary>
+    /// <summary>メニュー/ドロップダウン一覧の地の色。</summary>
     public Color FlyoutColor => IsDark ? Color.FromRgb(0x2C, 0x2C, 0x2C) : Color.FromRgb(0xFC, 0xFC, 0xFC);
-    /// <summary>ポップアップに Acrylic を使うか（背景効果「なし」のときは単色）。</summary>
-    public static bool TranslucentPopups { get; private set; } = true;
 
     public static readonly FontFamily IconFont = new("Segoe Fluent Icons, Segoe MDL2 Assets");
     public static readonly FontFamily TextFont = new("Segoe UI Variable Text, Segoe UI, Yu Gothic UI");
@@ -72,7 +70,6 @@ public sealed class Theme
 
     public static void Apply(Settings s)
     {
-        TranslucentPopups = s.Backdrop != BackdropKind.Solid;
         Current = Build(s);
         Changed?.Invoke();
     }
@@ -145,36 +142,15 @@ public sealed class Theme
 }
 
 /// <summary>
-/// ウィンドウ背景効果（Mica / Acrylic）と角丸。
-/// - Win11 22H2+ かつアクティブになるウィンドウ: DWMWA_SYSTEMBACKDROP_TYPE（公式 API）
-/// - 常に非アクティブなウィンドウ（タスクバー）や Win10: SetWindowCompositionAttribute の Acrylic
-///   （公式 Backdrop は非アクティブ時に単色化されるため）
+/// 設定画面だけが使う Windows の背景効果（Mica）。設定画面は普通のウィンドウ（アクティブになる）なので公式 API で付けられる。
+/// GPU が無い PC では Windows が単色で描く。タスクバー・スタートメニュー・メニューは <see cref="SurfacePaint"/> で自分で描く。
 /// </summary>
 public static class Backdrop
 {
     private static readonly bool Is22H2 = Environment.OSVersion.Version.Build >= 22621;
     private static readonly bool IsWin11 = Environment.OSVersion.Version.Build >= 22000;
 
-    /// <summary>公式の背景効果 (DWMWA_SYSTEMBACKDROP_TYPE) を使うかどうか。</summary>
-    public static bool UsesSystemBackdrop(BackdropKind kind, BackdropEngine engine, bool alwaysInactive) =>
-        kind != BackdropKind.Solid && Is22H2 && engine switch
-        {
-            BackdropEngine.SystemBackdrop => true,
-            BackdropEngine.AccentBlur => false,
-            _ => !alwaysInactive,
-        };
-
-    /// <summary>
-    /// 背景効果を適用する。
-    /// 公式 API の背景効果はタイトルバー枠を持つウィンドウでしか描かれないため、
-    /// それを使うウィンドウは WindowStyle=SingleBorderWindow + WindowChrome(CaptionHeight=0) にしておくこと
-    /// （WindowStyle=None だと真っ黒/不透明になる）。
-    /// ※ Windows の「設定 → 個人用設定 → 色 → 透明効果」がオフだと、どの方式でも不透明になる。
-    /// </summary>
-    /// <param name="tint">背景の不透明度 (0–1)。null なら既定。
-    /// Acrylic ぼかし方式では色の濃さそのもの、Windows 標準方式では上に重ねる単色の濃さとして使う。</param>
-    public static void Apply(Window w, BackdropKind kind, BackdropEngine engine, Theme t, bool alwaysInactive, double? tint = null,
-        TaskbarMaterial material = TaskbarMaterial.Acrylic)
+    public static void ApplyMica(Window w, Theme t)
     {
         var hwnd = new WindowInteropHelper(w).EnsureHandle();
         var src = HwndSource.FromHwnd(hwnd);
@@ -186,137 +162,17 @@ public static class Backdrop
             int corner = t.WindowCorner;
             Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, ref corner, sizeof(int));
         }
-
-        bool system = UsesSystemBackdrop(kind, engine, alwaysInactive);
-        if (Is22H2 && !system)
+        if (!Is22H2)
         {
-            int none = Win32.DWMSBT_NONE;
-            Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_SYSTEMBACKDROP_TYPE, ref none, sizeof(int));
-        }
-
-        if (kind == BackdropKind.Solid)
-        {
-            SetAccent(hwnd, AccentState.Disabled, 0);
             w.Background = t.SolidBackground;
-            if (src?.CompositionTarget != null) src.CompositionTarget.BackgroundColor = t.SolidColor;
             return;
         }
-
         // DWM に描かせるため WPF 側の背景は完全透過にし、クライアント領域全体にフレームを広げる
         w.Background = Brushes.Transparent;
         if (src?.CompositionTarget != null) src.CompositionTarget.BackgroundColor = Colors.Transparent;
         var m = new Win32.MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
         Win32.DwmExtendFrameIntoClientArea(hwnd, ref m);
-
-        if (system)
-        {
-            // 標準の背景効果は透明度を変えられないので、上に半透明の単色を重ねて濃くする
-            if (tint is > 0) w.Background = new SolidColorBrush(Color.FromArgb((byte)Math.Round(Math.Clamp(tint.Value, 0, 1) * 255), t.SolidColor.R, t.SolidColor.G, t.SolidColor.B));
-            SetAccent(hwnd, AccentState.Disabled, 0);
-            int type = kind == BackdropKind.Mica ? Win32.DWMSBT_MAINWINDOW : Win32.DWMSBT_TRANSIENTWINDOW;
-            Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_SYSTEMBACKDROP_TYPE, ref type, sizeof(int));
-        }
-        else
-        {
-            var c = t.SolidColor;
-            byte alpha;
-            if (tint is { } v)
-            {
-                // 濃さはスタートメニューと同じく「上に重ねる半透明の色」で付ける（アクセントポリシーの色の濃さは
-                // 環境によって効かないことがあるため）。ぼかし側の色はごく薄くしておく（0 だと既定色になる環境がある）
-                alpha = 0x10;
-                w.Background = new SolidColorBrush(Color.FromArgb((byte)Math.Round(Math.Clamp(v, 0, 1) * 255), c.R, c.G, c.B));
-            }
-            else alpha = kind == BackdropKind.Mica ? (byte)0xD8 : (byte)0x99; // Mica 指定時は濃いめのティントで近い見た目にする
-            uint abgr = ((uint)alpha << 24) | ((uint)c.B << 16) | ((uint)c.G << 8) | c.R;
-            // 下地の種類: Acrylic（明るさの層とノイズ入り。暗い背景では灰色の板に見える）/ ぼかしのみ / 完全に透明
-            var state = material switch
-            {
-                TaskbarMaterial.Blur => AccentState.BlurBehind,
-                TaskbarMaterial.Clear => AccentState.TransparentGradient,
-                _ => AccentState.AcrylicBlurBehind,
-            };
-            if (material == TaskbarMaterial.Clear) abgr &= 0x00FFFFFF; // 下地は完全に透明。濃さは重ねる色だけで付ける
-            SetAccent(hwnd, state, abgr);
-        }
-    }
-
-    [DllImport("gdi32.dll")] private static extern IntPtr CreateRoundRectRgn(int x1, int y1, int x2, int y2, int w, int h);
-    [DllImport("user32.dll")] private static extern int SetWindowRgn(IntPtr hwnd, IntPtr rgn, bool redraw);
-
-    /// <summary>
-    /// 「角丸を強制する」がオンのとき、ウィンドウの形そのものを角丸に切り抜く（Windows が角丸を描かない
-    /// 仮想マシン・リモートデスクトップ等のため）。オフなら切り抜きを外して Windows の角丸に任せる。
-    /// </summary>
-    [DllImport("gdi32.dll")] private static extern IntPtr CreateRectRgn(int x1, int y1, int x2, int y2);
-    [DllImport("user32.dll")] private static extern int GetWindowRgn(IntPtr hwnd, IntPtr rgn);
-    [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr obj);
-
-    /// <summary>
-    /// 「角丸を強制する」の切り抜きを保ち続ける。WPF の WindowChrome はウィンドウが動くたびに
-    /// ウィンドウの領域を消してしまう（DWM 有効時の仕様）ので、消されたら付け直す。
-    /// </summary>
-    public static void KeepRegion(Window w, Settings s)
-    {
-        var hwnd = new WindowInteropHelper(w).EnsureHandle();
-        var src = HwndSource.FromHwnd(hwnd);
-        src?.AddHook((IntPtr h, int msg, IntPtr wp, IntPtr lp, ref bool handled) =>
-        {
-            if (msg is 0x0047 /*WM_WINDOWPOSCHANGED*/ or 0x0005 /*WM_SIZE*/ && s.ForceRoundCorners && s.CornerRadius > 0)
-            {
-                w.Dispatcher.BeginInvoke(() =>
-                {
-                    if (!Win32.GetWindowRect(hwnd, out var r) || r.Width <= 0) return;
-                    // 領域が付いていない（消された）ときだけ付け直す。付け直しで再び通知が来ても、2 回目は何もしない
-                    var probe = CreateRectRgn(0, 0, 0, 0);
-                    int kind = GetWindowRgn(hwnd, probe);
-                    DeleteObject(probe);
-                    if (kind == 0 /*ERROR = 領域なし*/)
-                        UpdateRegion(hwnd, r.Width, r.Height, s, Win32.GetDpiForWindow(hwnd) / 96.0);
-                }, System.Windows.Threading.DispatcherPriority.Background);
-            }
-            return IntPtr.Zero;
-        });
-    }
-
-    public static void UpdateRegion(IntPtr hwnd, int widthPx, int heightPx, Settings s, double dpiScale)
-    {
-        try
-        {
-            if (!s.ForceRoundCorners || s.CornerRadius <= 0 || widthPx <= 0 || heightPx <= 0)
-            {
-                SetWindowRgn(hwnd, IntPtr.Zero, true);
-                return;
-            }
-            int d = (int)Math.Round(s.CornerRadius * 2 * dpiScale);
-            // 領域の所有権は Windows に移るので解放しない
-            SetWindowRgn(hwnd, CreateRoundRectRgn(0, 0, widthPx + 1, heightPx + 1, d, d), true);
-        }
-        catch { }
-    }
-
-    internal enum AccentState { Disabled = 0, TransparentGradient = 2, BlurBehind = 3, AcrylicBlurBehind = 4 }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct AccentPolicy { public AccentState State; public int Flags; public uint GradientColor; public int AnimationId; }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct WindowCompositionAttributeData { public int Attribute; public IntPtr Data; public int SizeOfData; }
-
-    [DllImport("user32.dll")]
-    private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
-
-    internal static void SetAccent(IntPtr hwnd, AccentState state, uint abgr)
-    {
-        var policy = new AccentPolicy { State = state, Flags = 2, GradientColor = abgr };
-        int size = Marshal.SizeOf<AccentPolicy>();
-        var ptr = Marshal.AllocHGlobal(size);
-        try
-        {
-            Marshal.StructureToPtr(policy, ptr, false);
-            var data = new WindowCompositionAttributeData { Attribute = 19 /*WCA_ACCENT_POLICY*/, Data = ptr, SizeOfData = size };
-            SetWindowCompositionAttribute(hwnd, ref data);
-        }
-        finally { Marshal.FreeHGlobal(ptr); }
+        int type = Win32.DWMSBT_MAINWINDOW;
+        Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_SYSTEMBACKDROP_TYPE, ref type, sizeof(int));
     }
 }

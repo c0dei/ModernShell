@@ -18,7 +18,7 @@ namespace ModernShell.UI;
 
 /// <summary>
 /// ポップアップ（メニュー・ドロップダウン一覧）を Windows 11 と同じ見た目にする。
-/// 透過ウィンドウ（レイヤード）にせず、DWM に角丸・枠・影を描かせ、背景は Acrylic ぼかしにする。
+/// 背景・角丸・枠線は <see cref="SurfacePaint"/> で自分で描く（GPU が無い PC でも同じ見た目）。
 /// </summary>
 public static class FluentSurface
 {
@@ -27,28 +27,35 @@ public static class FluentSurface
     /// <summary>いずれかのメニュー/一覧が開いているか（開いている間はタスクバーのボタンを作り直さない）。</summary>
     public static bool AnyOpen => _open > 0;
 
-    /// <summary>Popup を Fluent 表面として構成する。中身（Child）は背景なしの要素を渡すこと。</summary>
+    /// <summary>
+    /// Popup を Fluent 表面として構成する。中身（Child）は背景なしの要素を渡すこと。
+    /// 背景・角丸・枠線は自分で描く（透過ウィンドウ）。初めはスタートメニューと同じ背景で、
+    /// タスクバーから開くものは <see cref="UseTaskbarLook"/> でタスクバーと同じ背景に切り替える。
+    /// </summary>
     public static Popup Create(UIElement content, UIElement target, PlacementMode placement)
     {
-        var t = Theme.Current;
         var popup = new Popup
         {
-            AllowsTransparency = false, // レイヤードにすると DWM の角丸・影・Acrylic が効かない
+            AllowsTransparency = true,
             StaysOpen = false,
             PlacementTarget = target,
             Placement = placement,
             PopupAnimation = PopupAnimation.None,
-            Child = new Border
-            {
-                Background = Theme.TranslucentPopups ? Brushes.Transparent : t.SolidBackground,
-                Child = content,
-            },
         };
+        var state = new LookState { Content = (FrameworkElement)content };
+        _looks.Add(popup, state);
+        var s = Settings.Current ?? new Settings();
+        Paint(popup, state, s.StartMenuBackground, s.StartMenuOpacity);
         // タスクバー等に重ならないよう、上下に出すときは少し離す（Windows のメニューと同じくらいの間隔）
         if (placement == PlacementMode.Top) popup.VerticalOffset = -8;
         else if (placement == PlacementMode.Bottom) popup.VerticalOffset = 8;
-        popup.Opened += (_, _) => { _openList.Add(popup); ApplyBackdrop(popup); };
-        popup.Closed += (_, _) => _openList.Remove(popup);
+        popup.Opened += (_, _) => { _openList.Add(popup); FollowBlur(popup, state); };
+        popup.Closed += (_, _) =>
+        {
+            _openList.Remove(popup);
+            if (state.Follow != null) CompositionTarget.Rendering -= state.Follow;
+            state.Follow = null;
+        };
         return popup;
     }
 
@@ -73,120 +80,47 @@ public static class FluentSurface
         if (_openList.Count > 0) _openList[^1].IsOpen = false;
     }
 
-    /// <summary>タスクバーと同じ背景（素材・不透明度）にするポップアップ。プレビュー・デスクトップ一覧・「^」の一覧。</summary>
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Popup, TaskbarLookState> _taskbarLook = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Popup, LookState> _looks = new();
 
-    private sealed class TaskbarLookState
+    private sealed class LookState
     {
-        public ImageBrush? Mica;
+        public required FrameworkElement Content;
+        public SurfacePaint.Painted? Painted;
         public EventHandler? Follow;
+        public bool Taskbar;
     }
+
+    private static void Paint(Popup popup, LookState state, SurfaceStyle style, int opacity)
+    {
+        // 前の背景から中身を外して包み直す
+        if (state.Content.Parent is Border old) old.Child = null;
+        popup.Child = null;
+        state.Painted = SurfacePaint.Wrap(state.Content, style, opacity, new CornerRadius(Math.Max(0, Theme.Current.Radius)));
+        popup.Child = state.Painted.Root;
+    }
+
+    public static bool HasTaskbarLook(Popup popup) => _looks.TryGetValue(popup, out var s) && s.Taskbar;
 
     /// <summary>
     /// ポップアップの背景をタスクバーと同じ設定（「タスクバーの背景」と「タスクバーの不透明度」）にする。開く前に呼ぶ。
-    /// 「角丸と透過を ModernShell で描く」がオンなら、タスクバーと同じく透過ウィンドウにして角丸と透明度を自分で描く。
+    /// プレビュー・デスクトップ一覧・「^」の一覧・タスクバーの右クリックメニューで使う。
     /// </summary>
-    public static bool HasTaskbarLook(Popup popup) => _taskbarLook.TryGetValue(popup, out _);
-
     public static void UseTaskbarLook(Popup popup)
     {
-        var s = Settings.Current;
-        if (s == null || popup.Child is not Border body || _taskbarLook.TryGetValue(popup, out _)) return;
-        var t = Theme.Current;
-        var state = new TaskbarLookState();
-        _taskbarLook.Add(popup, state);
-
-        bool selfDrawn = s.ForceRoundCorners;
-        bool solid = s.TaskbarMaterial == TaskbarMaterial.Solid && !selfDrawn;
-        var c = t.SolidColor;
-        // 不透明度 0 でもクリックが裏へ抜けないよう、ほんの少しだけ色を残す（タスクバーと同じ）
-        byte alpha = (byte)Math.Max(1, Math.Round(Math.Clamp(s.TaskbarOpacity, 0, 100) / 100.0 * 255));
-        body.Background = solid ? t.SolidBackground : new SolidColorBrush(Color.FromArgb(alpha, c.R, c.G, c.B));
-
-        var radius = new CornerRadius(selfDrawn ? Math.Max(0, s.CornerRadius) : 0);
-        if (selfDrawn)
-        {
-            popup.AllowsTransparency = true;
-            body.CornerRadius = radius;
-            body.BorderBrush = t.Stroke;
-            body.BorderThickness = new Thickness(1);
-        }
-        if (s.TaskbarMaterial == TaskbarMaterial.MicaLike && MicaLike.Image != null)
-        {
-            // Mica 風: 壁紙をぼかした画像の、ポップアップの位置に当たる部分を下に敷く
-            state.Mica = new ImageBrush { ViewboxUnits = BrushMappingMode.Absolute, Stretch = Stretch.Fill };
-            popup.Child = null;
-            popup.Child = new Border { CornerRadius = radius, Background = state.Mica, Child = body };
-        }
+        if (Settings.Current is not { } s || !_looks.TryGetValue(popup, out var state) || state.Taskbar) return;
+        state.Taskbar = true;
+        Paint(popup, state, s.TaskbarBackground, s.TaskbarOpacity);
     }
 
-    /// <summary>ポップアップが動いている間（スライドして現れるときなど）も、Mica 風の画像の切り出し位置を合わせ続ける。</summary>
-    private static void FollowMica(Popup popup, HwndSource src, TaskbarLookState state)
+    /// <summary>ぼかしの画像を、ポップアップの位置に合わせ続ける（スライドして現れる間も）。</summary>
+    private static void FollowBlur(Popup popup, LookState state)
     {
-        if (state.Mica == null) return;
-        var brush = state.Mica;
+        if (state.Painted?.Blur == null || popup.Child == null || PresentationSource.FromVisual(popup.Child) is not HwndSource src) return;
+        var painted = state.Painted;
         var hwnd = src.Handle;
-        state.Follow = (_, _) =>
-        {
-            if (!Win32.GetWindowRect(hwnd, out var r) || r.Width <= 0) return;
-            var bar = new System.Drawing.Rectangle(r.Left, r.Top, r.Width, r.Height);
-            MicaLike.Place(brush, bar, System.Windows.Forms.Screen.FromRectangle(bar).Bounds);
-        };
+        state.Follow = (_, _) => painted.Place(hwnd);
         state.Follow(null, EventArgs.Empty);
         CompositionTarget.Rendering += state.Follow;
-        popup.Closed += (_, _) => { if (state.Follow != null) CompositionTarget.Rendering -= state.Follow; state.Follow = null; };
-    }
-
-    private static void ApplyBackdrop(Popup popup)
-    {
-        if (popup.Child == null || PresentationSource.FromVisual(popup.Child) is not HwndSource src) return;
-        var t = Theme.Current;
-        var hwnd = src.Handle;
-
-        int dark = t.IsDark ? 1 : 0;
-        Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
-        int corner = t.WindowCorner;
-        Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, ref corner, sizeof(int));
-
-        if (_taskbarLook.TryGetValue(popup, out var look) && Settings.Current is { } s)
-        {
-            FollowMica(popup, src, look);
-            // 自前で描く方式（透過ウィンドウ）・単色・Mica 風は、DWM のぼかしを使わない
-            if (popup.AllowsTransparency) return;
-            if (s.TaskbarMaterial is TaskbarMaterial.Solid or TaskbarMaterial.MicaLike)
-            {
-                if (src.CompositionTarget != null) src.CompositionTarget.BackgroundColor = t.SolidColor;
-                Backdrop.SetAccent(hwnd, Backdrop.AccentState.Disabled, 0);
-                return;
-            }
-            if (src.CompositionTarget != null) src.CompositionTarget.BackgroundColor = Colors.Transparent;
-            var mm = new Win32.MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
-            Win32.DwmExtendFrameIntoClientArea(hwnd, ref mm);
-            // タスクバーと同じ下地。濃さは上に重ねた色（Background）で付けるので、下地の色はごく薄く
-            var sc = t.SolidColor;
-            uint tint = (0x10u << 24) | ((uint)sc.B << 16) | ((uint)sc.G << 8) | sc.R;
-            var state = s.TaskbarMaterial switch
-            {
-                TaskbarMaterial.Blur => Backdrop.AccentState.BlurBehind,
-                TaskbarMaterial.Clear => Backdrop.AccentState.TransparentGradient,
-                _ => Backdrop.AccentState.AcrylicBlurBehind,
-            };
-            if (s.TaskbarMaterial == TaskbarMaterial.Clear) tint &= 0x00FFFFFF;
-            Backdrop.SetAccent(hwnd, state, tint);
-            return;
-        }
-
-        if (!Theme.TranslucentPopups)
-        {
-            if (src.CompositionTarget != null) src.CompositionTarget.BackgroundColor = t.SolidColor;
-            return;
-        }
-        if (src.CompositionTarget != null) src.CompositionTarget.BackgroundColor = Colors.Transparent;
-        var m = new Win32.MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
-        Win32.DwmExtendFrameIntoClientArea(hwnd, ref m);
-        var c = t.FlyoutColor;
-        uint abgr = (0xD0u << 24) | ((uint)c.B << 16) | ((uint)c.G << 8) | c.R;
-        Backdrop.SetAccent(hwnd, Backdrop.AccentState.AcrylicBlurBehind, abgr);
     }
 
     /// <summary>開くときの動き（WinUI 風: 少し伸びながらフェードイン）。originY は伸び始める位置 (0–1)。</summary>
@@ -212,7 +146,7 @@ public static class FluentSurface
 
     /// <summary>
     /// Windows のタスクバーのフライアウトと同じく、少し下（上に出すときは上）からスライドしながら現れる。
-    /// ポップアップの位置そのものを動かすので、Acrylic の背景ごと動く。
+    /// ポップアップの位置そのものを動かすので、背景ごと動く。
     /// </summary>
     public static void SlideIn(Popup popup, bool fromBelow, double distance = 24)
     {
@@ -242,7 +176,7 @@ public static class FluentSurface
 /// <summary>
 /// Windows 11 (WinUI 3) の ComboBox を再現したドロップダウン。
 ///  - ボタン: 半透明の地 + 下端だけ濃い枠、押すと山形アイコンが沈む
-///  - 一覧: 選択中の項目がボタンにぴったり重なる位置で開く、選択中は左端にアクセント色の縦線、Acrylic 背景
+///  - 一覧: 選択中の項目がボタンにぴったり重なる位置で開く、選択中は左端にアクセント色の縦線
 /// </summary>
 public sealed class FluentComboBox : Border
 {

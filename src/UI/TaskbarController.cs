@@ -205,9 +205,9 @@ public sealed partial class TaskbarController : IDisposable
     private string _layoutKey = "";
     private string LayoutKey() => string.Join("|", _settings.UseCustomTaskbar, _settings.TaskbarStyle, _settings.StartButtonPosition,
         _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarHeight, _settings.TaskbarIconSize, _settings.IslandMargin,
-        _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds, _settings.Backdrop, _settings.BackdropEngine,
+        _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds,
         _settings.MagnifyOnHover, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
-        _settings.TaskbarOpacity, _settings.TaskbarMaterial, _settings.BandMargin, _settings.ForceRoundCorners);
+        _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMargin);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e) => _dispatcher.BeginInvoke(UpdateStatus);
 
     // ------------------------------------------------------------------
@@ -342,7 +342,6 @@ public sealed partial class TaskbarController : IDisposable
                     int bh = (int)Math.Round(_settings.TaskbarHeight * s.Scale);
                     s.MoveTo(r.Left + bm, IsTop ? r.Top + bm : r.Bottom - bm - bh, r.Width - bm * 2, bh, bottomMost);
                 }
-                s.UpdateRegion(_settings);
                 continue;
             }
             var (w, h) = s.PixelSize;
@@ -355,7 +354,6 @@ public sealed partial class TaskbarController : IDisposable
                 _ => r.Left + (r.Width - w) / 2,
             };
             s.MoveTo(x, y, bottomMost: bottomMost);
-            s.UpdateRegion(_settings);
         }
         UpdateTrayHostData();
     }

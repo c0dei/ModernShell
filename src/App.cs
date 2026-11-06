@@ -190,13 +190,12 @@ public static class Program
 
     private static bool _hotkeyRegistered;
 
-    private static string ThemeKey() => $"{_settings.Theme}|{_settings.Backdrop}|{_settings.AccentColor}|{_settings.CornerRadius}";
+    private static string ThemeKey() => $"{_settings.Theme}|{_settings.AccentColor}|{_settings.CornerRadius}";
 
     private static void OnSettingsChanged()
     {
         ApplyTaskbarMode();
         SyncNativeStartAlignment();
-        if (_start.SelfDrawn != _settings.ForceRoundCorners && !_start.IsVisible) CreateStartMenu();
         var key = ThemeKey();
         if (key != _themeKey) { _themeKey = key; Theme.Apply(_settings); }
     }
