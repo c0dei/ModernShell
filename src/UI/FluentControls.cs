@@ -73,6 +73,68 @@ public static class FluentSurface
         if (_openList.Count > 0) _openList[^1].IsOpen = false;
     }
 
+    /// <summary>タスクバーと同じ背景（素材・不透明度）にするポップアップ。プレビュー・デスクトップ一覧・「^」の一覧。</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Popup, TaskbarLookState> _taskbarLook = new();
+
+    private sealed class TaskbarLookState
+    {
+        public ImageBrush? Mica;
+        public EventHandler? Follow;
+    }
+
+    /// <summary>
+    /// ポップアップの背景をタスクバーと同じ設定（「タスクバーの背景」と「タスクバーの不透明度」）にする。開く前に呼ぶ。
+    /// 「角丸と透過を ModernShell で描く」がオンなら、タスクバーと同じく透過ウィンドウにして角丸と透明度を自分で描く。
+    /// </summary>
+    public static void UseTaskbarLook(Popup popup)
+    {
+        var s = Settings.Current;
+        if (s == null || popup.Child is not Border body || _taskbarLook.TryGetValue(popup, out _)) return;
+        var t = Theme.Current;
+        var state = new TaskbarLookState();
+        _taskbarLook.Add(popup, state);
+
+        bool selfDrawn = s.ForceRoundCorners;
+        bool solid = s.TaskbarMaterial == TaskbarMaterial.Solid && !selfDrawn;
+        var c = t.SolidColor;
+        // 不透明度 0 でもクリックが裏へ抜けないよう、ほんの少しだけ色を残す（タスクバーと同じ）
+        byte alpha = (byte)Math.Max(1, Math.Round(Math.Clamp(s.TaskbarOpacity, 0, 100) / 100.0 * 255));
+        body.Background = solid ? t.SolidBackground : new SolidColorBrush(Color.FromArgb(alpha, c.R, c.G, c.B));
+
+        var radius = new CornerRadius(selfDrawn ? Math.Max(0, s.CornerRadius) : 0);
+        if (selfDrawn)
+        {
+            popup.AllowsTransparency = true;
+            body.CornerRadius = radius;
+            body.BorderBrush = t.Stroke;
+            body.BorderThickness = new Thickness(1);
+        }
+        if (s.TaskbarMaterial == TaskbarMaterial.MicaLike && MicaLike.Image != null)
+        {
+            // Mica 風: 壁紙をぼかした画像の、ポップアップの位置に当たる部分を下に敷く
+            state.Mica = new ImageBrush { ViewboxUnits = BrushMappingMode.Absolute, Stretch = Stretch.Fill };
+            popup.Child = null;
+            popup.Child = new Border { CornerRadius = radius, Background = state.Mica, Child = body };
+        }
+    }
+
+    /// <summary>ポップアップが動いている間（スライドして現れるときなど）も、Mica 風の画像の切り出し位置を合わせ続ける。</summary>
+    private static void FollowMica(Popup popup, HwndSource src, TaskbarLookState state)
+    {
+        if (state.Mica == null) return;
+        var brush = state.Mica;
+        var hwnd = src.Handle;
+        state.Follow = (_, _) =>
+        {
+            if (!Win32.GetWindowRect(hwnd, out var r) || r.Width <= 0) return;
+            var bar = new System.Drawing.Rectangle(r.Left, r.Top, r.Width, r.Height);
+            MicaLike.Place(brush, bar, System.Windows.Forms.Screen.FromRectangle(bar).Bounds);
+        };
+        state.Follow(null, EventArgs.Empty);
+        CompositionTarget.Rendering += state.Follow;
+        popup.Closed += (_, _) => { if (state.Follow != null) CompositionTarget.Rendering -= state.Follow; state.Follow = null; };
+    }
+
     private static void ApplyBackdrop(Popup popup)
     {
         if (popup.Child == null || PresentationSource.FromVisual(popup.Child) is not HwndSource src) return;
@@ -83,6 +145,34 @@ public static class FluentSurface
         Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
         int corner = t.WindowCorner;
         Win32.DwmSetWindowAttribute(hwnd, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, ref corner, sizeof(int));
+
+        if (_taskbarLook.TryGetValue(popup, out var look) && Settings.Current is { } s)
+        {
+            FollowMica(popup, src, look);
+            // 自前で描く方式（透過ウィンドウ）・単色・Mica 風は、DWM のぼかしを使わない
+            if (popup.AllowsTransparency) return;
+            if (s.TaskbarMaterial is TaskbarMaterial.Solid or TaskbarMaterial.MicaLike)
+            {
+                if (src.CompositionTarget != null) src.CompositionTarget.BackgroundColor = t.SolidColor;
+                Backdrop.SetAccent(hwnd, Backdrop.AccentState.Disabled, 0);
+                return;
+            }
+            if (src.CompositionTarget != null) src.CompositionTarget.BackgroundColor = Colors.Transparent;
+            var mm = new Win32.MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+            Win32.DwmExtendFrameIntoClientArea(hwnd, ref mm);
+            // タスクバーと同じ下地。濃さは上に重ねた色（Background）で付けるので、下地の色はごく薄く
+            var sc = t.SolidColor;
+            uint tint = (0x10u << 24) | ((uint)sc.B << 16) | ((uint)sc.G << 8) | sc.R;
+            var state = s.TaskbarMaterial switch
+            {
+                TaskbarMaterial.Blur => Backdrop.AccentState.BlurBehind,
+                TaskbarMaterial.Clear => Backdrop.AccentState.TransparentGradient,
+                _ => Backdrop.AccentState.AcrylicBlurBehind,
+            };
+            if (s.TaskbarMaterial == TaskbarMaterial.Clear) tint &= 0x00FFFFFF;
+            Backdrop.SetAccent(hwnd, state, tint);
+            return;
+        }
 
         if (!Theme.TranslucentPopups)
         {
@@ -104,6 +194,7 @@ public static class FluentSurface
     /// </summary>
     public static void PlaceCentered(Popup popup, FrameworkElement anchor, bool barAtTop, double gapDip = 8)
     {
+        UseTaskbarLook(popup);
         popup.PlacementTarget = anchor;
         popup.Placement = PlacementMode.Custom;
         popup.VerticalOffset = 0;
