@@ -17,9 +17,9 @@ jobs:
       matrix:
         rid: [win-x64, win-arm64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
 
@@ -51,14 +51,14 @@ jobs:
         shell: bash
         run: mv publish/ModernShell.exe "publish/ModernShell-${{ steps.ver.outputs.version }}-${{ matrix.rid }}.exe"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ModernShell-${{ matrix.rid }}
           path: publish/*.exe
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: publish/*.exe
           generate_release_notes: true
