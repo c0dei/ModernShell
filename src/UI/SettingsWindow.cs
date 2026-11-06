@@ -319,7 +319,7 @@ public sealed class SettingsWindow : Window
             ToggleRow("タスク ビュー ボタンを表示", "", _s.ShowTaskViewButton, v => _s.ShowTaskViewButton = v, on),
             ToggleRow("同じアプリのボタンをまとめる", "複数のウィンドウは一覧で選べます", _s.GroupTaskbarButtons, v => _s.GroupTaskbarButtons = v, on),
             ToggleRow("ボタンにウィンドウ名を表示", "", _s.ShowTaskbarLabels, v => _s.ShowTaskbarLabels = v, on),
-            ToggleRow("ホバー時にアイコンを拡大", "アイランドのときだけ有効です", _s.MagnifyOnHover, v => _s.MagnifyOnHover = v, on && floating),
+            ToggleRow("ホバー時にアイコンを拡大", "カーソルを置いたアプリのアイコンを少し大きくします", _s.MagnifyOnHover, v => _s.MagnifyOnHover = v, on),
             ToggleRow("時計に秒を表示", "", _s.ShowSeconds, v => _s.ShowSeconds = v, on));
 
         Group(p, "", "プレビュー", "カーソルを置いたときに出る一覧",

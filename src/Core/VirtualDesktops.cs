@@ -62,7 +62,7 @@ public static class VirtualDesktops
         return File.Exists(transcoded) ? transcoded : null;
     }
 
-    private const ushort VK_CONTROL = 0x11, VK_LEFT = 0x25, VK_RIGHT = 0x27, VK_D = 0x44;
+    private const ushort VK_CONTROL = 0x11, VK_LEFT = 0x25, VK_RIGHT = 0x27, VK_D = 0x44, VK_F4 = 0x73;
 
     /// <summary>index 番目のデスクトップへ切り替える（今の位置から左右キーを必要な回数送る）。</summary>
     public static void SwitchTo(int index)
@@ -76,6 +76,41 @@ public static class VirtualDesktops
         keys.Add((VK_CONTROL, true));
         keys.Add((Native.Win32.VK_LWIN, true));
         Input.Send(keys.ToArray());
+    }
+
+    /// <summary>今のデスクトップを閉じる（Ctrl+Win+F4）。開いていたウィンドウは隣のデスクトップへ移る（Windows と同じ）。</summary>
+    private static void CloseCurrent() =>
+        Input.Send((Native.Win32.VK_LWIN, false), (VK_CONTROL, false), (VK_F4, false), (VK_F4, true), (VK_CONTROL, true), (Native.Win32.VK_LWIN, true));
+
+    /// <summary>
+    /// index 番目のデスクトップを削除する。Windows はキー操作では「今のデスクトップを閉じる」しかできないので、
+    /// 別のデスクトップのときは一度そこへ切り替えて閉じ、元のデスクトップへ戻る。
+    /// </summary>
+    public static async System.Threading.Tasks.Task Remove(int index)
+    {
+        var list = List();
+        if (list.Count <= 1 || index < 0 || index >= list.Count) return;
+        int current = list.FindIndex(d => d.IsCurrent);
+        if (index == current) { CloseCurrent(); return; }
+        SwitchTo(index);
+        await WaitCurrent(index);
+        CloseCurrent();
+        // 閉じたあとは隣（左、いちばん左なら右）へ移る。元のデスクトップの番号は、消したものより後ろなら 1 つ詰まる
+        int back = current > index ? current - 1 : current;
+        await System.Threading.Tasks.Task.Delay(150);
+        for (int i = 0; i < 20 && List().Count == list.Count; i++) await System.Threading.Tasks.Task.Delay(50);
+        SwitchTo(back);
+    }
+
+    /// <summary>切り替えが終わる（レジストリの「今のデスクトップ」が変わる）まで少し待つ。</summary>
+    private static async System.Threading.Tasks.Task WaitCurrent(int index)
+    {
+        for (int i = 0; i < 20; i++)
+        {
+            await System.Threading.Tasks.Task.Delay(50);
+            if (List().FindIndex(d => d.IsCurrent) == index) break;
+        }
+        await System.Threading.Tasks.Task.Delay(100);
     }
 
     /// <summary>新しいデスクトップを作って切り替える（Ctrl+Win+D）。</summary>

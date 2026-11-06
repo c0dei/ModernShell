@@ -132,7 +132,7 @@ public sealed partial class TaskbarController
             ToolTip = running ? string.Join("\n", g.Windows.Select(w => w.Title)) : g.Pinned?.Name,
         };
         tile.MouseLeave += (_, _) => { if (active) tile.Background = t.Hover; };
-        if (Floating && _settings.MagnifyOnHover) AddMagnify(tile, icon);
+        if (_settings.MagnifyOnHover) AddMagnify(tile, icon);
 
         // カーソルを置くとウィンドウのプレビュー（実行中のときだけ）。クリック・右クリック・ドラッグで閉じる
         if (running)

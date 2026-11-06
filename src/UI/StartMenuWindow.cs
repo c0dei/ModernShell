@@ -142,13 +142,46 @@ public sealed class StartMenuWindow : Window
         Left = x / scale;
         Top = (y + slide) / scale;
         UpdateLayout();
+        // 隠したウィンドウを表示し直すと、新しい内容が描かれるまでの一瞬、前回閉じたときの画面が出てちらつく。
+        // 見えない状態（DWM のクローク）で表示して、新しい内容を描き終えてから見せる
+        Cloak(true);
         Show();
         Win32.SetWindowPos(Handle, IntPtr.Zero, x, y + slide, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
         Foregrounder.Force(Handle);
         Activate();
         _search.Focus();
         _search.CaretIndex = _search.Text.Length;
-        if (animate) SlideIn(x, y, slide);
+        AfterFrames(2, () =>
+        {
+            if (!IsVisible) return;
+            Cloak(false);
+            if (animate) SlideIn(x, y, slide);
+        });
+    }
+
+    private void Cloak(bool on)
+    {
+        int v = on ? 1 : 0;
+        Win32.DwmSetWindowAttribute(Handle, 13 /*DWMWA_CLOAK*/, ref v, sizeof(int));
+    }
+
+    /// <summary>WPF が n 回描画したあとに実行する（念のため 150ms で打ち切る）。</summary>
+    private void AfterFrames(int n, Action action)
+    {
+        bool done = false;
+        int count = 0;
+        EventHandler? h = null;
+        void Run()
+        {
+            if (done) return;
+            done = true;
+            CompositionTarget.Rendering -= h;
+            action();
+        }
+        h = (_, _) => { if (++count > n) Run(); };
+        CompositionTarget.Rendering += h;
+        new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(150), System.Windows.Threading.DispatcherPriority.Normal,
+            (s, _) => { ((System.Windows.Threading.DispatcherTimer)s!).Stop(); Run(); }, Dispatcher).Start();
     }
 
     private EventHandler? _slide;
@@ -198,7 +231,7 @@ public sealed class StartMenuWindow : Window
         _hiddenAt = DateTime.Now;
         StopSlide();
         _root.BeginAnimation(OpacityProperty, null);
-        _root.Opacity = 1;
+        Cloak(false);
         _widgets?.Close();
         CloseFolder();
         Hide();

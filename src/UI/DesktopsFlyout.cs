@@ -67,13 +67,38 @@ public sealed class DesktopsFlyout
             };
             var label = UiKit.Label(d.Name, 12, t.Text, d.IsCurrent ? FontWeights.SemiBold : FontWeights.Normal);
             label.HorizontalAlignment = HorizontalAlignment.Center;
-            label.MaxWidth = 160;
+            label.MaxWidth = 130;
             label.Margin = new Thickness(0, 6, 0, 0);
             var body = new StackPanel();
             body.Children.Add(frame);
-            body.Children.Add(label);
-            var card = new Tile { Padding = new Thickness(6), Margin = new Thickness(2), Child = body, ToolTip = d.Name };
+            var labelRow = new Grid();
+            labelRow.Children.Add(label);
             int index = i;
+            Tile? close = null;
+            if (desktops.Count > 1)
+            {
+                // 「×」でデスクトップを削除（ウィンドウは隣のデスクトップへ移る。Windows のタスク ビューと同じ）
+                close = new Tile
+                {
+                    Width = 22, Height = 22, CornerRadius = t.Corner(4), Child = UiKit.Glyph("\uE711", 10), ToolTip = "デスクトップを閉じる",
+                    HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Opacity = 0,
+                };
+                close.Click += async _ =>
+                {
+                    Cancel();
+                    await VirtualDesktops.Remove(index);
+                };
+                labelRow.Children.Add(close);
+            }
+            body.Children.Add(labelRow);
+            var card = new Tile { Padding = new Thickness(6), Margin = new Thickness(2), Child = body, ToolTip = d.Name };
+            if (close != null)
+            {
+                // Windows と同じく、カーソルを置いたカードだけ「×」を出す
+                var c = close;
+                card.MouseEnter += (_, _) => c.Opacity = 1;
+                card.MouseLeave += (_, _) => c.Opacity = 0;
+            }
             card.Click += _ => { Cancel(); VirtualDesktops.SwitchTo(index); };
             row.Children.Add(card);
         }
