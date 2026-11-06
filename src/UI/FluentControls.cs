@@ -86,6 +86,8 @@ public static class FluentSurface
     /// ポップアップの背景をタスクバーと同じ設定（「タスクバーの背景」と「タスクバーの不透明度」）にする。開く前に呼ぶ。
     /// 「角丸と透過を ModernShell で描く」がオンなら、タスクバーと同じく透過ウィンドウにして角丸と透明度を自分で描く。
     /// </summary>
+    public static bool HasTaskbarLook(Popup popup) => _taskbarLook.TryGetValue(popup, out _);
+
     public static void UseTaskbarLook(Popup popup)
     {
         var s = Settings.Current;

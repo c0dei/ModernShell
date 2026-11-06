@@ -209,6 +209,10 @@ public static class Flyout
         var panel = new StackPanel { Margin = new Thickness(4) };
         var popup = FluentSurface.Create(panel, target, placement);
         popup.Tag = parent;
+        // タスクバーから開いたメニュー（スタートボタン・アプリ・空いている場所の右クリック、そのサブメニュー）は
+        // タスクバーと同じ背景にする。スタートメニューなどから開いたものはこれまでどおり
+        if (parent != null ? FluentSurface.HasTaskbarLook(parent) : Window.GetWindow(target) is BarSurface)
+            FluentSurface.UseTaskbarLook(popup);
 
         foreach (var spec in items)
         {
