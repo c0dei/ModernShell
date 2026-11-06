@@ -893,7 +893,7 @@ public sealed class TaskbarController : IDisposable
         bool running = g.Windows.Count > 0;
         bool active = g.Windows.Any(w => w.State == ApplicationWindow.WindowState.Active);
         bool flashing = g.Windows.Any(w => w.State == ApplicationWindow.WindowState.Flashing);
-        var icon = UiKit.Icon(g.Windows.FirstOrDefault()?.Icon ?? g.Pinned?.Icon(64), IconSz);
+        var icon = UiKit.Icon(CustomIcon(g) ?? g.Windows.FirstOrDefault()?.Icon ?? g.Pinned?.Icon(64), IconSz);
 
         var content = new Grid();
         FrameworkElement main = icon;
@@ -1106,6 +1106,12 @@ public sealed class TaskbarController : IDisposable
                     : new MenuItemSpec("\uE718", "タスクバーにピン留めする", () => { pins.Add(app.Id); _settings.Save(); }));
             }
         }
+        // アイコンの差し替え（ピン留め・実行中どちらのボタンにも効く）
+        var iconKey = IconKey(g);
+        items.Add(MenuItemSpec.Separator);
+        items.Add(new MenuItemSpec("\uE790", "アイコンを変更...", () => ChooseIcon(iconKey)));
+        if (_settings.CustomIcons.ContainsKey(iconKey))
+            items.Add(new MenuItemSpec("\uE7A7", "アイコンを元に戻す", () => { _settings.CustomIcons.Remove(iconKey); _settings.Save(); }));
         if (g.Windows.Count > 0)
         {
             items.Add(MenuItemSpec.Separator);
@@ -1113,6 +1119,38 @@ public sealed class TaskbarController : IDisposable
                 () => { foreach (var w in g.Windows) w.Close(); }, Danger: true));
         }
         return items;
+    }
+
+    // ---- アイコンの差し替え ----
+
+    /// <summary>差し替えの記録に使うキー（ピン留めならアプリ ID、実行中だけならグループのキー = AUMID か exe）。</summary>
+    private static string IconKey(Group g) => g.Pinned?.Id ?? g.Key;
+
+    private ImageSource? CustomIcon(Group g)
+    {
+        if (!_settings.CustomIcons.TryGetValue(IconKey(g), out var spec)) return null;
+        var parts = spec.Split('|');
+        var file = parts[0];
+        int index = parts.Length > 1 && int.TryParse(parts[1], out var i) ? i : 0;
+        if (!System.IO.File.Exists(file)) return null;
+        var ext = System.IO.Path.GetExtension(file).ToLowerInvariant();
+        return ext is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" or ".ico"
+            ? PackageInfo.LoadImage(file)
+            : ModernShell.Core.IconHelper.FromFile(file, index);
+    }
+
+    /// <summary>ファイルを選んでアイコンを差し替える（.ico / .png などの画像、または .exe / .dll の最初のアイコン）。</summary>
+    private void ChooseIcon(string key)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "アイコンを選ぶ",
+            Filter = "アイコン・画像・プログラム (*.ico;*.png;*.jpg;*.exe;*.dll)|*.ico;*.png;*.jpg;*.jpeg;*.exe;*.dll|すべてのファイル (*.*)|*.*",
+            CheckFileExists = true,
+        };
+        if (dlg.ShowDialog() != true) return;
+        _settings.CustomIcons[key] = dlg.FileName + "|0";
+        _settings.Save();
     }
 
     private static string Truncate(string s, int n) => s.Length <= n ? s : s.Substring(0, n - 1) + "…";

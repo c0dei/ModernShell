@@ -69,6 +69,8 @@ public sealed class Settings
     public TaskbarPinSource TaskbarPinSource { get; set; } = TaskbarPinSource.Windows;
     /// <summary>「Windows と共有」のとき、Windows のピン留めの後ろに ModernShell 側で追加したピン留め。</summary>
     public List<string> PinnedTaskbarExtra { get; set; } = new();
+    /// <summary>タスクバーのアプリごとのアイコンの差し替え（アプリ ID → "ファイルパス|番号"）。</summary>
+    public Dictionary<string, string> CustomIcons { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>タスクバーのアプリアイコンの大きさ (px)。</summary>
     public int TaskbarIconSize { get; set; } = 24;
 

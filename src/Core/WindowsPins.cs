@@ -92,6 +92,7 @@ public sealed class WindowsPins : IDisposable
         }
 
         var found = new List<(int pos, AppEntry app)>();
+        bool haveOrder = blob.Length > 16;
 
         // デスクトップアプリ（.lnk）
         foreach (var lnk in lnkFiles)
@@ -108,7 +109,18 @@ public sealed class WindowsPins : IDisposable
                           Id = lnk, Name = Path.GetFileNameWithoutExtension(lnk), ExePath = target,
                           Aumid = info?.Aumid, LaunchArgs = info?.Arguments, ShortcutPath = lnk,
                       };
-            int pos = Position(name);
+
+            // 並び順データの中での位置。ショートカット名だけでなく、8.3 形式の短い名前・AUMID・リンク先 exe 名でも探す
+            var candidates = new[] { name, ShortName(lnk), info?.Aumid, target != null ? Path.GetFileName(target) : null };
+            // 優先順（ショートカット名 → 短い名前 → AUMID → exe 名）で最初に見つかった位置を使う。
+            // exe 名などは他のピン留めの中にも出てくることがあるので、全候補の最小値は取らない
+            int pos = candidates.Where(c => !string.IsNullOrEmpty(c)).Select(c => Position(c!)).FirstOrDefault(p => p >= 0, -1);
+            if (pos < 0 && haveOrder)
+            {
+                // 並び順データに無いショートカットは、ピン留めを外したあとに残った古いファイルとみなして除外する
+                Log.Info($"windows pins: skip stale shortcut {name}");
+                continue;
+            }
             found.Add((pos < 0 ? int.MaxValue - 1000 + found.Count : pos, app));
         }
 
@@ -120,11 +132,22 @@ public sealed class WindowsPins : IDisposable
                 found.Add((pos, app));
         }
 
+        foreach (var f in found.OrderBy(f => f.pos)) Log.Info($"windows pins: {f.pos,6} {f.app.Name}");
         return found.OrderBy(f => f.pos).Select(f => f.app)
             .GroupBy(a => a.Id, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
     }
 
     internal static string? ShortcutTarget(string lnk) => Shortcut.Read(lnk)?.Target;
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern uint GetShortPathName(string longPath, StringBuilder shortPath, uint size);
+
+    /// <summary>8.3 形式の短いファイル名（並び順データに短い名前で入っていることがある）。</summary>
+    private static string? ShortName(string path)
+    {
+        var sb = new StringBuilder(512);
+        return GetShortPathName(path, sb, (uint)sb.Capacity) > 0 ? Path.GetFileName(sb.ToString()) : null;
+    }
 
     private void OnCatalogChanged() => ThreadPool.QueueUserWorkItem(_ => Refresh(force: true));
 
