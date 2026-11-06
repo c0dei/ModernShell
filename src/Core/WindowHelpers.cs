@@ -48,7 +48,23 @@ internal static class KnownApps
         ["Microsoft.Office.EXCEL.EXE.15"] = "excel.exe",
         ["Microsoft.Office.POWERPNT.EXE.15"] = "powerpnt.exe",
         ["Microsoft.Office.OUTLOOK.EXE.15"] = "outlook.exe",
+        ["Microsoft.Windows.RemoteDesktop"] = "mstsc.exe",
     };
+
+    private static readonly Dictionary<string, string?> ShortcutExe = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>ショートカットのリンク先 exe（読み取り結果を覚えておく）。</summary>
+    private static string? TargetExe(string lnk)
+    {
+        lock (ShortcutExe)
+        {
+            if (ShortcutExe.TryGetValue(lnk, out var cached)) return cached;
+            var t = Shortcut.Read(lnk)?.Target;
+            t = t != null && t.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? Environment.ExpandEnvironmentVariables(t) : null;
+            ShortcutExe[lnk] = t;
+            return t;
+        }
+    }
 
     /// <summary>ピン留めアプリと実行中ウィンドウ（AUMID / exe フルパス）が同じアプリか。</summary>
     public static bool Matches(AppEntry app, string? aumid, string? exePath)
@@ -58,12 +74,14 @@ internal static class KnownApps
                               || string.Equals(aumid, app.Aumid, StringComparison.OrdinalIgnoreCase))) return true;
         if (exePath == null) return false;
         var exeName = Path.GetFileName(exePath);
-        if (app.ExePath != null)
+        // 一覧の項目が AUMID だけで実行ファイルを持たないとき（リモート デスクトップ接続など）は、ショートカットのリンク先を使う
+        var appExe = app.ExePath ?? (app.ShortcutPath != null ? TargetExe(app.ShortcutPath) : null);
+        if (appExe != null)
         {
             // 2) 実行ファイルが同じ
-            if (string.Equals(app.ExePath, exePath, StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(appExe, exePath, StringComparison.OrdinalIgnoreCase)) return true;
             // 3) 同じ名前の exe（バージョン番号付きフォルダに入るアプリなど。ランチャー類の汎用名は除く）
-            var pinnedName = Path.GetFileName(app.ExePath);
+            var pinnedName = Path.GetFileName(appExe);
             if (string.Equals(pinnedName, exeName, StringComparison.OrdinalIgnoreCase) && !GenericExe.Contains(exeName)) return true;
         }
         // 4) ランチャー経由（例: Update.exe --processStart Discord.exe）: 引数に実行中の exe 名が含まれる

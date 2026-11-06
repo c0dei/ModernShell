@@ -176,9 +176,28 @@ public sealed class WindowsPins : IDisposable
             }
         }
 
+        LogFavoritesOnce(text0, text1);
         foreach (var f in found.OrderBy(f => f.pos)) Log.Info($"windows pins: {f.pos,6} {f.app.Name}");
         return found.OrderBy(f => f.pos).Select(f => f.app)
             .GroupBy(a => a.Id, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
+    }
+
+    private static bool _loggedFavorites;
+
+    /// <summary>
+    /// 照合できないピン留めを調べるため、並び順データに含まれるショートカット名などを 1 度だけログに残す
+    /// （アプリ名・ファイル名だけで、それ以外の内容は書かない）。
+    /// </summary>
+    private static void LogFavoritesOnce(string text0, string text1)
+    {
+        if (_loggedFavorites) return;
+        _loggedFavorites = true;
+        var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var text in new[] { text0, text1 })
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, @"[^\x00-\x1F\\/:*?""<>|]{2,80}\.(lnk|exe)\b|[A-Za-z0-9._-]{3,}![A-Za-z0-9._-]+|MSEdge[A-Za-z0-9._-]*",
+                         System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                names.Add(m.Value.Trim());
+        Log.Info("windows pins: favorites mentions " + string.Join(" | ", names));
     }
 
     private static bool SameApp(AppEntry a, AppEntry b)
