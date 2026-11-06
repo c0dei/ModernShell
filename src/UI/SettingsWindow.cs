@@ -321,16 +321,16 @@ public sealed class SettingsWindow : Window
         p.Children.Add(Swatches());
 
         p.Children.Add(Section("効果"));
-        p.Children.Add(DropDownRow("背景効果", "スタートメニューとタスクバーの素材",
+        p.Children.Add(DropDownRow("スタート メニューの背景", "スタートメニューと設定画面の素材（タスクバーは下の「タスクバーの背景」で選びます）",
             new[] { ("Acrylic", "Acrylic"), ("Mica", "Mica"), ("Solid", "なし（単色）") }, _s.Backdrop.ToString(), v => _s.Backdrop = Enum.Parse<BackdropKind>(v)));
         p.Children.Add(DropDownRow("背景効果の描画方式", "透けない場合は「Acrylic ぼかし」を試してください",
             new[] { ("Auto", "自動"), ("SystemBackdrop", "Windows 11 標準（22H2 以降）"), ("AccentBlur", "Acrylic ぼかし（互換）") },
             _s.BackdropEngine.ToString(), v => _s.BackdropEngine = Enum.Parse<BackdropEngine>(v)));
-        p.Children.Add(DropDownRow("タスクバーの下地", "不透明度 0% のときに見える素材です",
-            new[] { ("Blur", "ぼかしのみ"), ("Clear", "完全に透明（ぼかしなし）"), ("Acrylic", "Acrylic（すりガラス）") },
-            _s.TaskbarMaterial.ToString(), v => _s.TaskbarMaterial = Enum.Parse<TaskbarMaterial>(v), _s.Backdrop != BackdropKind.Solid));
-        p.Children.Add(SliderRow("タスクバーの不透明度", "下地の上に重ねる色の濃さ。0 で下地のまま、100 で不透明",
-            _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.Backdrop != BackdropKind.Solid));
+        p.Children.Add(DropDownRow("タスクバーの背景", "Mica は常に非アクティブなタスクバーでは単色になるため選べません。不透明度 0% のときはこの素材がそのまま見えます",
+            new[] { ("Blur", "ぼかしのみ"), ("Clear", "完全に透明（ぼかしなし）"), ("Acrylic", "Acrylic（すりガラス）"), ("Solid", "なし（単色）") },
+            _s.TaskbarMaterial.ToString(), v => _s.TaskbarMaterial = Enum.Parse<TaskbarMaterial>(v)));
+        p.Children.Add(SliderRow("タスクバーの不透明度", "背景の上に重ねる色の濃さ。0 で背景のまま、100 で不透明",
+            _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.TaskbarMaterial != TaskbarMaterial.Solid || _s.ForceRoundCorners));
         p.Children.Add(SliderRow("スタート メニューの不透明度", "0 で標準の Acrylic / Mica。上げるほど濃くなります",
             _s.StartMenuOpacity, v => _s.StartMenuOpacity = v, _s.Backdrop != BackdropKind.Solid));
         p.Children.Add(DropDownRow("メニューの文字サイズ", "右クリックメニュー・ジャンプリスト・サブメニュー共通",

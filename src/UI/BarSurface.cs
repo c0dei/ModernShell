@@ -68,7 +68,9 @@ public sealed class BarSurface : Window
         Win32.SetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE, (IntPtr)(ex | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_NOACTIVATE));
         // タスクバーは常に非アクティブなので Windows 標準の背景効果は使えない（単色化する）。下地は設定の素材、濃さは重ねる色で付ける
         if (!_selfDrawn)
-            Backdrop.Apply(this, settings.Backdrop, BackdropEngine.AccentBlur, Theme.Current, alwaysInactive: true,
+            // タスクバーの背景は「タスクバーの背景」設定だけで決める（スタートメニューの背景設定とは独立）
+            Backdrop.Apply(this, settings.TaskbarMaterial == TaskbarMaterial.Solid ? BackdropKind.Solid : BackdropKind.Acrylic,
+                BackdropEngine.AccentBlur, Theme.Current, alwaysInactive: true,
                 tint: settings.TaskbarOpacity / 100.0, material: settings.TaskbarMaterial);
         HwndSource.FromHwnd(hwnd)!.AddHook(WndProc);
 

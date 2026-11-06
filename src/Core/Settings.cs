@@ -15,7 +15,7 @@ public enum TaskbarEdge { Bottom, Top }
 public enum StartButtonPosition { WithApps, LeftEdge }
 public enum BackdropEngine { Auto, SystemBackdrop, AccentBlur }
 /// <summary>タスクバーの下地。Acrylic: Windows 11 のすりガラス（明るさの層とノイズ入り） / Blur: ぼかしのみ / Clear: 完全に透明</summary>
-public enum TaskbarMaterial { Acrylic, Blur, Clear }
+public enum TaskbarMaterial { Acrylic, Blur, Clear, Solid }
 /// <summary>スタートメニューを開く位置。Auto: スタートボタンの位置に合わせる</summary>
 public enum StartMenuPosition { Auto, Left, Center }
 /// <summary>タスクバーのピン留めの出どころ。Windows: Windows のタスクバーと同じ内容・並び順（読み取り） / ModernShell: 独自に管理</summary>
