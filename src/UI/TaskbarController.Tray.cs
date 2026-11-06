@@ -54,7 +54,9 @@ public sealed partial class TaskbarController
             Padding = new Thickness(10, 0, 10, 0), Height = TileH, Margin = new Thickness(2, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
             Child = UiKit.Row(_network, volume, _battery), ToolTip = "クイック設定 (Win+A)",
         };
-        quick.Click += _ => SystemActions.QuickSettings();
+        // Win+A / Win+N のキー操作で開く。管理者として動くアプリ（タスク マネージャーなど）が前面だと、
+        // Windows は他のアプリからのキー操作をそこへ届けない（UIPI）ので、先にタスクバーが前面になってから送る
+        quick.Click += x => { TakeForeground(x); SystemActions.QuickSettings(); };
         p.Children.Add(quick);
 
         _time = UiKit.Label("", 12);
@@ -69,7 +71,7 @@ public sealed partial class TaskbarController
             Padding = new Thickness(10, 0, 10, 0), Height = TileH, Margin = new Thickness(2, 0, 2, 0),
             VerticalAlignment = VerticalAlignment.Center, Child = clockStack, ToolTip = "通知とカレンダー (Win+N)",
         };
-        clock.Click += _ => SystemActions.NotificationCenter();
+        clock.Click += x => { TakeForeground(x); SystemActions.NotificationCenter(); };
         p.Children.Add(clock);
         return p;
     }
@@ -157,6 +159,7 @@ public sealed partial class TaskbarController
                 if (dragToBar) e.Handled = true;
                 return;
             }
+            TakeForeground(tile); // 前面のアプリが何であっても、フライアウトやメニューを開けるように
             icon.IconMouseDown(e.ChangedButton, MouseHelper.GetCursorPositionParam(), dbl);
             e.Handled = true;
         };
@@ -181,6 +184,7 @@ public sealed partial class TaskbarController
                 if (draggedOut || reorder?.IsDragging == true) return; // ドラッグだった
                 if (reorder?.ConsumeDragged() == true) return;
                 SetPlacement(icon, tile);
+                TakeForeground(tile);
                 icon.IconMouseDown(MouseButton.Left, MouseHelper.GetCursorPositionParam(), dbl);
             }
             SetPlacement(icon, tile);

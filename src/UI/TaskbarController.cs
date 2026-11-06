@@ -365,7 +365,7 @@ public sealed partial class TaskbarController : IDisposable
     {
         var p = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         var start = new Tile { Width = TileW, Height = TileH, Margin = new Thickness(2, 0, 2, 0), Child = UiKit.StartLogo(Math.Round(IconSz * 0.75), t.AccentBrush), ToolTip = "スタート" };
-        start.Click += _ => StartClicked?.Invoke();
+        start.Click += x => { TakeForeground(x); StartClicked?.Invoke(); };
         start.RightClick += x => Flyout.Show(x, new[]
         {
             new MenuItemSpec("", "Win+X メニュー", SystemActions.PowerUserMenu),
@@ -387,7 +387,8 @@ public sealed partial class TaskbarController : IDisposable
     private Tile SmallButton(string glyph, string tip, Action onClick, Action<Tile>? configure = null)
     {
         var tile = new Tile { Width = TileW, Height = TileH, Margin = new Thickness(2, 0, 2, 0), Child = UiKit.Glyph(glyph, GlyphSz), ToolTip = tip };
-        tile.Click += _ => onClick();
+        // 検索・タスク ビューはキー操作を送って開くので、管理者として動くアプリが前面でも届くよう先に前面になる
+        tile.Click += x => { TakeForeground(x); onClick(); };
         configure?.Invoke(tile);
         return tile;
     }

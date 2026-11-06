@@ -147,11 +147,11 @@ public sealed partial class TaskbarController
 
         tile.Click += x =>
         {
-            if (g.Windows.Count == 0) g.Pinned?.Launch();
-            else if (g.Windows.Count == 1) ToggleWindow(g.Windows[0]);
+            if (g.Windows.Count == 0) { TakeForeground(x); g.Pinned?.Launch(); }
+            else if (g.Windows.Count == 1) ToggleWindow(g.Windows[0], x);
             else WindowList(x, g);
         };
-        tile.MiddleClick += _ => (g.Pinned ?? FindApp(g.Windows.FirstOrDefault()))?.Launch();
+        tile.MiddleClick += x => { TakeForeground(x); (g.Pinned ?? FindApp(g.Windows.FirstOrDefault()))?.Launch(); };
         tile.RightClick += x => Flyout.Show(x, GroupMenu(g), FlyoutPlacement);
         return tile;
     }
@@ -220,10 +220,26 @@ public sealed partial class TaskbarController
     }
 
     /// <summary>前面（アクティブ）なら最小化、それ以外は前面化（最小化中なら復元）。</summary>
-    private static void ToggleWindow(ApplicationWindow w)
+    private static void ToggleWindow(ApplicationWindow w, DependencyObject from)
     {
         if (w.State == ApplicationWindow.WindowState.Active && !w.IsMinimized) w.Minimize();
-        else w.BringToFront();
+        else { TakeForeground(from); w.BringToFront(); }
+    }
+
+    /// <summary>
+    /// クリックを受けたタスクバー（またはポップアップ）を一瞬前面にする。
+    /// タスクバーはクリックしてもアクティブにならない作りなので、そのままだと Windows から「前面のアプリ」と見なされず、
+    /// 他のアプリ（管理者として動くタスク マネージャーや、開いている音量・通知のフライアウトなど）が前面にあるとき、
+    /// アプリを前面に出したりトレイのフライアウトを開いたりする権利（前面ウィンドウの切り替え）を渡せない。
+    /// 直前にクリックを受けたのは自分なので、Windows はこの切り替えを許可する。
+    /// 「前面のアプリをクリックで最小化」の判定には影響しない（判定のあと、前面に出すときだけ呼ぶ）。
+    /// </summary>
+    internal static void TakeForeground(DependencyObject from)
+    {
+        if (PresentationSource.FromDependencyObject(from) is not System.Windows.Interop.HwndSource src) return;
+        var h = src.Handle;
+        if (Win32.GetForegroundWindow() == h) return;
+        if (!Win32.SetForegroundWindow(h)) Log.Info("take foreground failed");
     }
 
     private AppEntry? FindApp(ApplicationWindow? w)
@@ -256,7 +272,7 @@ public sealed partial class TaskbarController
 
     private void WindowList(UIElement target, Group g) =>
         Flyout.Show(target, g.Windows.Select(w =>
-            new MenuItemSpec("", Truncate(w.Title ?? "", 48), () => w.BringToFront())), FlyoutPlacement);
+            new MenuItemSpec("", Truncate(w.Title ?? "", 48), () => { TakeForeground(target); w.BringToFront(); })), FlyoutPlacement);
 
     private IEnumerable<MenuItemSpec> GroupMenu(Group g)
     {
