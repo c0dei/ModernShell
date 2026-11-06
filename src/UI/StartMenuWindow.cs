@@ -91,10 +91,15 @@ public sealed class StartMenuWindow : Window
         Closed += (_, _) => _closed = true;
         Deactivated += (_, _) => HideMenu();
         PreviewKeyDown += OnPreviewKeyDown;
-        Theme.Changed += () => Dispatcher.BeginInvoke(Rebuild);
+        Action onTheme = () => Dispatcher.BeginInvoke(Rebuild);
         // ウィジェットの表示切替などを反映（開いている最中は閉じたときに反映される）
-        _settings.Changed += () => Dispatcher.BeginInvoke(() => { if (!IsVisible) Rebuild(); });
-        _catalog.Changed += () => Dispatcher.BeginInvoke(() => { if (IsVisible && _page != Page.Search) ShowPage(_page); });
+        Action onSettings = () => Dispatcher.BeginInvoke(() => { if (!IsVisible) Rebuild(); });
+        Action onCatalog = () => Dispatcher.BeginInvoke(() => { if (IsVisible && _page != Page.Search) ShowPage(_page); });
+        Theme.Changed += onTheme;
+        _settings.Changed += onSettings;
+        _catalog.Changed += onCatalog;
+        // 描画方式の切り替えで作り直したとき、古いウィンドウが購読経由で残らないようにする
+        Closed += (_, _) => { Theme.Changed -= onTheme; _settings.Changed -= onSettings; _catalog.Changed -= onCatalog; _widgets?.Close(); };
 
         // 不可視のままハンドルを作っておく（TaskbarCreated 等のブロードキャストを受け取るため）
         var hwnd = new WindowInteropHelper(this).EnsureHandle();

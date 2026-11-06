@@ -42,7 +42,9 @@ jobs:
           --self-contained true
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:EnableCompressionInSingleFile=true
+          # 圧縮すると起動時に .NET 本体や WPF の DLL をメモリ上に展開するため、使用メモリが数十 MB 増える（2 プロセス分）。
+          # exe は大きくなるが、圧縮しなければ exe から直接読み込める
+          -p:EnableCompressionInSingleFile=false
           -p:DebugType=none
           -p:Version=${{ steps.ver.outputs.version }}
           -o publish

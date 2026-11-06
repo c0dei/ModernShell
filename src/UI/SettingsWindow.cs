@@ -57,7 +57,10 @@ public sealed class SettingsWindow : Window
         FontSize = 14;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         SourceInitialized += (_, _) => Build();
-        Theme.Changed += () => Dispatcher.BeginInvoke(() => { if (IsLoaded) Build(); });
+        // Theme は全体で 1 つ（static）なので、閉じたら購読を外す。外さないと閉じた設定画面が丸ごとメモリに残り続ける
+        Action onTheme = () => Dispatcher.BeginInvoke(() => { if (IsLoaded) Build(); });
+        Theme.Changed += onTheme;
+        Closed += (_, _) => { Theme.Changed -= onTheme; Content = null; MemoryHousekeeping.Compact("settings closed"); };
     }
 
     private Theme T => Theme.Current;

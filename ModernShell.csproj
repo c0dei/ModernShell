@@ -18,7 +18,14 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <!-- WinForms 用の高 DPI 警告。DPI は app.manifest (PerMonitorV2) で WPF と共通に設定している -->
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
+    <!-- 常駐アプリなので、速さより使用メモリの少なさを優先する GC 設定 -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>false</TieredPGO>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- 断片化した大きなオブジェクト領域も詰めて、空いたメモリを OS に返しやすくする (0-9) -->
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
+  </ItemGroup>
   <ItemGroup>
     <!-- 通知領域（トレイ）とタスク一覧。RetroBar / Cairo Shell と同じ、explorer に注入しない方式のライブラリ (Apache-2.0) -->
     <PackageReference Include="ManagedShell" Version="0.0.374" />
