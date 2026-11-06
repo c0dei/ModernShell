@@ -53,7 +53,8 @@ public sealed class Settings
     /// <summary>帯型のとき画面の端（左右と下/上）から離す距離 (DIP)。0 より大きいと角丸になる。</summary>
     public int BandMargin { get; set; } = 0;
     /// <summary>Windows が角丸を描かない環境（仮想マシン、リモートデスクトップ等）でも、ウィンドウを角丸に切り抜く。</summary>
-    public bool ForceRoundCorners { get; set; } = false;
+    // GPU の無い PC（Windows がぼかし・透過・角丸を描かない）を前提に、初期状態は ModernShell が自分で描く
+    public bool ForceRoundCorners { get; set; } = true;
     /// <summary>アイランド型のときホバーでアイコンを拡大する。</summary>
     public bool MagnifyOnHover { get; set; } = true;
     /// <summary>開くときのアニメーション（それぞれ切り替えられる）。</summary>
@@ -91,7 +92,7 @@ public sealed class Settings
     public int MenuFontSize { get; set; } = 14;
     /// <summary>タスクバー背景の不透明度 (0 = ぼかしだけ ～ 100 = 不透明)。</summary>
     public int TaskbarOpacity { get; set; } = 60;
-    public TaskbarMaterial TaskbarMaterial { get; set; } = TaskbarMaterial.Blur;
+    public TaskbarMaterial TaskbarMaterial { get; set; } = TaskbarMaterial.MicaLike;
     /// <summary>スタートメニュー背景の不透明度 (0 = 標準の Acrylic/Mica のまま ～ 100 = 不透明)。</summary>
     public int StartMenuOpacity { get; set; } = 0;
     /// <summary>背景効果の描画方式。Auto: Win11 22H2 以降は公式 API、それ以外は Acrylic ぼかし。</summary>
@@ -157,7 +158,7 @@ public sealed class Settings
     /// WPF の描画に GPU を使うか。オフにすると GPU ドライバー（NVIDIA なら 100 MB 超の DLL 群）を読み込まないので
     /// 使用メモリが減る。背景のぼかし（Acrylic / Mica）は Windows が描くので影響しない。変更は再起動で反映。
     /// </summary>
-    public bool UseGpuRendering { get; set; } = true;
+    public bool UseGpuRendering { get; set; } = false;
 
     // ---------------------------------------------------------------
     [JsonIgnore]

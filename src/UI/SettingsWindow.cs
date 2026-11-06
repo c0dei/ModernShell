@@ -468,12 +468,12 @@ public sealed class SettingsWindow : Window
                     _s.TaskbarMaterial == TaskbarMaterial.MicaLike ? "MicaLike" : "Clear",
                     v => _s.TaskbarMaterial = Enum.Parse<TaskbarMaterial>(v), _s.UseCustomTaskbar)
                 : DropDownRow("タスクバーの背景",
-                    "ぼかしのみ: 後ろをそのままぼかす。Acrylic: ぼかしに細かい粒子と白っぽい明るさの層が加わり、すりガラスのように見える" +
-                    "（違いは不透明度を 0〜20% にすると分かりやすい）。Mica 風: 後ろのウィンドウではなく壁紙を強くぼかす",
+                    "Mica 風: 壁紙を強くぼかした色を下地にする（GPU が無くても描ける）。" +
+                    "ぼかしのみ・Acrylic は後ろのウィンドウを Windows がぼかすので、GPU が無い PC では単色になります",
                     new[]
                     {
-                        ("Blur", "ぼかしのみ"), ("Acrylic", "Acrylic（すりガラス・粒子あり）"), ("MicaLike", "Mica 風（壁紙をぼかす）"),
-                        ("Clear", "完全に透明（ぼかしなし）"), ("Solid", "なし（単色）"),
+                        ("MicaLike", "Mica 風（壁紙をぼかす）"), ("Clear", "完全に透明（ぼかしなし）"), ("Solid", "なし（単色）"),
+                        ("Blur", "ぼかしのみ（GPU が必要）"), ("Acrylic", "Acrylic（GPU が必要）"),
                     },
                     _s.TaskbarMaterial.ToString(), v => _s.TaskbarMaterial = Enum.Parse<TaskbarMaterial>(v), _s.UseCustomTaskbar),
             SliderRow("タスクバーの不透明度", "背景の上に重ねる色の濃さ。0 で背景のまま、100 で不透明",
