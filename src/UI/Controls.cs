@@ -119,14 +119,13 @@ public static class UiKit
         VerticalAlignment = VerticalAlignment.Center,
     };
 
-    public static Image Icon(ImageSource? src, double size) => new()
+    public static Image Icon(ImageSource? src, double size)
     {
-        Source = src,
-        Width = size,
-        Height = size,
-        Stretch = Stretch.Uniform,
-        SnapsToDevicePixels = true,
-    };
+        var img = new Image { Source = src, Width = size, Height = size, Stretch = Stretch.Uniform, SnapsToDevicePixels = true };
+        // 大きめの絵を縮小して表示するので、なめらかに縮小する（既定の縮小は粗くギザギザになりやすい）
+        RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+        return img;
+    }
 
     /// <summary>Windows ロゴ風の 4 枚タイル（グリフに頼らず描画）。</summary>
     public static FrameworkElement StartLogo(double size, Brush fill)

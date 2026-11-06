@@ -132,6 +132,9 @@ internal static class IconHelper
     public static ImageSource? Exact(string file, int index, int sizePx)
     {
         if (string.IsNullOrEmpty(file) || !System.IO.File.Exists(file)) return null;
+        // アイコンの中身はふつう 16 / 24 / 32 / 48 / 64 / 256 px の絵しか持っていない。中途半端な大きさ（150% 表示の 36 px など）を頼むと
+        // 小さい絵（32 px）が選ばれて引き伸ばされ、ぼやける。標準の大きさのうち表示サイズ以上のものを取り出して、縮小して表示する
+        sizePx = StandardSizeAtLeast(sizePx);
         var key = "exact|" + file + "|" + index + "|" + sizePx;
         return Cached(key, _ =>
         {
@@ -146,6 +149,14 @@ internal static class IconHelper
             catch { return null; }
             finally { if (icons[0] != IntPtr.Zero) Win32.DestroyIcon(icons[0]); }
         });
+    }
+
+    private static readonly int[] StandardSizes = { 16, 24, 32, 48, 64, 96, 128, 256 };
+
+    private static int StandardSizeAtLeast(int px)
+    {
+        foreach (var s in StandardSizes) if (s >= px) return s;
+        return 256;
     }
 
     /// <summary>

@@ -363,7 +363,9 @@ public sealed partial class TaskbarController
     /// </summary>
     private ImageSource? AppIcon(Group g)
     {
-        int px = (int)Math.Round(IconSz * (_surfaces.FirstOrDefault()?.Scale ?? 1.0));
+        // 表示倍率: タスクバーがまだ無いとき（作り直しの途中など）は Windows 全体の倍率を使う（1.0 と決め打ちすると小さい絵になる）
+        double scale = _surfaces.FirstOrDefault()?.Scale ?? (Win32.GetDpiForSystem() is var d and > 0 ? d / 96.0 : 1.0);
+        int px = (int)Math.Round(IconSz * scale);
         var w0 = g.Windows.FirstOrDefault();
         var app = g.Pinned ?? (w0 != null ? FindApp(w0) : null);
         if (app?.ShortcutPath is { } lnk && System.IO.File.Exists(lnk) && ModernShell.Core.IconHelper.ForShortcut(lnk, px) is { } fromLnk) return fromLnk;
