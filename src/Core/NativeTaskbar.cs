@@ -44,6 +44,7 @@ public static class NativeTaskbar
     /// <summary>記録があれば純正タスクバーを元の状態に戻して表示する。記録がなければ何もしない。</summary>
     public static bool Restore()
     {
+        RestoreStartAlignment();
         lock (Gate)
         {
             int state = LoadPersisted();
@@ -76,6 +77,55 @@ public static class NativeTaskbar
         }
         catch { }
     }
+    // ---- Windows のタスクバーの配置（Windows 標準のスタートメニューを開く位置もこれに従う） ----
+    private const string AdvancedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
+    private static string AlignFile => System.IO.Path.Combine(Settings.Directory, "taskbar-align.txt");
+
+    /// <summary>
+    /// Windows 標準のスタートを左/中央のどちらに開くか（= Windows の「タスクバーの配置」）を変える。
+    /// ModernShell のタスクバー使用中だけ使い、元の値は記録しておいて終了時・ウォッチドッグで戻す。
+    /// </summary>
+    public static void SetStartAlignment(bool center)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(AdvancedKey);
+            int current = key.GetValue("TaskbarAl") is int v ? v : 1;
+            int want = center ? 1 : 0;
+            if (current == want) return;
+            if (!System.IO.File.Exists(AlignFile))
+            {
+                System.IO.Directory.CreateDirectory(Settings.Directory);
+                System.IO.File.WriteAllText(AlignFile, current.ToString());
+            }
+            key.SetValue("TaskbarAl", want, Microsoft.Win32.RegistryValueKind.DWord);
+            NotifyTraySettings();
+        }
+        catch (Exception ex) { Log.Error("start alignment", ex); }
+    }
+
+    /// <summary>ModernShell が変えた「タスクバーの配置」を元に戻す。</summary>
+    public static void RestoreStartAlignment()
+    {
+        try
+        {
+            if (!System.IO.File.Exists(AlignFile)) return;
+            int original = int.Parse(System.IO.File.ReadAllText(AlignFile));
+            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(AdvancedKey);
+            key.SetValue("TaskbarAl", original, Microsoft.Win32.RegistryValueKind.DWord);
+            System.IO.File.Delete(AlignFile);
+            NotifyTraySettings();
+        }
+        catch (Exception ex) { Log.Error("restore start alignment", ex); }
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, IntPtr wParam, string lParam, uint flags, uint timeout, out IntPtr result);
+
+    /// <summary>explorer に設定の変更を知らせる（Windows の設定アプリで切り替えたときと同じ通知）。</summary>
+    private static void NotifyTraySettings() =>
+        SendMessageTimeout((IntPtr)0xFFFF, Win32.WM_SETTINGCHANGE, IntPtr.Zero, "TraySettings", 0x2 /*SMTO_ABORTIFHUNG*/, 1000, out _);
+
     private static int LoadPersisted()
     {
         try { return int.Parse(System.IO.File.ReadAllText(StateFile)); } catch { return -1; }

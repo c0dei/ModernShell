@@ -147,7 +147,7 @@ public sealed class TaskbarController : IDisposable
         _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarHeight, _settings.TaskbarIconSize, _settings.IslandMargin,
         _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds, _settings.Backdrop, _settings.BackdropEngine,
         _settings.MagnifyOnHover, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
-        _settings.TaskbarOpacity, _settings.TaskbarMaterial);
+        _settings.TaskbarOpacity, _settings.TaskbarMaterial, _settings.BandMargin, _settings.ForceRoundCorners);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e) => _dispatcher.BeginInvoke(UpdateStatus);
 
     // ------------------------------------------------------------------
@@ -192,7 +192,7 @@ public sealed class TaskbarController : IDisposable
             tray.Children.Add(ShowDesktopSliver());
             Place(grid, tray, 2, HorizontalAlignment.Right);
             AddSurface(BarSurface.Anchor.Fill, h, grid);
-            _reservation.Reserve(IsTop, h);
+            _reservation.Reserve(IsTop, h + _settings.BandMargin * 2);
         }
         else
         {
@@ -261,7 +261,15 @@ public sealed class TaskbarController : IDisposable
             if (!s.IsLoaded) continue;
             if (s.Placement == BarSurface.Anchor.Fill)
             {
-                s.MoveTo(r.Left, r.Top, r.Width, r.Height, bottomMost);
+                // 帯型: 余白 0 なら画面端に密着（Windows はこの場合角を丸めない）、余白があれば離して角丸にする
+                int bm = (int)Math.Round(_settings.BandMargin * s.Scale);
+                if (bm <= 0) s.MoveTo(r.Left, r.Top, r.Width, r.Height, bottomMost);
+                else
+                {
+                    int bh = (int)Math.Round(_settings.TaskbarHeight * s.Scale);
+                    s.MoveTo(r.Left + bm, IsTop ? r.Top + bm : r.Bottom - bm - bh, r.Width - bm * 2, bh, bottomMost);
+                }
+                s.UpdateRegion(_settings);
                 continue;
             }
             var (w, h) = s.PixelSize;
@@ -274,6 +282,7 @@ public sealed class TaskbarController : IDisposable
                 _ => r.Left + (r.Width - w) / 2,
             };
             s.MoveTo(x, y, bottomMost: bottomMost);
+            s.UpdateRegion(_settings);
         }
         UpdateTrayHostData();
     }
@@ -1195,7 +1204,7 @@ public sealed class TaskbarController : IDisposable
     // ------------------------------------------------------------------
 
     /// <summary>explorer 再起動時など、作業領域の予約をやり直す。</summary>
-    public void Reapply() => _reservation.Reserve(IsTop, Floating ? _settings.TaskbarHeight + _settings.IslandMargin * 2 : _settings.TaskbarHeight);
+    public void Reapply() => _reservation.Reserve(IsTop, Floating ? _settings.TaskbarHeight + _settings.IslandMargin * 2 : _settings.TaskbarHeight + _settings.BandMargin * 2);
 
     public void Dispose()
     {

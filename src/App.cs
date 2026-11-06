@@ -174,6 +174,7 @@ public static class Program
     private static void OnSettingsChanged()
     {
         ApplyTaskbarMode();
+        SyncNativeStartAlignment();
         var key = ThemeKey();
         if (key != _themeKey) { _themeKey = key; Theme.Apply(_settings); }
     }
@@ -214,6 +215,7 @@ public static class Program
             _taskbar.OpenSettingsRequested += ShowSettings;
             _taskbar.ExitRequested += Exit;
             _taskbar.Start();
+            SyncNativeStartAlignment();
         }
         else
         {
@@ -228,7 +230,7 @@ public static class Program
     private static (Win32.RECT bar, bool top, bool center)? StartAnchor()
     {
         if (_taskbar != null)
-            return (_taskbar.BarRect, _taskbar.IsTop, _taskbar.StartCentered);
+            return (_taskbar.BarRect, _taskbar.IsTop, StartCentered(_taskbar.StartCentered));
 
         if (NativeTaskbar.GetTaskbarRect() is not { } r) return null;
         bool center = true;
@@ -241,7 +243,21 @@ public static class Program
         catch { }
         var screenH = (int)(SystemParameters.PrimaryScreenHeight * (Win32.GetDpiForWindow(_start.Handle) / 96.0));
         bool top = r.Top <= 0 && r.Bottom < screenH / 2;
-        return (r, top, center);
+        return (r, top, StartCentered(center));
+    }
+
+    /// <summary>スタートメニューを中央に開くか（設定の「開く位置」。自動ならスタートボタンの位置に合わせる）。</summary>
+    private static bool StartCentered(bool auto) => _settings.StartMenuPosition switch
+    {
+        StartMenuPosition.Left => false,
+        StartMenuPosition.Center => true,
+        _ => auto,
+    };
+
+    /// <summary>ModernShell のタスクバー使用中は、Windows 標準のスタートも同じ位置に開くよう Windows の配置を合わせる。</summary>
+    private static void SyncNativeStartAlignment()
+    {
+        if (_taskbar != null) NativeTaskbar.SetStartAlignment(StartCentered(_taskbar.StartCentered));
     }
 
     private static uint _taskbarCreatedMsg;

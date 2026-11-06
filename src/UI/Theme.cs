@@ -241,6 +241,29 @@ public static class Backdrop
         }
     }
 
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateRoundRectRgn(int x1, int y1, int x2, int y2, int w, int h);
+    [DllImport("user32.dll")] private static extern int SetWindowRgn(IntPtr hwnd, IntPtr rgn, bool redraw);
+
+    /// <summary>
+    /// 「角丸を強制する」がオンのとき、ウィンドウの形そのものを角丸に切り抜く（Windows が角丸を描かない
+    /// 仮想マシン・リモートデスクトップ等のため）。オフなら切り抜きを外して Windows の角丸に任せる。
+    /// </summary>
+    public static void UpdateRegion(IntPtr hwnd, int widthPx, int heightPx, Settings s, double dpiScale)
+    {
+        try
+        {
+            if (!s.ForceRoundCorners || s.CornerRadius <= 0 || widthPx <= 0 || heightPx <= 0)
+            {
+                SetWindowRgn(hwnd, IntPtr.Zero, true);
+                return;
+            }
+            int d = (int)Math.Round(s.CornerRadius * 2 * dpiScale);
+            // 領域の所有権は Windows に移るので解放しない
+            SetWindowRgn(hwnd, CreateRoundRectRgn(0, 0, widthPx + 1, heightPx + 1, d, d), true);
+        }
+        catch { }
+    }
+
     internal enum AccentState { Disabled = 0, TransparentGradient = 2, BlurBehind = 3, AcrylicBlurBehind = 4 }
 
     [StructLayout(LayoutKind.Sequential)]

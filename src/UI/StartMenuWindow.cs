@@ -151,6 +151,7 @@ public sealed class StartMenuWindow : Window
             y = (int)(work.Bottom * scale) - h - gap;
         }
         Win32.SetWindowPos(Handle, Win32.HWND_TOPMOST, x, y, w, h, Win32.SWP_NOACTIVATE);
+        Backdrop.UpdateRegion(Handle, w, h, _settings, scale);
     }
 
     // ------------------------------------------------------------------

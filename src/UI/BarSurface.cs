@@ -81,6 +81,12 @@ public sealed class BarSurface : Window
     /// <summary>現在の大きさ（物理ピクセル）。</summary>
     public (int w, int h) PixelSize => ((int)Math.Round(ActualWidth * Scale), (int)Math.Round(ActualHeight * Scale));
 
+    /// <summary>今の大きさに合わせて「角丸を強制する」の切り抜きを更新する。</summary>
+    public void UpdateRegion(Settings settings)
+    {
+        if (Win32.GetWindowRect(Handle, out var r)) Backdrop.UpdateRegion(Handle, r.Width, r.Height, settings, Scale);
+    }
+
     public void MoveTo(int x, int y, int? w = null, int? h = null, bool bottomMost = false)
     {
         uint flags = Win32.SWP_NOACTIVATE | Win32.SWP_SHOWWINDOW;

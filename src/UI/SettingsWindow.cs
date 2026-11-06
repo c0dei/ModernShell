@@ -161,6 +161,9 @@ public sealed class SettingsWindow : Window
             which, _s.ReplaceStartMenu ? "ModernShell" : "Windows", v => _s.ReplaceStartMenu = v == "ModernShell"));
         p.Children.Add(DropDownRow("スタート ボタンで開くスタート", "タスクバーのスタートボタン（ModernShell / 純正どちらのタスクバーでも）をクリックしたとき",
             which, _s.InterceptNativeStartButton ? "ModernShell" : "Windows", v => _s.InterceptNativeStartButton = v == "ModernShell"));
+        p.Children.Add(DropDownRow("スタート メニューを開く位置", "自動はスタートボタンの位置に合わせます。Windows 標準のスタートも、ModernShell のタスクバー使用中はこの位置に開きます",
+            new[] { ("Auto", "自動"), ("Left", "左"), ("Center", "中央") },
+            _s.StartMenuPosition.ToString(), v => _s.StartMenuPosition = Enum.Parse<StartMenuPosition>(v)));
         p.Children.Add(ToggleRow("開いたときに「すべてのアプリ」を表示", "", _s.ShowAllAppsFirst, v => _s.ShowAllAppsFirst = v));
         p.Children.Add(DropDownRow("ピン留めの列数", "", new[] { ("4", "4 列"), ("5", "5 列"), ("6", "6 列"), ("7", "7 列"), ("8", "8 列") },
             _s.PinnedColumns.ToString(), v => _s.PinnedColumns = int.Parse(v)));
@@ -228,6 +231,9 @@ public sealed class SettingsWindow : Window
         p.Children.Add(DropDownRow("アプリ アイコンの大きさ", "",
             new[] { ("16", "16 px（小）"), ("20", "20 px"), ("24", "24 px（標準）"), ("28", "28 px"), ("32", "32 px（大）") },
             _s.TaskbarIconSize.ToString(), v => _s.TaskbarIconSize = int.Parse(v), on));
+        p.Children.Add(DropDownRow("帯の余白", "画面の端から離します。Windows は画面端に接したウィンドウの角を丸めないので、角丸にしたいときは余白を付けてください",
+            new[] { ("0", "なし（画面端に密着）"), ("4", "4 px"), ("8", "8 px"), ("12", "12 px") },
+            _s.BandMargin.ToString(), v => _s.BandMargin = int.Parse(v), on && !floating));
         p.Children.Add(DropDownRow("アイランドの余白", "画面の端と島のあいだの距離", new[] { ("4", "4 px"), ("8", "8 px"), ("12", "12 px"), ("16", "16 px") },
             _s.IslandMargin.ToString(), v => _s.IslandMargin = int.Parse(v), on && floating));
         p.Children.Add(ToggleRow("検索ボタンを表示", "", _s.ShowSearchButton, v => _s.ShowSearchButton = v, on));
@@ -330,6 +336,8 @@ public sealed class SettingsWindow : Window
             _s.MenuFontSize.ToString(), v => _s.MenuFontSize = int.Parse(v)));
         p.Children.Add(DropDownRow("角の丸み", "", new[] { ("0", "なし"), ("4", "小"), ("8", "標準"), ("12", "大") },
             ((int)_s.CornerRadius).ToString(), v => _s.CornerRadius = double.Parse(v)));
+        p.Children.Add(ToggleRow("角丸を強制する", "仮想マシンやリモートデスクトップなど、Windows 自体が角丸を描かない環境でもスタートメニューとタスクバーを角丸に切り抜きます（ふちは少し粗くなります）",
+            _s.ForceRoundCorners, v => _s.ForceRoundCorners = v, _s.CornerRadius > 0));
         p.Children.Add(InfoBar("透けて見えないときは",
             "Windows の「設定 → 個人用設定 → 色 → 透明効果」がオンになっているか確認してください。オフだとどの方式でも不透明になります。"));
     }

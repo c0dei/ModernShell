@@ -16,6 +16,8 @@ public enum StartButtonPosition { WithApps, LeftEdge }
 public enum BackdropEngine { Auto, SystemBackdrop, AccentBlur }
 /// <summary>タスクバーの下地。Acrylic: Windows 11 のすりガラス（明るさの層とノイズ入り） / Blur: ぼかしのみ / Clear: 完全に透明</summary>
 public enum TaskbarMaterial { Acrylic, Blur, Clear }
+/// <summary>スタートメニューを開く位置。Auto: スタートボタンの位置に合わせる</summary>
+public enum StartMenuPosition { Auto, Left, Center }
 /// <summary>タスクバーのピン留めの出どころ。Windows: Windows のタスクバーと同じ内容・並び順（読み取り） / ModernShell: 独自に管理</summary>
 public enum TaskbarPinSource { Windows, ModernShell }
 /// <summary>Band: 画面端に密着した帯 / Floating: 画面端から浮いた島（アイランド、Mac のドック風）</summary>
@@ -29,6 +31,8 @@ public sealed class Settings
     /// <summary>純正タスクバー使用時、純正スタートボタンのクリックも横取りする。</summary>
     public bool InterceptNativeStartButton { get; set; } = true;
     public int PinnedColumns { get; set; } = 6;
+    /// <summary>スタートメニュー（ModernShell / Windows 標準どちらも）を開く位置。</summary>
+    public StartMenuPosition StartMenuPosition { get; set; } = StartMenuPosition.Auto;
     public bool ShowAllAppsFirst { get; set; } = false;
     public List<string> PinnedStart { get; set; } = new();
 
@@ -46,6 +50,10 @@ public sealed class Settings
     public TaskbarStyle TaskbarStyle { get; set; } = TaskbarStyle.Band;
     /// <summary>アイランド型のとき画面端からの余白 (DIP)。</summary>
     public int IslandMargin { get; set; } = 8;
+    /// <summary>帯型のとき画面の端（左右と下/上）から離す距離 (DIP)。0 より大きいと角丸になる。</summary>
+    public int BandMargin { get; set; } = 0;
+    /// <summary>Windows が角丸を描かない環境（仮想マシン、リモートデスクトップ等）でも、ウィンドウを角丸に切り抜く。</summary>
+    public bool ForceRoundCorners { get; set; } = false;
     /// <summary>アイランド型のときホバーでアイコンを拡大する。</summary>
     public bool MagnifyOnHover { get; set; } = true;
     public bool GroupTaskbarButtons { get; set; } = true;
