@@ -104,9 +104,11 @@ public sealed partial class TaskbarController
         };
         foreach (var icon in pinned)
         {
+            StallDetector.Phase = $"taskbar: tray icon {icon.Title}";
             Watch(icon);
             _trayIcons.Children.Add(TrayIconTile(icon, editable: false, reorder));
         }
+        StallDetector.Phase = "taskbar: tray overflow";
         _overflowButton.Visibility = Icons(_shell.Tray?.UnpinnedIcons).Any() || _trayEditMode ? Visibility.Visible : Visibility.Collapsed;
         if (_overflowPopup?.IsOpen == true) FillOverflow();
         PruneWatched();
@@ -493,11 +495,35 @@ public sealed partial class TaskbarController
     }
 
     /// <summary>ネットワーク接続とバッテリー残量をアイコンに反映。</summary>
+    /// <summary>ネットワークにつながっているか（最後に調べた結果）。</summary>
+    private volatile bool _online = true;
+    private int _checkingNetwork;
+
+    /// <summary>
+    /// ネットワークの状態を別スレッドで調べ直す。全ネットワーク アダプターを列挙するので、スリープ復帰直後や VPN 接続中などは
+    /// 数秒かかることがあり、タスクバーのスレッドで呼ぶと固まる（砂時計になってクリックできない）。
+    /// </summary>
+    private void RefreshNetworkAsync()
+    {
+        if (System.Threading.Interlocked.Exchange(ref _checkingNetwork, 1) == 1) return;
+        System.Threading.Tasks.Task.Run(() =>
+        {
+            bool online;
+            try { online = NetworkInterface.GetIsNetworkAvailable(); } catch { online = true; }
+            _checkingNetwork = 0;
+            if (online == _online) return;
+            _online = online;
+            _dispatcher.BeginInvoke(UpdateStatus);
+        });
+    }
+
     private void UpdateStatus()
     {
+        StallDetector.Phase = "taskbar: status";
+        RefreshNetworkAsync();
         if (_network == null || _battery == null) return;
         var t = Theme.Current;
-        bool online = NetworkInterface.GetIsNetworkAvailable();
+        bool online = _online;
         _network.Foreground = online ? t.Text : t.TextSecondary;
         _network.Opacity = online ? 1 : 0.5;
 

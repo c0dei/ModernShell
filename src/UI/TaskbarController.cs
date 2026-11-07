@@ -208,7 +208,11 @@ public sealed partial class TaskbarController : IDisposable
         _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds,
         _settings.MagnifyOnHover, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
         _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMargin);
-    private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e) => _dispatcher.BeginInvoke(UpdateStatus);
+    private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e)
+    {
+        _online = e.IsAvailable;
+        _dispatcher.BeginInvoke(UpdateStatus);
+    }
 
     // ------------------------------------------------------------------
     // 組み立て
@@ -271,8 +275,10 @@ public sealed partial class TaskbarController : IDisposable
 
         RebuildApps();
         RebuildTray();
+        StallDetector.Phase = "taskbar: clock";
         UpdateClock();
         UpdateStatus();
+        StallDetector.Phase = "taskbar: show windows";
         foreach (var s in _surfaces) s.Show();
         Arrange();
     }
