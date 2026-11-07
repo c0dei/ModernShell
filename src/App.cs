@@ -239,6 +239,10 @@ public static class Program
             _taskbar.SearchClicked += () => _start.ShowMenu("");
             _taskbar.OpenSettingsRequested += ShowSettings;
             _taskbar.ExitRequested += Exit;
+            // 純正タスクバーは、ModernShell のタスクバーが実際に描かれてから隠す（それまでは純正のまま使える）
+            var shell = _shell;
+            _taskbar.FirstDrawn += () => shell?.HideNativeTaskbar();
+            Log.Info($"render: tier {System.Windows.Media.RenderCapability.Tier >> 16}, mode {(_settings.UseGpuRendering ? "GPU" : "software")}");
             Log.Timing("before taskbar");
             _taskbar.Start();
             Log.Timing("taskbar built");

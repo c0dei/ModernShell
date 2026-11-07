@@ -41,8 +41,21 @@ public sealed class ShellHost : IDisposable
         config.TaskIconSize = IconSize.Large;
         config.PinnedNotifyIcons = settings.PinnedTrayIcons.ToArray();
         Manager = new ShellManager(config);
-        Manager.ExplorerHelper.HideExplorerTaskbar = true;
         Log.Info($"shell host started (tray failed={Manager.NotificationArea?.IsFailed})");
+    }
+
+    private bool _nativeHidden;
+
+    /// <summary>
+    /// 純正タスクバーを隠す。ModernShell のタスクバーが実際に画面に描かれてから呼ぶ。
+    /// PC の起動直後などは最初の描画に数十秒かかることがあり、先に隠すとその間タスクバーが使えなくなるため。
+    /// </summary>
+    public void HideNativeTaskbar()
+    {
+        if (_disposed || _nativeHidden) return;
+        _nativeHidden = true;
+        Manager.ExplorerHelper.HideExplorerTaskbar = true;
+        Log.Timing("native taskbar hidden");
     }
 
     /// <summary>現在タスクバーに固定されているトレイアイコンの識別子を設定に保存する。</summary>

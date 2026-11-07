@@ -49,6 +49,8 @@ public sealed partial class TaskbarController : IDisposable
     private bool _trayEditMode;
 
     public event Action? StartClicked;
+    /// <summary>タスクバーが実際に画面に描かれたとき（純正タスクバーを隠すのはこのあと）。</summary>
+    public event Action? FirstDrawn;
     public event Action? SearchClicked;
     public event Action? OpenSettingsRequested;
     public event Action? ExitRequested;
@@ -326,6 +328,7 @@ public sealed partial class TaskbarController : IDisposable
             }, PlacementMode.MousePoint);
         };
         s.ContentSizeChanged += Arrange;
+        s.ContentRendered += (_, _) => FirstDrawn?.Invoke();
         s.Loaded += (_, _) => Arrange();
         _surfaces.Add(s);
     }
