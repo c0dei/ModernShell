@@ -27,6 +27,8 @@ public sealed class Theme
     public Brush SolidBackground { get; init; } = Brushes.Black;
     public Color SolidColor { get; init; }
     public double Radius { get; init; } = 8;
+    /// <summary>タスクバー・スタートメニュー・メニューの文字のフォント（設定の「フォント」。設定画面は常に <see cref="TextFont"/>）。</summary>
+    public FontFamily UiFont { get; init; } = TextFont;
 
     // ---- Windows 11 (WinUI) のコントロール配色 ----
     private static SolidColorBrush F(byte a, byte r, byte g, byte b) { var x = new SolidColorBrush(Color.FromArgb(a, r, g, b)); x.Freeze(); return x; }
@@ -65,6 +67,10 @@ public sealed class Theme
     public static readonly FontFamily IconFont = new("Segoe Fluent Icons, Segoe MDL2 Assets");
     public static readonly FontFamily TextFont = new("Segoe UI Variable Text, Segoe UI, Yu Gothic UI");
 
+    /// <summary>選んだフォントを先頭にし、無い文字（日本語など）は標準のフォントで表示する。</summary>
+    private static FontFamily UiFontOf(Settings s) =>
+        string.IsNullOrWhiteSpace(s.UiFont) ? TextFont : new FontFamily(s.UiFont.Trim() + ", " + TextFont.Source);
+
     public static Theme Current { get; private set; } = Build(new Settings());
     public static event Action? Changed;
 
@@ -76,7 +82,7 @@ public sealed class Theme
     public static void Apply(Settings s)
     {
         var next = Build(s);
-        static string Key(Theme t) => $"{t.IsDark}|{t.Accent}|{t.Radius}";
+        static string Key(Theme t) => $"{t.IsDark}|{t.Accent}|{t.Radius}|{t.UiFont.Source}";
         bool changed = Key(next) != Key(Current);
         Current = next;
         if (changed) Changed?.Invoke();
@@ -105,7 +111,7 @@ public sealed class Theme
                 Text = B(255, 255, 255, 255), TextSecondary = B(255, 0xC5, 0xC5, 0xC5),
                 Surface = B(0x14, 255, 255, 255), Hover = B(0x15, 255, 255, 255), Pressed = B(0x0B, 255, 255, 255),
                 Stroke = B(0x18, 255, 255, 255), FooterBand = B(0x30, 0, 0, 0),
-                SolidBackground = C(solid), SolidColor = solid, Radius = s.CornerRadius,
+                SolidBackground = C(solid), SolidColor = solid, Radius = s.CornerRadius, UiFont = UiFontOf(s),
             }
             : new Theme
             {
@@ -113,7 +119,7 @@ public sealed class Theme
                 Text = B(255, 0x1A, 0x1A, 0x1A), TextSecondary = B(255, 0x5D, 0x5D, 0x5D),
                 Surface = B(0xB0, 255, 255, 255), Hover = B(0x0F, 0, 0, 0), Pressed = B(0x08, 0, 0, 0),
                 Stroke = B(0x14, 0, 0, 0), FooterBand = B(0x0A, 0, 0, 0),
-                SolidBackground = C(solid), SolidColor = solid, Radius = s.CornerRadius,
+                SolidBackground = C(solid), SolidColor = solid, Radius = s.CornerRadius, UiFont = UiFontOf(s),
             };
     }
 

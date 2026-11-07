@@ -64,7 +64,7 @@ public sealed class StartMenuWindow : Window
         Width = MenuWidth + SurfacePaint.ShadowPad * 2;
         Height = MenuHeight + SurfacePaint.ShadowPad * 2;
         WindowStartupLocation = WindowStartupLocation.Manual;
-        FontFamily = Theme.TextFont;
+        FontFamily = Theme.Current.UiFont;
         UseLayoutRounding = true;
 
         Closed += (_, _) => _closed = true;
@@ -269,6 +269,7 @@ public sealed class StartMenuWindow : Window
         if (_closed) return; // 描画方式の切り替えで作り直したあとの古いウィンドウには何もしない
         var t = Theme.Current;
         Foreground = t.Text;
+        FontFamily = t.UiFont;
 
         Width = MenuWidth + SurfacePaint.ShadowPad * 2;
         // 外枠: [メイン列 | ウィジェット列] の下にフッター
@@ -306,7 +307,7 @@ public sealed class StartMenuWindow : Window
             VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(36, 0, 12, 0),
         };
-        _placeholder = UiKit.Label("アプリ、設定、ドキュメントを検索", 14, t.TextSecondary);
+        _placeholder = UiKit.Label(L.T("アプリ、設定、ドキュメントを検索"), 14, t.TextSecondary);
         _placeholder.Margin = new Thickness(38, 0, 0, 0);
         _placeholder.IsHitTestVisible = false;
         var searchIcon = UiKit.Glyph("", 14, t.TextSecondary);
@@ -378,28 +379,28 @@ public sealed class StartMenuWindow : Window
         user.Click += _ => { HideMenu(); SystemActions.OpenUserAccount(); };
         user.RightClick += tile => OpenFlyout(tile, new[]
         {
-            new MenuItemSpec("", "ロック", () => { HideMenu(); SystemActions.Lock(); }),
-            new MenuItemSpec("", "サインアウト", () => { HideMenu(); SystemActions.SignOut(); }),
+            new MenuItemSpec("", L.T("ロック"), () => { HideMenu(); SystemActions.Lock(); }),
+            new MenuItemSpec("", L.T("サインアウト"), () => { HideMenu(); SystemActions.SignOut(); }),
         });
         g.Children.Add(user);
 
-        var gear = IconTile("", "ModernShell の設定");
+        var gear = IconTile("", L.T("ModernShell の設定"));
         gear.Click += _ => { HideMenu(); OpenSettingsRequested?.Invoke(); };
         Grid.SetColumn(gear, 1);
         g.Children.Add(gear);
 
-        var power = IconTile("", "電源");
+        var power = IconTile("", L.T("電源"));
         power.Margin = new Thickness(4, 0, 40, 0);
         power.Click += tile => OpenFlyout(tile, new[]
         {
-            new MenuItemSpec("", "ロック", () => { HideMenu(); SystemActions.Lock(); }),
-            new MenuItemSpec("", "スリープ", () => { HideMenu(); SystemActions.Sleep(); }),
-            new MenuItemSpec("", "サインアウト", () => { HideMenu(); SystemActions.SignOut(); }),
+            new MenuItemSpec("", L.T("ロック"), () => { HideMenu(); SystemActions.Lock(); }),
+            new MenuItemSpec("", L.T("スリープ"), () => { HideMenu(); SystemActions.Sleep(); }),
+            new MenuItemSpec("", L.T("サインアウト"), () => { HideMenu(); SystemActions.SignOut(); }),
             MenuItemSpec.Separator,
-            new MenuItemSpec("", "再起動", () => { HideMenu(); SystemActions.Restart(); }),
-            new MenuItemSpec("", "シャットダウン", () => { HideMenu(); SystemActions.Shutdown(); }),
+            new MenuItemSpec("", L.T("再起動"), () => { HideMenu(); SystemActions.Restart(); }),
+            new MenuItemSpec("", L.T("シャットダウン"), () => { HideMenu(); SystemActions.Shutdown(); }),
             MenuItemSpec.Separator,
-            new MenuItemSpec("\uE8BB", "ModernShell を終了（純正に戻す）", () => { HideMenu(); ExitRequested?.Invoke(); }),
+            new MenuItemSpec("\uE8BB", L.T("ModernShell を終了（純正に戻す）"), () => { HideMenu(); ExitRequested?.Invoke(); }),
         }, PlacementMode.Top);
         Grid.SetColumn(power, 2);
         g.Children.Add(power);
@@ -466,7 +467,7 @@ public sealed class StartMenuWindow : Window
     private FrameworkElement BuildPinned()
     {
         var dock = new DockPanel();
-        var header = Header("ピン留め済み", "すべてのアプリ", "", false, () => ShowPage(Page.AllApps));
+        var header = Header(L.T("ピン留め済み"), L.T("すべてのアプリ"), "", false, () => ShowPage(Page.AllApps));
         DockPanel.SetDock(header, Dock.Top);
         dock.Children.Add(header);
 
@@ -476,7 +477,7 @@ public sealed class StartMenuWindow : Window
 
         if (pinned.Count == 0)
         {
-            var hint = UiKit.Label(_catalog.Apps.Count == 0 ? "アプリを読み込んでいます…" : "「すべてのアプリ」で右クリック →「スタートにピン留め」", 13, Theme.Current.TextSecondary);
+            var hint = UiKit.Label(_catalog.Apps.Count == 0 ? L.T("アプリを読み込んでいます…") : L.T("「すべてのアプリ」で右クリック →「スタートにピン留め」"), 13, Theme.Current.TextSecondary);
             hint.Margin = new Thickness(20);
             dock.Children.Add(hint);
         }
@@ -533,7 +534,7 @@ public sealed class StartMenuWindow : Window
     private FrameworkElement BuildAllApps()
     {
         var dock = new DockPanel();
-        var header = Header("すべてのアプリ", "戻る", "", true, () => ShowPage(Page.Pinned));
+        var header = Header(L.T("すべてのアプリ"), L.T("戻る"), "", true, () => ShowPage(Page.Pinned));
         DockPanel.SetDock(header, Dock.Top);
         dock.Children.Add(header);
 
@@ -571,7 +572,7 @@ public sealed class StartMenuWindow : Window
         label.Margin = new Thickness(14, 0, 0, 0);
         var row = UiKit.Row(img, label);
         row.VerticalAlignment = VerticalAlignment.Center;
-        var tile = new Tile { Height = 40, Padding = new Thickness(12, 0, 12, 0), Child = row, ToolTip = $"{name}（{items.Count} 個）" };
+        var tile = new Tile { Height = 40, Padding = new Thickness(12, 0, 12, 0), Child = row, ToolTip = L.F("{0}（{1} 個）", name, items.Count) };
         tile.Click += _ => ShowFolder(name, items);
         return tile;
     }
@@ -675,7 +676,7 @@ public sealed class StartMenuWindow : Window
             for (int i = bounds.Length - 1; i >= 0; i--)
                 if (c >= bounds[i]) return rows[i].ToString();
         }
-        return "その他";
+        return L.T("その他");
     }
 
     // --- 検索 ---
@@ -695,22 +696,22 @@ public sealed class StartMenuWindow : Window
         var matches = Rank(_catalog.Apps, query).Take(12).ToList();
         if (matches.Count > 0)
         {
-            var h = UiKit.Label("アプリ", 13, t.Text, FontWeights.SemiBold);
+            var h = UiKit.Label(L.T("アプリ"), 13, t.Text, FontWeights.SemiBold);
             h.Margin = new Thickness(12, 0, 0, 6);
             list.Children.Add(h);
             foreach (var app in matches)
             {
-                var tile = ListTile(app, AppMenu(app, pinnedPage: false), app.IsStoreApp ? "アプリ" : "デスクトップアプリ");
+                var tile = ListTile(app, AppMenu(app, pinnedPage: false), app.IsStoreApp ? L.T("アプリ") : L.T("デスクトップアプリ"));
                 _results.Add(tile);
                 list.Children.Add(tile);
             }
         }
 
-        var h2 = UiKit.Label("その他", 13, t.Text, FontWeights.SemiBold);
+        var h2 = UiKit.Label(L.T("その他"), 13, t.Text, FontWeights.SemiBold);
         h2.Margin = new Thickness(12, 12, 0, 6);
         list.Children.Add(h2);
-        var run = ActionTile("", $"実行: {query}", () => { if (SystemActions.TryRun(query)) HideMenu(); });
-        var web = ActionTile("", $"Web で検索: {query}", () => { HideMenu(); SystemActions.WebSearch(query); });
+        var run = ActionTile("", L.F("実行: {0}", query), () => { if (SystemActions.TryRun(query)) HideMenu(); });
+        var web = ActionTile("", L.F("Web で検索: {0}", query), () => { HideMenu(); SystemActions.WebSearch(query); });
         _results.Add(run); list.Children.Add(run);
         _results.Add(web); list.Children.Add(web);
 
@@ -795,25 +796,25 @@ public sealed class StartMenuWindow : Window
         var items = new List<MenuItemSpec>
         {
             pinned
-                ? new("", "スタートからピン留めを外す", () => { _settings.PinnedStart.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); ShowPage(_page); })
-                : new("", "スタートにピン留めする", () => { _settings.PinnedStart.Add(app.Id); _settings.Save(); ShowPage(_page); }),
+                ? new("", L.T("スタートからピン留めを外す"), () => { _settings.PinnedStart.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); ShowPage(_page); })
+                : new("", L.T("スタートにピン留めする"), () => { _settings.PinnedStart.Add(app.Id); _settings.Save(); ShowPage(_page); }),
         };
         if (pinnedPage && pinned)
-            items.Add(new("", "先頭に移動", () => { _settings.PinnedStart.Remove(app.Id); _settings.PinnedStart.Insert(0, app.Id); _settings.Save(); ShowPage(_page); }));
+            items.Add(new("", L.T("先頭に移動"), () => { _settings.PinnedStart.Remove(app.Id); _settings.PinnedStart.Insert(0, app.Id); _settings.Save(); ShowPage(_page); }));
         // Windows と共有している場合、タスクバーのピン留めは Windows 側でしか変更できない
         if (_settings.TaskbarPinSource == TaskbarPinSource.ModernShell)
             items.Add(onBar
-                ? new("", "タスクバーからピン留めを外す", () => { _settings.PinnedTaskbar.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
-                : new("", "タスクバーにピン留めする", () => { _settings.PinnedTaskbar.Add(app.Id); _settings.Save(); }));
+                ? new("", L.T("タスクバーからピン留めを外す"), () => { _settings.PinnedTaskbar.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
+                : new("", L.T("タスクバーにピン留めする"), () => { _settings.PinnedTaskbar.Add(app.Id); _settings.Save(); }));
         if (app.ExePath != null)
         {
             items.Add(MenuItemSpec.Separator);
-            items.Add(new("", "管理者として実行", () => Launch(app, asAdmin: true)));
-            items.Add(new("", "ファイルの場所を開く", () => { HideMenu(); app.OpenFileLocation(); }));
+            items.Add(new("", L.T("管理者として実行"), () => Launch(app, asAdmin: true)));
+            items.Add(new("", L.T("ファイルの場所を開く"), () => { HideMenu(); app.OpenFileLocation(); }));
         }
         // Windows 11 と同じく、Windows 標準の右クリックメニューは「その他のオプションを確認」の中に出す
         items.Add(MenuItemSpec.Separator);
-        items.Add(new MenuItemSpec("\uE712", "その他のオプションを確認", () => { })
+        items.Add(new MenuItemSpec("\uE712", L.T("その他のオプションを確認"), () => { })
         {
             Children = () => ShellContextMenu.For(app.ShellPath, Handle),
         });

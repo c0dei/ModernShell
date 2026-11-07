@@ -81,7 +81,7 @@ public sealed class DesktopsFlyout
                 // 「×」でデスクトップを削除（ウィンドウは隣のデスクトップへ移る。Windows のタスク ビューと同じ）
                 close = new Tile
                 {
-                    Width = 22, Height = 22, CornerRadius = t.Corner(4), Child = UiKit.Glyph("\uE711", 10), ToolTip = "デスクトップを閉じる",
+                    Width = 22, Height = 22, CornerRadius = t.Corner(4), Child = UiKit.Glyph("\uE711", 10), ToolTip = L.T("デスクトップを閉じる"),
                     HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Opacity = 0,
                 };
                 close.Click += async _ =>
@@ -110,7 +110,7 @@ public sealed class DesktopsFlyout
             Width = 160, Height = 90, CornerRadius = t.Corner(6), Background = t.ControlFill,
             BorderBrush = t.Stroke, BorderThickness = new Thickness(1), Child = UiKit.Glyph("", 20),
         };
-        var plusLabel = UiKit.Label("新しいデスクトップ", 12);
+        var plusLabel = UiKit.Label(L.T("新しいデスクトップ"), 12);
         plusLabel.HorizontalAlignment = HorizontalAlignment.Center;
         plusLabel.Margin = new Thickness(0, 6, 0, 0);
         var plusBody = new StackPanel();

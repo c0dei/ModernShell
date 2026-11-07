@@ -6,6 +6,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 
+using ModernShell.Core;
+
 namespace ModernShell.UI;
 
 /// <summary>
@@ -94,8 +96,8 @@ public sealed class ColorPicker : StackPanel
                 Update(fromText: true);
             }
         };
-        var apply = Button("適用", accent: true, () => Applied?.Invoke(Value));
-        var cancel = Button("キャンセル", accent: false, () => Cancelled?.Invoke());
+        var apply = Button(L.T("適用"), accent: true, () => Applied?.Invoke(Value));
+        var cancel = Button(L.T("キャンセル"), accent: false, () => Cancelled?.Invoke());
         apply.Margin = new Thickness(20, 0, 8, 0);
         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 16, 0, 0) };
         row.Children.Add(_preview);

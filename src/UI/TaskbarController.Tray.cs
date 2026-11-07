@@ -34,7 +34,7 @@ public sealed partial class TaskbarController
         _overflowButton = new Tile
         {
             Width = 28, Height = TileH, Margin = new Thickness(2, 0, 0, 0),
-            Child = UiKit.Glyph(IsTop ? "" : "", 12), ToolTip = "隠れているインジケーターを表示",
+            Child = UiKit.Glyph(IsTop ? "" : "", 12), ToolTip = L.T("隠れているインジケーターを表示"),
         };
         _overflowButton.Click += ShowOverflow;
         MakeOverflowDropTarget(_overflowButton); // 「^」の上に落としてもしまえる
@@ -52,7 +52,7 @@ public sealed partial class TaskbarController
         var quick = new Tile
         {
             Padding = new Thickness(10, 0, 10, 0), Height = TileH, Margin = new Thickness(2, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
-            Child = UiKit.Row(_network, volume, _battery), ToolTip = "クイック設定 (Win+A)",
+            Child = UiKit.Row(_network, volume, _battery), ToolTip = L.T("クイック設定 (Win+A)"),
         };
         // Win+A / Win+N のキー操作で開く。管理者として動くアプリ（タスク マネージャーなど）が前面だと、
         // Windows は他のアプリからのキー操作をそこへ届けない（UIPI）ので、先にタスクバーが前面になってから送る
@@ -69,7 +69,7 @@ public sealed partial class TaskbarController
         var clock = new Tile
         {
             Padding = new Thickness(10, 0, 10, 0), Height = TileH, Margin = new Thickness(2, 0, 2, 0),
-            VerticalAlignment = VerticalAlignment.Center, Child = clockStack, ToolTip = "通知とカレンダー (Win+N)",
+            VerticalAlignment = VerticalAlignment.Center, Child = clockStack, ToolTip = L.T("通知とカレンダー (Win+N)"),
         };
         clock.Click += x => { TakeForeground(x); SystemActions.NotificationCenter(); };
         p.Children.Add(clock);
@@ -78,7 +78,7 @@ public sealed partial class TaskbarController
 
     private Tile ShowDesktopSliver()
     {
-        var desk = new Tile { Width = 10, Height = TileH, CornerRadius = new CornerRadius(0), Margin = new Thickness(4, 0, 0, 0), ToolTip = "デスクトップの表示" };
+        var desk = new Tile { Width = 10, Height = TileH, CornerRadius = new CornerRadius(0), Margin = new Thickness(4, 0, 0, 0), ToolTip = L.T("デスクトップの表示") };
         desk.Click += _ => SystemActions.ShowDesktop();
         return desk;
     }
@@ -401,8 +401,8 @@ public sealed partial class TaskbarController
         var edit = new Tile { Padding = new Thickness(8, 4, 8, 4), Margin = new Thickness(4), HorizontalAlignment = HorizontalAlignment.Right };
         void UpdateEdit()
         {
-            edit.Child = UiKit.Row(UiKit.Glyph(_trayEditMode ? "" : "", 12), Spaced(UiKit.Label(_trayEditMode ? "完了" : "表示するアイコンを選ぶ", 12)));
-            _overflowHint!.Text = _trayEditMode ? "クリックで表示/非表示を切り替え、「常に表示」の中はドラッグで並べ替えできます" : "";
+            edit.Child = UiKit.Row(UiKit.Glyph(_trayEditMode ? "" : "", 12), Spaced(UiKit.Label(_trayEditMode ? L.T("完了") : L.T("表示するアイコンを選ぶ"), 12)));
+            _overflowHint!.Text = _trayEditMode ? L.T("クリックで表示/非表示を切り替え、「常に表示」の中はドラッグで並べ替えできます") : "";
             _overflowHint.Visibility = _trayEditMode ? Visibility.Visible : Visibility.Collapsed;
         }
         edit.Click += _ =>
@@ -452,7 +452,7 @@ public sealed partial class TaskbarController
 
         if (_trayEditMode)
         {
-            Section("常に表示（ドラッグで並べ替え）");
+            Section(L.T("常に表示（ドラッグで並べ替え）"));
             _overflowPanel.Children.RemoveAt(_overflowPanel.Children.Count - 1); // 折り返しパネルの代わりに 1 行のパネルを使う
             var pinnedRow = new StackPanel { Orientation = Orientation.Horizontal };
             _overflowPanel.Children.Add(pinnedRow);
@@ -463,14 +463,14 @@ public sealed partial class TaskbarController
                 Watch(icon);
                 pinnedRow.Children.Add(TrayIconTile(icon, editable: true, reorder));
             }
-            if (pinnedRow.Children.Count == 0) pinnedRow.Children.Add(UiKit.Label("なし", 12, t.TextSecondary));
-            var others = Section("「^」の中に表示");
+            if (pinnedRow.Children.Count == 0) pinnedRow.Children.Add(UiKit.Label(L.T("なし"), 12, t.TextSecondary));
+            var others = Section(L.T("「^」の中に表示"));
             foreach (var icon in Icons(_shell.Tray?.UnpinnedIcons))
             {
                 Watch(icon);
                 others.Children.Add(TrayIconTile(icon, editable: true));
             }
-            if (others.Children.Count == 0) others.Children.Add(UiKit.Label("なし", 12, t.TextSecondary));
+            if (others.Children.Count == 0) others.Children.Add(UiKit.Label(L.T("なし"), 12, t.TextSecondary));
             return;
         }
 
@@ -481,7 +481,7 @@ public sealed partial class TaskbarController
             all.Children.Add(TrayIconTile(icon, editable: true, dragToBar: true));
         }
         if (all.Children.Count == 0)
-            all.Children.Add(new TextBlock { Text = "アイコンはありません", Margin = new Thickness(8), Foreground = t.TextSecondary });
+            all.Children.Add(new TextBlock { Text = L.T("アイコンはありません"), Margin = new Thickness(8), Foreground = t.TextSecondary });
     }
 
     private static FrameworkElement Spaced(FrameworkElement e) { e.Margin = new Thickness(8, 0, 0, 0); return e; }
@@ -491,7 +491,7 @@ public sealed partial class TaskbarController
         if (_time == null || _date == null) return;
         var now = DateTime.Now;
         _time.Text = now.ToString(_settings.ShowSeconds ? "H:mm:ss" : "H:mm");
-        _date.Text = now.ToString("yyyy/MM/dd");
+        _date.Text = now.ToString(L.IsEnglish ? "M/d/yyyy" : "yyyy/MM/dd", L.Culture);
     }
 
     /// <summary>ネットワーク接続とバッテリー残量をアイコンに反映。</summary>
@@ -541,7 +541,7 @@ public sealed partial class TaskbarController
             // Segoe Fluent Icons: Battery0–9 = E850–E859, Battery10 = E83F, 充電中 0–10 = EBAB–EBB5
             _battery.Text = charging ? ((char)(0xEBAB + level)).ToString()
                           : level >= 10 ? "" : ((char)(0xE850 + level)).ToString();
-            _battery.ToolTip = $"バッテリー {ps.BatteryLifePercent:P0}{(charging ? "（充電中）" : "")}";
+            _battery.ToolTip = L.F("バッテリー {0:P0}", ps.BatteryLifePercent) + (charging ? L.T("（充電中）") : "");
         }
         catch { _battery.Visibility = Visibility.Collapsed; }
     }

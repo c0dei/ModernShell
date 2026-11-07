@@ -198,7 +198,7 @@ public static class Program
 
     private static bool _hotkeyRegistered;
 
-    private static string ThemeKey() => $"{_settings.Theme}|{_settings.AccentColor}|{_settings.CornerRadius}";
+    private static string ThemeKey() => $"{_settings.Theme}|{_settings.AccentColor}|{_settings.CornerRadius}|{_settings.UiFont}";
 
     private static void OnSettingsChanged()
     {
@@ -206,7 +206,15 @@ public static class Program
         SyncNativeStartAlignment();
         var key = ThemeKey();
         if (key != _themeKey) { _themeKey = key; Theme.Apply(_settings); }
+        // 表示言語が変わったら、トレイの ModernShell アイコンのメニューも作り直す
+        if (_settings.Language != _trayLanguage)
+        {
+            try { if (_tray != null) { _tray.Visible = false; _tray.Dispose(); } } catch { }
+            CreateTrayIcon();
+        }
     }
+
+    private static string? _trayLanguage;
 
     private static void ApplyTaskbarMode()
     {
@@ -319,13 +327,14 @@ public static class Program
 
     private static void CreateTrayIcon()
     {
+        _trayLanguage = _settings.Language;
         try
         {
             var menu = new Forms.ContextMenuStrip();
-            menu.Items.Add("スタートを開く", null, (_, _) => _start.ShowMenu());
-            menu.Items.Add("設定", null, (_, _) => ShowSettings());
+            menu.Items.Add(L.T("スタートを開く"), null, (_, _) => _start.ShowMenu());
+            menu.Items.Add(L.T("設定"), null, (_, _) => ShowSettings());
             menu.Items.Add(new Forms.ToolStripSeparator());
-            menu.Items.Add("純正タスクバーに戻して終了", null, (_, _) => Exit());
+            menu.Items.Add(L.T("純正タスクバーに戻して終了"), null, (_, _) => Exit());
 
             _tray = new Forms.NotifyIcon
             {

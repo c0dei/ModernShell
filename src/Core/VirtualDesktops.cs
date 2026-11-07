@@ -30,7 +30,7 @@ public static class VirtualDesktops
             if (ids == null || ids.Length < 16)
             {
                 // デスクトップを増やしたことがなければ一覧は無い（デスクトップは 1 つだけ）
-                result.Add(new DesktopInfo(Guid.Empty, "デスクトップ 1", globalWallpaper, true));
+                result.Add(new DesktopInfo(Guid.Empty, L.T("デスクトップ 1"), globalWallpaper, true));
                 return result;
             }
             for (int i = 0; i + 16 <= ids.Length; i += 16)
@@ -39,13 +39,13 @@ public static class VirtualDesktops
                 using var dk = key!.OpenSubKey($@"Desktops\{{{id}}}");
                 var name = dk?.GetValue("Name") as string;
                 var wall = dk?.GetValue("Wallpaper") as string;
-                result.Add(new DesktopInfo(id, string.IsNullOrWhiteSpace(name) ? $"デスクトップ {i / 16 + 1}" : name!,
+                result.Add(new DesktopInfo(id, string.IsNullOrWhiteSpace(name) ? L.F("デスクトップ {0}", i / 16 + 1) : name!,
                     !string.IsNullOrEmpty(wall) && File.Exists(wall) ? wall : globalWallpaper,
                     id == currentId || (currentId == Guid.Empty && i == 0)));
             }
         }
         catch (Exception ex) { Log.Error("virtual desktops", ex); }
-        if (result.Count == 0) result.Add(new DesktopInfo(Guid.Empty, "デスクトップ 1", GlobalWallpaper(), true));
+        if (result.Count == 0) result.Add(new DesktopInfo(Guid.Empty, L.T("デスクトップ 1"), GlobalWallpaper(), true));
         return result;
     }
 

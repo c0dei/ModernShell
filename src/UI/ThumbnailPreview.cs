@@ -113,7 +113,7 @@ public sealed class ThumbnailPreview
             title.MaxWidth = maxW - 56;
             var icon = UiKit.Icon(w.Icon, 16);
             icon.Margin = new Thickness(0, 0, 8, 0);
-            var close = new Tile { Width = 24, Height = 24, CornerRadius = t.Corner(4), Child = UiKit.Glyph("", 10), ToolTip = "ウィンドウを閉じる" };
+            var close = new Tile { Width = 24, Height = 24, CornerRadius = t.Corner(4), Child = UiKit.Glyph("", 10), ToolTip = L.T("ウィンドウを閉じる") };
             var head = new DockPanel { Margin = new Thickness(4, 2, 0, 6), LastChildFill = true };
             DockPanel.SetDock(close, Dock.Right);
             DockPanel.SetDock(icon, Dock.Left);

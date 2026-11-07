@@ -35,7 +35,7 @@ public sealed class BarSurface : Window
         ShowInTaskbar = false;
         ShowActivated = false;
         Topmost = true;
-        FontFamily = Theme.TextFont;
+        FontFamily = Theme.Current.UiFont;
         UseLayoutRounding = true;
         // 正しい位置に移動されるまで画面外に置いてチラつきを防ぐ
         WindowStartupLocation = WindowStartupLocation.Manual;

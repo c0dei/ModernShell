@@ -21,6 +21,8 @@
     <!-- 常駐アプリなので、速さより使用メモリの少なさを優先する GC 設定 -->
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <TieredPGO>false</TieredPGO>
+    <!-- .NET・WPF の翻訳データは日本語だけ同梱する（英語は本体に入っている）。ほかの言語のフォルダーを作らない -->
+    <SatelliteResourceLanguages>ja</SatelliteResourceLanguages>
   </PropertyGroup>
   <ItemGroup>
     <!-- 断片化した大きなオブジェクト領域も詰めて、空いたメモリを OS に返しやすくする (0-9) -->

@@ -44,7 +44,7 @@ public static class JumpList
                 var recent = Recent(appId, recentCount);
                 var custom = Custom(appId);
                 if (recent.Count == 0 && custom.Count == 0) continue;
-                if (recent.Count > 0) result.Add(new JumpCategory("最近使ったもの", recent));
+                if (recent.Count > 0) result.Add(new JumpCategory(L.T("最近使ったもの"), recent));
                 result.AddRange(custom);
                 break;
             }
@@ -149,7 +149,7 @@ public static class JumpList
                     U32();
                     break;
                 case 2: // タスク
-                    title = "タスク";
+                    title = L.T("タスク");
                     items = U32();
                     break;
                 default:

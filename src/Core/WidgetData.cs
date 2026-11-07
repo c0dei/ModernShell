@@ -64,17 +64,17 @@ public static class Weather
     /// <summary>WMO 天気コード → 日本語。</summary>
     public static string Describe(int code) => code switch
     {
-        0 => "快晴",
-        1 => "晴れ",
-        2 => "晴れ時々くもり",
-        3 => "くもり",
-        45 or 48 => "霧",
-        >= 51 and <= 57 => "霧雨",
-        >= 61 and <= 67 => "雨",
-        >= 71 and <= 77 => "雪",
-        >= 80 and <= 82 => "にわか雨",
-        85 or 86 => "にわか雪",
-        >= 95 => "雷雨",
+        0 => L.T("快晴"),
+        1 => L.T("晴れ"),
+        2 => L.T("晴れ時々くもり"),
+        3 => L.T("くもり"),
+        45 or 48 => L.T("霧"),
+        >= 51 and <= 57 => L.T("霧雨"),
+        >= 61 and <= 67 => L.T("雨"),
+        >= 71 and <= 77 => L.T("雪"),
+        >= 80 and <= 82 => L.T("にわか雨"),
+        85 or 86 => L.T("にわか雪"),
+        >= 95 => L.T("雷雨"),
         _ => "—",
     };
 }
@@ -148,12 +148,12 @@ public static class UserFolders
     {
         var list = new List<(string, string, string?)>
         {
-            ("ドキュメント", "\uE8A5", Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)),
-            ("ダウンロード", "\uE896", DownloadsPath()),
-            ("ピクチャ", "\uE91B", Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)),
-            ("ミュージック", "\uE8D6", Environment.GetFolderPath(Environment.SpecialFolder.MyMusic)),
-            ("ビデオ", "\uE714", Environment.GetFolderPath(Environment.SpecialFolder.MyVideos)),
-            ("デスクトップ", "\uE7F4", Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)),
+            (L.T("ドキュメント"), "\uE8A5", Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)),
+            (L.T("ダウンロード"), "\uE896", DownloadsPath()),
+            (L.T("ピクチャ"), "\uE91B", Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)),
+            (L.T("ミュージック"), "\uE8D6", Environment.GetFolderPath(Environment.SpecialFolder.MyMusic)),
+            (L.T("ビデオ"), "\uE714", Environment.GetFolderPath(Environment.SpecialFolder.MyVideos)),
+            (L.T("デスクトップ"), "\uE7F4", Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)),
         };
         return list.Where(x => !string.IsNullOrEmpty(x.Item3) && Directory.Exists(x.Item3)).Select(x => (x.Item1, x.Item2, x.Item3!));
     }

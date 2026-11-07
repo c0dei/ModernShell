@@ -320,27 +320,27 @@ public sealed partial class TaskbarController
             if (IsWindowsPin(app))
             {
                 // Windows のピン留めはアプリから変更できない（Windows が API を提供していない）
-                items.Add(new MenuItemSpec("\uE946", "Windows のタスクバーのピン留め（Windows 側で変更）", () => OpenSettingsRequested?.Invoke()));
+                items.Add(new MenuItemSpec("\uE946", L.T("Windows のタスクバーのピン留め（Windows 側で変更）"), () => OpenSettingsRequested?.Invoke()));
             }
             else
             {
                 var pins = EditablePins;
                 bool pinned = pins.Contains(app.Id, StringComparer.OrdinalIgnoreCase);
                 items.Add(pinned
-                    ? new MenuItemSpec("\uE77A", "タスクバーからピン留めを外す", () => { pins.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
-                    : new MenuItemSpec("\uE718", "タスクバーにピン留めする", () => { pins.Add(app.Id); _settings.Save(); }));
+                    ? new MenuItemSpec("\uE77A", L.T("タスクバーからピン留めを外す"), () => { pins.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
+                    : new MenuItemSpec("\uE718", L.T("タスクバーにピン留めする"), () => { pins.Add(app.Id); _settings.Save(); }));
             }
         }
         // アイコンの差し替え（ピン留め・実行中どちらのボタンにも効く）
         var iconKey = IconKey(g);
         items.Add(MenuItemSpec.Separator);
-        items.Add(new MenuItemSpec("\uE790", "アイコンを変更...", () => ChooseIcon(iconKey)));
+        items.Add(new MenuItemSpec("\uE790", L.T("アイコンを変更..."), () => ChooseIcon(iconKey)));
         if (_settings.CustomIcons.ContainsKey(iconKey))
-            items.Add(new MenuItemSpec("\uE7A7", "アイコンを元に戻す", () => { _settings.CustomIcons.Remove(iconKey); _settings.Save(); }));
+            items.Add(new MenuItemSpec("\uE7A7", L.T("アイコンを元に戻す"), () => { _settings.CustomIcons.Remove(iconKey); _settings.Save(); }));
         if (g.Windows.Count > 0)
         {
             items.Add(MenuItemSpec.Separator);
-            items.Add(new MenuItemSpec("", g.Windows.Count > 1 ? "すべてのウィンドウを閉じる" : "ウィンドウを閉じる",
+            items.Add(new MenuItemSpec("", g.Windows.Count > 1 ? L.T("すべてのウィンドウを閉じる") : L.T("ウィンドウを閉じる"),
                 () => { foreach (var w in g.Windows) w.Close(); }, Danger: true));
         }
         return items;
@@ -415,8 +415,8 @@ public sealed partial class TaskbarController
     {
         var dlg = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "アイコンを選ぶ",
-            Filter = "アイコン・画像・プログラム (*.ico;*.png;*.jpg;*.exe;*.dll)|*.ico;*.png;*.jpg;*.jpeg;*.exe;*.dll|すべてのファイル (*.*)|*.*",
+            Title = L.T("アイコンを選ぶ"),
+            Filter = L.T("アイコン・画像・プログラム (*.ico;*.png;*.jpg;*.exe;*.dll)|*.ico;*.png;*.jpg;*.jpeg;*.exe;*.dll|すべてのファイル (*.*)|*.*"),
             CheckFileExists = true,
         };
         if (dlg.ShowDialog() != true) return;
@@ -435,14 +435,14 @@ public sealed partial class TaskbarController
         var shell = ShellContextMenu.TaskbarStyle(target, OwnerHandle);
         if (shell.Count == 0) return ManualAppMenu(app);
         // Windows 側のメニューに無い（または外部アプリから動かせない）タスクバーのピン留めは ModernShell の項目で補う
-        if (!IsWindowsPin(app) && !shell.Any(m => m.Text.Contains("タスク") && m.Text.Contains("ピン留め")))
+        if (!IsWindowsPin(app) && !shell.Any(m => m.Text.Contains(L.T("タスク")) && m.Text.Contains(L.T("ピン留め"))))
         {
             var pins = EditablePins;
             bool onBar = pins.Contains(app.Id, StringComparer.OrdinalIgnoreCase);
             int at = shell.FindIndex(m => m.IsSeparator);
             var pinItem = onBar
-                ? new MenuItemSpec("\uE77A", "タスクバーからピン留めを外す", () => { pins.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
-                : new MenuItemSpec("\uE718", "タスクバーにピン留めする", () => { pins.Add(app.Id); _settings.Save(); });
+                ? new MenuItemSpec("\uE77A", L.T("タスクバーからピン留めを外す"), () => { pins.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
+                : new MenuItemSpec("\uE718", L.T("タスクバーにピン留めする"), () => { pins.Add(app.Id); _settings.Save(); });
             shell.Insert(at < 0 ? shell.Count : at, pinItem);
         }
         return shell;
@@ -452,21 +452,21 @@ public sealed partial class TaskbarController
 
     private IEnumerable<MenuItemSpec> ManualAppMenu(AppEntry app)
     {
-        yield return new MenuItemSpec("\uE8A7", "開く", () => app.Launch());
-        if (app.ExePath != null) yield return new MenuItemSpec("\uE7EF", "管理者として実行", () => app.Launch(asAdmin: true));
+        yield return new MenuItemSpec("\uE8A7", L.T("開く"), () => app.Launch());
+        if (app.ExePath != null) yield return new MenuItemSpec("\uE7EF", L.T("管理者として実行"), () => app.Launch(asAdmin: true));
         bool onStart = _settings.PinnedStart.Contains(app.Id, StringComparer.OrdinalIgnoreCase);
         yield return onStart
-            ? new MenuItemSpec("\uE77A", "スタートからピン留めを外す", () => { _settings.PinnedStart.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
-            : new MenuItemSpec("\uE718", "スタートにピン留めする", () => { _settings.PinnedStart.Add(app.Id); _settings.Save(); });
+            ? new MenuItemSpec("\uE77A", L.T("スタートからピン留めを外す"), () => { _settings.PinnedStart.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
+            : new MenuItemSpec("\uE718", L.T("スタートにピン留めする"), () => { _settings.PinnedStart.Add(app.Id); _settings.Save(); });
         if (!IsWindowsPin(app))
         {
             var pins = EditablePins;
             bool onBar = pins.Contains(app.Id, StringComparer.OrdinalIgnoreCase);
             yield return onBar
-                ? new MenuItemSpec("\uE77A", "タスクバーからピン留めを外す", () => { pins.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
-                : new MenuItemSpec("\uE718", "タスクバーにピン留めする", () => { pins.Add(app.Id); _settings.Save(); });
+                ? new MenuItemSpec("\uE77A", L.T("タスクバーからピン留めを外す"), () => { pins.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
+                : new MenuItemSpec("\uE718", L.T("タスクバーにピン留めする"), () => { pins.Add(app.Id); _settings.Save(); });
         }
-        if (app.ExePath != null) yield return new MenuItemSpec("\uE838", "ファイルの場所を開く", app.OpenFileLocation);
+        if (app.ExePath != null) yield return new MenuItemSpec("\uE838", L.T("ファイルの場所を開く"), app.OpenFileLocation);
     }
 
     /// <summary>ジャンプリストの項目を右クリックしたとき。</summary>
@@ -478,11 +478,11 @@ public sealed partial class TaskbarController
             var shell = ShellContextMenu.For(path, OwnerHandle);
             if (shell.Count > 0) { foreach (var m in shell) yield return m; yield break; }
         }
-        yield return new MenuItemSpec("\uE8A7", "開く", () => OpenPath(path));
+        yield return new MenuItemSpec("\uE8A7", L.T("開く"), () => OpenPath(path));
         if (!isTask && System.IO.File.Exists(path))
         {
-            yield return new MenuItemSpec("\uE838", "ファイルの場所を開く", () => OpenPath("explorer.exe", $"/select,\"{path}\""));
-            yield return new MenuItemSpec("\uE8C8", "パスをコピー", () => { try { Clipboard.SetText(path); } catch { } });
+            yield return new MenuItemSpec("\uE838", L.T("ファイルの場所を開く"), () => OpenPath("explorer.exe", $"/select,\"{path}\""));
+            yield return new MenuItemSpec("\uE8C8", L.T("パスをコピー"), () => { try { Clipboard.SetText(path); } catch { } });
         }
     }
 

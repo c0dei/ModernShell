@@ -209,7 +209,7 @@ public sealed partial class TaskbarController : IDisposable
         _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarHeight, _settings.TaskbarIconSize, _settings.IslandMargin,
         _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds,
         _settings.MagnifyOnHover, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
-        _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMargin);
+        _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMargin, _settings.Language);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e)
     {
         _online = e.IsAvailable;
@@ -324,9 +324,9 @@ public sealed partial class TaskbarController : IDisposable
             e.Handled = true;
             Flyout.Show(content, new[]
             {
-                new MenuItemSpec("\uE9D9", "タスク マネージャー", SystemActions.OpenTaskManager),
+                new MenuItemSpec("\uE9D9", L.T("タスク マネージャー"), SystemActions.OpenTaskManager),
                 MenuItemSpec.Separator,
-                new MenuItemSpec("\uE713", "タスクバーの設定", () => OpenSettingsRequested?.Invoke()),
+                new MenuItemSpec("\uE713", L.T("タスクバーの設定"), () => OpenSettingsRequested?.Invoke()),
             }, PlacementMode.MousePoint);
         };
         s.ContentSizeChanged += Arrange;
@@ -377,21 +377,21 @@ public sealed partial class TaskbarController : IDisposable
     private StackPanel StartGroup(Theme t)
     {
         var p = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var start = new Tile { Width = TileW, Height = TileH, Margin = new Thickness(2, 0, 2, 0), Child = UiKit.StartLogo(Math.Round(IconSz * 0.75), t.AccentBrush), ToolTip = "スタート" };
+        var start = new Tile { Width = TileW, Height = TileH, Margin = new Thickness(2, 0, 2, 0), Child = UiKit.StartLogo(Math.Round(IconSz * 0.75), t.AccentBrush), ToolTip = L.T("スタート") };
         start.Click += x => { TakeForeground(x); StartClicked?.Invoke(); };
         start.RightClick += x => Flyout.Show(x, new[]
         {
-            new MenuItemSpec("", "Win+X メニュー", SystemActions.PowerUserMenu),
-            new MenuItemSpec("", "タスク マネージャー", SystemActions.OpenTaskManager),
-            new MenuItemSpec("", "エクスプローラー", SystemActions.OpenFileExplorer),
-            new MenuItemSpec("", "Windows の設定", SystemActions.OpenSettings),
+            new MenuItemSpec("", L.T("Win+X メニュー"), SystemActions.PowerUserMenu),
+            new MenuItemSpec("", L.T("タスク マネージャー"), SystemActions.OpenTaskManager),
+            new MenuItemSpec("", L.T("エクスプローラー"), SystemActions.OpenFileExplorer),
+            new MenuItemSpec("", L.T("Windows の設定"), SystemActions.OpenSettings),
             MenuItemSpec.Separator,
-            new MenuItemSpec("", "ModernShell の設定", () => OpenSettingsRequested?.Invoke()),
-            new MenuItemSpec("", "ModernShell を終了（純正に戻す）", () => ExitRequested?.Invoke()),
+            new MenuItemSpec("", L.T("ModernShell の設定"), () => OpenSettingsRequested?.Invoke()),
+            new MenuItemSpec("", L.T("ModernShell を終了（純正に戻す）"), () => ExitRequested?.Invoke()),
         }, FlyoutPlacement);
         p.Children.Add(start);
-        if (_settings.ShowSearchButton) p.Children.Add(SmallButton("", "検索", () => SearchClicked?.Invoke()));
-        if (_settings.ShowTaskViewButton) p.Children.Add(SmallButton("", "タスク ビュー", SystemActions.TaskView, HookDesktops));
+        if (_settings.ShowSearchButton) p.Children.Add(SmallButton("", L.T("検索"), () => SearchClicked?.Invoke()));
+        if (_settings.ShowTaskViewButton) p.Children.Add(SmallButton("", L.T("タスク ビュー"), SystemActions.TaskView, HookDesktops));
         return p;
     }
 

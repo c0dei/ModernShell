@@ -157,6 +157,10 @@ public sealed class Settings
     /// 使用メモリが減る。背景（透過・ぼかし）は CPU で描いているので見た目は変わらない。変更は再起動で反映。
     /// </summary>
     public bool UseGpuRendering { get; set; } = false;
+    /// <summary>表示言語。"" = Windows に合わせる / "ja" / "en"。</summary>
+    public string Language { get; set; } = "";
+    /// <summary>タスクバー・スタートメニュー・メニューの文字のフォント。空なら標準（Segoe UI Variable）。設定画面には使わない。</summary>
+    public string UiFont { get; set; } = "";
 
     // ---------------------------------------------------------------
     [JsonIgnore]

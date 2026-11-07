@@ -21,15 +21,16 @@ public sealed class SettingsWindow : Window
 {
     private enum Page { Start, Taskbar, Pins, Widgets, Look, General, About }
 
-    private static readonly (Page page, string glyph, string label)[] Pages =
+    // 表示言語を切り替えたら名前も変わるので、毎回作る
+    private static (Page page, string glyph, string label)[] Pages => new[]
     {
-        (Page.Start, "", "スタート メニュー"),
-        (Page.Taskbar, "", "タスクバー"),
-        (Page.Pins, "", "ピン留めとアイコン"),
-        (Page.Widgets, "", "ウィジェット"),
-        (Page.Look, "", "外観"),
-        (Page.General, "", "一般"),
-        (Page.About, "", "バージョン情報"),
+        (Page.Start, "", L.T("スタート メニュー")),
+        (Page.Taskbar, "", L.T("タスクバー")),
+        (Page.Pins, "", L.T("ピン留めとアイコン")),
+        (Page.Widgets, "", L.T("ウィジェット")),
+        (Page.Look, "", L.T("外観")),
+        (Page.General, "", L.T("一般")),
+        (Page.About, "", L.T("バージョン情報")),
     };
 
     private readonly Settings _s;
@@ -38,6 +39,7 @@ public sealed class SettingsWindow : Window
     /// <summary>検索結果を作っている間は、グループの見出しを付けずに行だけを並べる。</summary>
     private bool _flat;
     private bool _pickerOpen;
+    private string? _builtLanguage;
     private ScrollViewer? _scroll;
     public event Action? ExitRequested;
     /// <summary>設定ファイルを置き換えたあと、読み込み直すために再起動してほしいとき。</summary>
@@ -48,7 +50,7 @@ public sealed class SettingsWindow : Window
     public SettingsWindow(Settings settings)
     {
         _s = settings;
-        Title = "ModernShell の設定";
+        Title = L.T("ModernShell の設定");
         Width = 1080;
         Height = 760;
         MinWidth = 760;
@@ -68,6 +70,8 @@ public sealed class SettingsWindow : Window
     private void Build()
     {
         Backdrop.ApplyMica(this, T);
+        Title = L.T("ModernShell の設定");
+        _builtLanguage = _s.Language;
         Foreground = T.Text;
 
         var root = new Grid();
@@ -86,6 +90,8 @@ public sealed class SettingsWindow : Window
     private void Commit()
     {
         _s.Save();
+        // 表示言語を変えたときは、左の一覧やタイトルも含めて全体を作り直す
+        if (_s.Language != _builtLanguage) { Build(); return; }
         double offset = _scroll?.VerticalOffset ?? 0;
         RenderPage();
         _scroll?.ScrollToVerticalOffset(offset);
@@ -107,7 +113,7 @@ public sealed class SettingsWindow : Window
         ((FrameworkElement)logo.Child).VerticalAlignment = VerticalAlignment.Center;
         var names = new StackPanel { Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         names.Children.Add(UiKit.Label("ModernShell", 14, T.Text, FontWeights.SemiBold));
-        names.Children.Add(UiKit.Label("バージョン " + Version, 12, T.TextSecondary));
+        names.Children.Add(UiKit.Label(L.T("バージョン ") + Version, 12, T.TextSecondary));
         var header = UiKit.Row(logo, names);
         header.Margin = new Thickness(8, 8, 8, 16);
         p.Children.Add(header);
@@ -144,7 +150,7 @@ public sealed class SettingsWindow : Window
             Text = _query, Padding = new Thickness(10, 6, 32, 6), Background = T.ControlFill, Foreground = T.Text, CaretBrush = T.Text,
             BorderBrush = T.ControlBorder, BorderThickness = new Thickness(1, 1, 1, 2), VerticalContentAlignment = VerticalAlignment.Center,
         };
-        var hint = UiKit.Label("設定の検索", 14, T.TextSecondary);
+        var hint = UiKit.Label(L.T("設定の検索"), 14, T.TextSecondary);
         hint.Margin = new Thickness(12, 0, 0, 0);
         hint.VerticalAlignment = VerticalAlignment.Center;
         hint.IsHitTestVisible = false;
@@ -181,7 +187,7 @@ public sealed class SettingsWindow : Window
         var p = new StackPanel { Margin = new Thickness(24, 8, 40, 40), MaxWidth = 1000, HorizontalAlignment = HorizontalAlignment.Stretch };
         p.Children.Add(new TextBlock
         {
-            Text = _query.Length > 0 ? $"「{_query}」の検索結果" : Pages.First(x => x.page == _page).label,
+            Text = _query.Length > 0 ? L.F("「{0}」の検索結果", _query) : Pages.First(x => x.page == _page).label,
             FontSize = 28, FontWeight = FontWeights.SemiBold, Foreground = T.Text, Margin = new Thickness(0, 0, 0, 24),
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
@@ -239,7 +245,7 @@ public sealed class SettingsWindow : Window
         }
         finally { _flat = false; }
         if (found == 0)
-            p.Children.Add(Note("一致する設定はありません。別の言葉で検索してみてください。"));
+            p.Children.Add(Note(L.T("一致する設定はありません。別の言葉で検索してみてください。")));
     }
 
     private static void Collect(Panel panel, string pageLabel, Func<string, bool> match, List<FrameworkElement> hits)
@@ -253,23 +259,23 @@ public sealed class SettingsWindow : Window
 
     private void StartPage(StackPanel p)
     {
-        var which = new[] { ("ModernShell", "ModernShell のスタート"), ("Windows", "Windows 標準のスタート") };
-        Group(p, "", "開き方", "どのスタートを、どこに開くか",
-            DropDownRow("Win キーで開くスタート", "Win+E などの組み合わせはどちらでもそのまま使えます",
+        var which = new[] { ("ModernShell", L.T("ModernShell のスタート")), ("Windows", L.T("Windows 標準のスタート")) };
+        Group(p, "", L.T("開き方"), L.T("どのスタートを、どこに開くか"),
+            DropDownRow(L.T("Win キーで開くスタート"), L.T("Win+E などの組み合わせはどちらでもそのまま使えます"),
                 which, _s.ReplaceStartMenu ? "ModernShell" : "Windows", v => _s.ReplaceStartMenu = v == "ModernShell"),
-            DropDownRow("スタート ボタンで開くスタート", "タスクバーのスタートボタン（ModernShell / 純正どちらのタスクバーでも）をクリックしたとき",
+            DropDownRow(L.T("スタート ボタンで開くスタート"), L.T("タスクバーのスタートボタン（ModernShell / 純正どちらのタスクバーでも）をクリックしたとき"),
                 which, _s.InterceptNativeStartButton ? "ModernShell" : "Windows", v => _s.InterceptNativeStartButton = v == "ModernShell"),
-            DropDownRow("スタート メニューを開く位置", "自動はスタートボタンの位置に合わせます。Windows 標準のスタートも、ModernShell のタスクバー使用中はこの位置に開きます",
-                new[] { ("Auto", "自動"), ("Left", "左"), ("Center", "中央") },
+            DropDownRow(L.T("スタート メニューを開く位置"), L.T("自動はスタートボタンの位置に合わせます。Windows 標準のスタートも、ModernShell のタスクバー使用中はこの位置に開きます"),
+                new[] { ("Auto", L.T("自動")), ("Left", L.T("左")), ("Center", L.T("中央")) },
                 _s.StartMenuPosition.ToString(), v => _s.StartMenuPosition = Enum.Parse<StartMenuPosition>(v)));
 
-        Group(p, "", "レイアウト", "",
-            ToggleRow("開いたときに「すべてのアプリ」を表示", "ピン留めではなくアプリの一覧から始めます", _s.ShowAllAppsFirst, v => _s.ShowAllAppsFirst = v),
-            DropDownRow("ピン留めの列数", "", new[] { ("4", "4 列"), ("5", "5 列"), ("6", "6 列"), ("7", "7 列"), ("8", "8 列") },
+        Group(p, "", L.T("レイアウト"), "",
+            ToggleRow(L.T("開いたときに「すべてのアプリ」を表示"), L.T("ピン留めではなくアプリの一覧から始めます"), _s.ShowAllAppsFirst, v => _s.ShowAllAppsFirst = v),
+            DropDownRow(L.T("ピン留めの列数"), "", new[] { ("4", L.T("4 列")), ("5", L.T("5 列")), ("6", L.T("6 列")), ("7", L.T("7 列")), ("8", L.T("8 列")) },
                 _s.PinnedColumns.ToString(), v => _s.PinnedColumns = int.Parse(v)),
-            ToggleRow("ウィジェットを表示", "スタート メニューの右側に表示します。内容は「ウィジェット」で選べます", _s.ShowWidgets, v => _s.ShowWidgets = v));
+            ToggleRow(L.T("ウィジェットを表示"), L.T("スタート メニューの右側に表示します。内容は「ウィジェット」で選べます"), _s.ShowWidgets, v => _s.ShowWidgets = v));
 
-        p.Children.Add(Note("ピン留めはスタート メニュー上でドラッグして並べ替え、右クリックで追加・削除できます。初期状態に戻すには「ピン留めとアイコン」へ。"));
+        p.Children.Add(Note(L.T("ピン留めはスタート メニュー上でドラッグして並べ替え、右クリックで追加・削除できます。初期状態に戻すには「ピン留めとアイコン」へ。")));
     }
 
     private void TaskbarPage(StackPanel p)
@@ -278,88 +284,88 @@ public sealed class SettingsWindow : Window
         bool floating = _s.TaskbarStyle == TaskbarStyle.Floating;
 
         if (!_flat) p.Children.Add(Preview());
-        p.Children.Add(ToggleRow("ModernShell のタスクバーを使う",
-            "純正タスクバーを隠して、下で選んだ見た目で表示します。トレイアイコンも表示されます。終了すると純正に戻ります",
+        p.Children.Add(ToggleRow(L.T("ModernShell のタスクバーを使う"),
+            L.T("純正タスクバーを隠して、下で選んだ見た目で表示します。トレイアイコンも表示されます。終了すると純正に戻ります"),
             on, v => _s.UseCustomTaskbar = v));
 
-        p.Children.Add(Section("スタイル"));
-        p.Children.Add(ChoiceCards("スタイル", new[]
+        p.Children.Add(Section(L.T("スタイル")));
+        p.Children.Add(ChoiceCards(L.T("スタイル"), new[]
         {
-            ("帯", "画面の端に密着した、従来型のタスクバー", TaskbarStyle.Band == _s.TaskbarStyle, (Action)(() => _s.TaskbarStyle = TaskbarStyle.Band), Art.Band),
-            ("アイランド", "端から浮いた島。アプリ数に合わせて伸び縮み", floating, () => _s.TaskbarStyle = TaskbarStyle.Floating, Art.Island),
+            (L.T("帯"), L.T("画面の端に密着した、従来型のタスクバー"), TaskbarStyle.Band == _s.TaskbarStyle, (Action)(() => _s.TaskbarStyle = TaskbarStyle.Band), Art.Band),
+            (L.T("アイランド"), L.T("端から浮いた島。アプリ数に合わせて伸び縮み"), floating, () => _s.TaskbarStyle = TaskbarStyle.Floating, Art.Island),
         }, on));
 
-        p.Children.Add(Section("スタート・検索・タスク ビューの位置"));
-        p.Children.Add(ChoiceCards("スタートボタンの位置", new[]
+        p.Children.Add(Section(L.T("スタート・検索・タスク ビューの位置")));
+        p.Children.Add(ChoiceCards(L.T("スタートボタンの位置"), new[]
         {
-            ("アプリと一緒", "アプリのボタンと 1 つのかたまりにする（下の「アプリの配置」で中央か左）", _s.StartButtonPosition == StartButtonPosition.WithApps,
+            (L.T("アプリと一緒"), L.T("アプリのボタンと 1 つのかたまりにする（下の「アプリの配置」で中央か左）"), _s.StartButtonPosition == StartButtonPosition.WithApps,
                 (Action)(() => _s.StartButtonPosition = StartButtonPosition.WithApps), Art.WithApps),
-            ("左端", "常に画面の左端に置き、アプリは別に並べる", _s.StartButtonPosition == StartButtonPosition.LeftEdge,
+            (L.T("左端"), L.T("常に画面の左端に置き、アプリは別に並べる"), _s.StartButtonPosition == StartButtonPosition.LeftEdge,
                 () => _s.StartButtonPosition = StartButtonPosition.LeftEdge, Art.LeftEdge),
         }, on));
 
-        p.Children.Add(Section("詳細"));
-        Group(p, "", "配置と大きさ", "位置・高さ・余白",
-            DropDownRow("アプリの配置", "アプリのボタン（「アプリと一緒」のときはスタートボタンも）の位置",
-                new[] { ("Center", "中央"), ("Left", "左") }, _s.TaskbarAlignment.ToString(), v => _s.TaskbarAlignment = Enum.Parse<TaskbarAlignment>(v), on),
-            DropDownRow("画面上の位置", "", new[] { ("Bottom", "下"), ("Top", "上") }, _s.TaskbarEdge.ToString(),
+        p.Children.Add(Section(L.T("詳細")));
+        Group(p, "", L.T("配置と大きさ"), L.T("位置・高さ・余白"),
+            DropDownRow(L.T("アプリの配置"), L.T("アプリのボタン（「アプリと一緒」のときはスタートボタンも）の位置"),
+                new[] { ("Center", L.T("中央")), ("Left", L.T("左")) }, _s.TaskbarAlignment.ToString(), v => _s.TaskbarAlignment = Enum.Parse<TaskbarAlignment>(v), on),
+            DropDownRow(L.T("画面上の位置"), "", new[] { ("Bottom", L.T("下")), ("Top", L.T("上")) }, _s.TaskbarEdge.ToString(),
                 v => _s.TaskbarEdge = Enum.Parse<TaskbarEdge>(v), on),
-            DropDownRow("高さ", "40 px 未満では時計の日付を省略します",
-                new[] { ("28", "28 px"), ("32", "32 px"), ("36", "36 px"), ("40", "40 px"), ("44", "44 px"), ("48", "48 px（標準）"), ("56", "56 px"), ("64", "64 px") },
+            DropDownRow(L.T("高さ"), L.T("40 px 未満では時計の日付を省略します"),
+                new[] { ("28", "28 px"), ("32", "32 px"), ("36", "36 px"), ("40", "40 px"), ("44", "44 px"), ("48", L.T("48 px（標準）")), ("56", "56 px"), ("64", "64 px") },
                 _s.TaskbarHeight.ToString(), v => _s.TaskbarHeight = int.Parse(v), on),
-            DropDownRow("アプリ アイコンの大きさ", "",
-                new[] { ("16", "16 px（小）"), ("20", "20 px"), ("24", "24 px（標準）"), ("28", "28 px"), ("32", "32 px（大）") },
+            DropDownRow(L.T("アプリ アイコンの大きさ"), "",
+                new[] { ("16", L.T("16 px（小）")), ("20", "20 px"), ("24", L.T("24 px（標準）")), ("28", "28 px"), ("32", L.T("32 px（大）")) },
                 _s.TaskbarIconSize.ToString(), v => _s.TaskbarIconSize = int.Parse(v), on),
             floating
-                ? DropDownRow("アイランドの余白", "画面の端と島のあいだの距離", new[] { ("4", "4 px"), ("8", "8 px"), ("12", "12 px"), ("16", "16 px") },
+                ? DropDownRow(L.T("アイランドの余白"), L.T("画面の端と島のあいだの距離"), new[] { ("4", "4 px"), ("8", "8 px"), ("12", "12 px"), ("16", "16 px") },
                     _s.IslandMargin.ToString(), v => _s.IslandMargin = int.Parse(v), on)
-                : DropDownRow("帯の余白", "画面の端から離します。Windows は画面端に接したウィンドウの角を丸めないので、角丸にしたいときは余白を付けてください",
-                    new[] { ("0", "なし（画面端に密着）"), ("4", "4 px"), ("8", "8 px"), ("12", "12 px") },
+                : DropDownRow(L.T("帯の余白"), L.T("画面の端から離します。Windows は画面端に接したウィンドウの角を丸めないので、角丸にしたいときは余白を付けてください"),
+                    new[] { ("0", L.T("なし（画面端に密着）")), ("4", "4 px"), ("8", "8 px"), ("12", "12 px") },
                     _s.BandMargin.ToString(), v => _s.BandMargin = int.Parse(v), on));
 
-        Group(p, "", "ボタン", "タスクバーに並べるもの",
-            ToggleRow("検索ボタンを表示", "", _s.ShowSearchButton, v => _s.ShowSearchButton = v, on),
-            ToggleRow("タスク ビュー ボタンを表示", "", _s.ShowTaskViewButton, v => _s.ShowTaskViewButton = v, on),
-            ToggleRow("同じアプリのボタンをまとめる", "複数のウィンドウは一覧で選べます", _s.GroupTaskbarButtons, v => _s.GroupTaskbarButtons = v, on),
-            ToggleRow("ボタンにウィンドウ名を表示", "", _s.ShowTaskbarLabels, v => _s.ShowTaskbarLabels = v, on),
-            ToggleRow("ホバー時にアイコンを拡大", "カーソルを置いたアプリのアイコンを少し大きくします", _s.MagnifyOnHover, v => _s.MagnifyOnHover = v, on),
-            ToggleRow("時計に秒を表示", "", _s.ShowSeconds, v => _s.ShowSeconds = v, on));
+        Group(p, "", L.T("ボタン"), L.T("タスクバーに並べるもの"),
+            ToggleRow(L.T("検索ボタンを表示"), "", _s.ShowSearchButton, v => _s.ShowSearchButton = v, on),
+            ToggleRow(L.T("タスク ビュー ボタンを表示"), "", _s.ShowTaskViewButton, v => _s.ShowTaskViewButton = v, on),
+            ToggleRow(L.T("同じアプリのボタンをまとめる"), L.T("複数のウィンドウは一覧で選べます"), _s.GroupTaskbarButtons, v => _s.GroupTaskbarButtons = v, on),
+            ToggleRow(L.T("ボタンにウィンドウ名を表示"), "", _s.ShowTaskbarLabels, v => _s.ShowTaskbarLabels = v, on),
+            ToggleRow(L.T("ホバー時にアイコンを拡大"), L.T("カーソルを置いたアプリのアイコンを少し大きくします"), _s.MagnifyOnHover, v => _s.MagnifyOnHover = v, on),
+            ToggleRow(L.T("時計に秒を表示"), "", _s.ShowSeconds, v => _s.ShowSeconds = v, on));
 
-        Group(p, "", "プレビュー", "カーソルを置いたときに出る一覧",
-            ToggleRow("ウィンドウのプレビューを表示", "実行中のアプリのボタンに置くと、ウィンドウの中身を縮小表示します。クリックで切り替え、× で閉じます",
+        Group(p, "", L.T("プレビュー"), L.T("カーソルを置いたときに出る一覧"),
+            ToggleRow(L.T("ウィンドウのプレビューを表示"), L.T("実行中のアプリのボタンに置くと、ウィンドウの中身を縮小表示します。クリックで切り替え、× で閉じます"),
                 _s.ShowThumbnailPreview, v => _s.ShowThumbnailPreview = v, on),
-            ToggleRow("タスク ビュー ボタンで仮想デスクトップを表示", "カーソルを置くとデスクトップの一覧を表示し、クリックで切り替え、＋ で追加します",
+            ToggleRow(L.T("タスク ビュー ボタンで仮想デスクトップを表示"), L.T("カーソルを置くとデスクトップの一覧を表示し、クリックで切り替え、＋ で追加します"),
                 _s.ShowDesktopsOnTaskView, v => _s.ShowDesktopsOnTaskView = v, on && _s.ShowTaskViewButton),
-            DropDownRow("表示までの待ち時間", "",
-                new[] { ("0", "すぐ"), ("200", "0.2 秒"), ("400", "0.4 秒（標準）"), ("700", "0.7 秒"), ("1000", "1 秒") },
+            DropDownRow(L.T("表示までの待ち時間"), "",
+                new[] { ("0", L.T("すぐ")), ("200", L.T("0.2 秒")), ("400", L.T("0.4 秒（標準）")), ("700", L.T("0.7 秒")), ("1000", L.T("1 秒")) },
                 _s.PreviewDelayMs.ToString(), v => _s.PreviewDelayMs = int.Parse(v), on && (_s.ShowThumbnailPreview || _s.ShowDesktopsOnTaskView)),
-            DropDownRow("プレビューの大きさ", "",
-                new[] { ("Small", "小"), ("Medium", "中（標準）"), ("Large", "大") },
+            DropDownRow(L.T("プレビューの大きさ"), "",
+                new[] { ("Small", L.T("小")), ("Medium", L.T("中（標準）")), ("Large", L.T("大")) },
                 _s.PreviewSize, v => _s.PreviewSize = v, on && _s.ShowThumbnailPreview));
 
-        p.Children.Add(Note("背景の素材と不透明度は「外観」で変えられます。"));
+        p.Children.Add(Note(L.T("背景の素材と不透明度は「外観」で変えられます。")));
         if (!_flat)
-            p.Children.Add(InfoBar("困ったときは Ctrl + Alt + Shift + F12",
-                "いつでも ModernShell を終了して純正タスクバーに戻せます。トレイの「^」→ ModernShell アイコンの右クリック、スタートの電源メニューからも終了できます。"));
+            p.Children.Add(InfoBar(L.T("困ったときは Ctrl + Alt + Shift + F12"),
+                L.T("いつでも ModernShell を終了して純正タスクバーに戻せます。トレイの「^」→ ModernShell アイコンの右クリック、スタートの電源メニューからも終了できます。")));
     }
 
     private void PinsPage(StackPanel p)
     {
         bool on = _s.UseCustomTaskbar;
-        p.Children.Add(Section("タスクバーのピン留め", first: true));
-        p.Children.Add(ChoiceCards("タスクバーのピン留め", new[]
+        p.Children.Add(Section(L.T("タスクバーのピン留め"), first: true));
+        p.Children.Add(ChoiceCards(L.T("タスクバーのピン留め"), new[]
         {
-            ("Windows と共有", "Windows のタスクバーと同じアプリ・同じ並び順を表示（自動で追従）",
+            (L.T("Windows と共有"), L.T("Windows のタスクバーと同じアプリ・同じ並び順を表示（自動で追従）"),
                 _s.TaskbarPinSource == TaskbarPinSource.Windows, (Action)(() => _s.TaskbarPinSource = TaskbarPinSource.Windows), Art.PinsWindows),
-            ("ModernShell で管理", "右クリックでピン留め、ドラッグで並べ替え",
+            (L.T("ModernShell で管理"), L.T("右クリックでピン留め、ドラッグで並べ替え"),
                 _s.TaskbarPinSource == TaskbarPinSource.ModernShell, () => _s.TaskbarPinSource = TaskbarPinSource.ModernShell, Art.PinsOwn),
         }, on));
         if (_s.TaskbarPinSource == TaskbarPinSource.Windows)
-            p.Children.Add(NoteRow("Windows はアプリからピン留めを変更する手段を提供していないため、共有は「Windows → ModernShell」の一方向です。" +
-                                   "ModernShell のタスクバーで右クリックしてピン留めしたものは、Windows のピン留めの後ろに追加で並びます。"));
+            p.Children.Add(NoteRow(L.T("Windows はアプリからピン留めを変更する手段を提供していないため、共有は「Windows → ModernShell」の一方向です。") +
+                                   L.T("ModernShell のタスクバーで右クリックしてピン留めしたものは、Windows のピン留めの後ろに追加で並びます。")));
         else
-            p.Children.Add(ButtonRow("Windows のピン留めを取り込む", "Windows のタスクバーと同じ内容・並び順で置き換えます（その後は ModernShell で自由に変更できます）",
-                "取り込む", () =>
+            p.Children.Add(ButtonRow(L.T("Windows のピン留めを取り込む"), L.T("Windows のタスクバーと同じ内容・並び順で置き換えます（その後は ModernShell で自由に変更できます）"),
+                L.T("取り込む"), () =>
                 {
                     var ids = ImportWindowsPins?.Invoke();
                     if (ids == null || ids.Count == 0) return;
@@ -367,49 +373,49 @@ public sealed class SettingsWindow : Window
                     Commit();
                 }, enabled: on));
 
-        p.Children.Add(Section("アイコン"));
+        p.Children.Add(Section(L.T("アイコン")));
         int custom = _s.CustomIcons.Count;
-        p.Children.Add(ButtonRow("変更したアイコンを元に戻す",
-            custom > 0 ? $"タスクバーのボタンで「アイコンの変更」をした {custom} 個のアプリを、元のアイコンに戻します"
-                       : "タスクバーのボタンを右クリック →「アイコンの変更」で、アプリごとに好きなアイコンを選べます",
-            "すべて元に戻す", () => { _s.CustomIcons.Clear(); Commit(); }, enabled: custom > 0));
+        p.Children.Add(ButtonRow(L.T("変更したアイコンを元に戻す"),
+            custom > 0 ? L.F("タスクバーのボタンで「アイコンの変更」をした {0} 個のアプリを、元のアイコンに戻します", custom)
+                       : L.T("タスクバーのボタンを右クリック →「アイコンの変更」で、アプリごとに好きなアイコンを選べます"),
+            L.T("すべて元に戻す"), () => { _s.CustomIcons.Clear(); Commit(); }, enabled: custom > 0));
 
-        p.Children.Add(Section("スタート メニューのピン留め"));
-        p.Children.Add(ButtonRow("スタート メニューのピン留めを初期状態に戻す", "スタートメニュー上でドラッグして並べ替え、右クリックで追加・削除できます",
-            "初期状態に戻す", () =>
+        p.Children.Add(Section(L.T("スタート メニューのピン留め")));
+        p.Children.Add(ButtonRow(L.T("スタート メニューのピン留めを初期状態に戻す"), L.T("スタートメニュー上でドラッグして並べ替え、右クリックで追加・削除できます"),
+            L.T("初期状態に戻す"), () =>
             {
-                if (!Confirm("スタート メニューのピン留めを初期状態に戻しますか？")) return;
+                if (!Confirm(L.T("スタート メニューのピン留めを初期状態に戻しますか？"))) return;
                 _s.PinnedStart.Clear();
                 _s.PinnedStart.AddRange(Settings.DefaultPinnedStart);
                 Commit();
             }));
 
-        p.Children.Add(Section("通知領域（トレイ）"));
-        p.Children.Add(NoteRow("トレイのアイコンは、タスクバーと「^」の一覧のあいだをドラッグして、常に表示するかどうかを切り替えられます。並び順もドラッグで変えられます。"));
+        p.Children.Add(Section(L.T("通知領域（トレイ）")));
+        p.Children.Add(NoteRow(L.T("トレイのアイコンは、タスクバーと「^」の一覧のあいだをドラッグして、常に表示するかどうかを切り替えられます。並び順もドラッグで変えられます。")));
     }
 
     private void WidgetsPage(StackPanel p)
     {
-        p.Children.Add(ToggleRow("スタート メニューにウィジェットを表示", "スタート メニューの右側に表示します", _s.ShowWidgets, v => _s.ShowWidgets = v));
+        p.Children.Add(ToggleRow(L.T("スタート メニューにウィジェットを表示"), L.T("スタート メニューの右側に表示します"), _s.ShowWidgets, v => _s.ShowWidgets = v));
         bool on = _s.ShowWidgets;
-        p.Children.Add(Section("表示するウィジェットと並び順"));
-        if (!_flat) p.Children.Add(Note("↑↓ で並び順を変えられます。スタート メニュー上でもウィジェットの見出しをドラッグして並べ替えできます。"));
+        p.Children.Add(Section(L.T("表示するウィジェットと並び順")));
+        if (!_flat) p.Children.Add(Note(L.T("↑↓ で並び順を変えられます。スタート メニュー上でもウィジェットの見出しをドラッグして並べ替えできます。")));
         var order = _s.OrderedWidgets();
         for (int i = 0; i < order.Count; i++)
         {
             var id = order[i];
             var (title, desc) = id switch
             {
-                "clock" => ("時計とカレンダー", ""),
-                "weather" => ("天気", "Open-Meteo（無料・登録不要）から取得します。地点の名前が送信されます"),
-                "system" => ("システム", "CPU・メモリ・ディスクの使用状況"),
-                "folders" => ("フォルダー", "ドキュメント・ダウンロードなどへのショートカット"),
-                "recent" => ("最近使ったファイル", ""),
-                _ => ("メモ", "書いた内容は自動で保存されます"),
+                "clock" => (L.T("時計とカレンダー"), ""),
+                "weather" => (L.T("天気"), L.T("Open-Meteo（無料・登録不要）から取得します。地点の名前が送信されます")),
+                "system" => (L.T("システム"), L.T("CPU・メモリ・ディスクの使用状況")),
+                "folders" => (L.T("フォルダー"), L.T("ドキュメント・ダウンロードなどへのショートカット")),
+                "recent" => (L.T("最近使ったファイル"), ""),
+                _ => (L.T("メモ"), L.T("書いた内容は自動で保存されます")),
             };
             p.Children.Add(WidgetRow(id, title, desc, i, order.Count, on));
             if (id == "weather")
-                p.Children.Add(TextRow("天気の地点", "都市名（例: Tokyo, Osaka, 札幌）", _s.WeatherCity, v => _s.WeatherCity = v, on && _s.WidgetWeather));
+                p.Children.Add(TextRow(L.T("天気の地点"), L.T("都市名（例: Tokyo, Osaka, 札幌）"), _s.WeatherCity, v => _s.WeatherCity = v, on && _s.WidgetWeather));
         }
     }
 
@@ -430,90 +436,94 @@ public sealed class SettingsWindow : Window
         sw.Toggled += v => { _s.SetWidgetEnabled(id, v); Commit(); };
         sw.Margin = new Thickness(12, 0, 0, 0);
         var right = new StackPanel { Orientation = Orientation.Horizontal };
-        right.Children.Add(Arrow("", "上へ", index > 0, index - 1));
-        right.Children.Add(Arrow("", "下へ", index < count - 1, index + 2));
+        right.Children.Add(Arrow("", L.T("上へ"), index > 0, index - 1));
+        right.Children.Add(Arrow("", L.T("下へ"), index < count - 1, index + 2));
         right.Children.Add(sw);
         return Card(Texts(title, desc), right, enabled);
     }
 
     private void LookPage(StackPanel p)
     {
-        p.Children.Add(Section("モード", first: true));
-        p.Children.Add(ChoiceCards("モード テーマ ライト ダーク", new[]
+        p.Children.Add(Section(L.T("モード"), first: true));
+        p.Children.Add(ChoiceCards(L.T("モード テーマ ライト ダーク"), new[]
         {
-            ("Windows に合わせる", "", _s.Theme == ThemeMode.System, (Action)(() => _s.Theme = ThemeMode.System), Art.ThemeSystem),
-            ("ライト", "", _s.Theme == ThemeMode.Light, () => _s.Theme = ThemeMode.Light, Art.ThemeLight),
-            ("ダーク", "", _s.Theme == ThemeMode.Dark, () => _s.Theme = ThemeMode.Dark, Art.ThemeDark),
+            (L.T("Windows に合わせる"), "", _s.Theme == ThemeMode.System, (Action)(() => _s.Theme = ThemeMode.System), Art.ThemeSystem),
+            (L.T("ライト"), "", _s.Theme == ThemeMode.Light, () => _s.Theme = ThemeMode.Light, Art.ThemeLight),
+            (L.T("ダーク"), "", _s.Theme == ThemeMode.Dark, () => _s.Theme = ThemeMode.Dark, Art.ThemeDark),
         }, true));
 
-        p.Children.Add(Section("アクセント カラー"));
+        p.Children.Add(Section(L.T("アクセント カラー")));
         p.Children.Add(Swatches());
 
-        p.Children.Add(Section("背景と効果"));
+        p.Children.Add(Section(L.T("背景と効果")));
         // 3 択はどれも ModernShell が自分で描くので、GPU が無い PC でも同じ見た目になる
-        Group(p, "\uE8FC", "スタート メニュー", "スタート メニューと、そこから開くメニューの背景",
-            DropDownRow("背景", "透過なし: テーマの色（ライト/ダーク）。透過: テーマの色を半透明で。ぼかし: 壁紙を強くぼかした下地にテーマの色を重ねる",
-                new[] { ("Solid", "透過なし"), ("Transparent", "透過"), ("Blur", "ぼかし") }, _s.StartMenuBackground.ToString(), v => _s.StartMenuBackground = Enum.Parse<SurfaceStyle>(v)),
-            SliderRow("不透明度", "重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ",
+        Group(p, "\uE8FC", L.T("スタート メニュー"), L.T("スタート メニューと、そこから開くメニューの背景"),
+            DropDownRow(L.T("背景"), L.T("透過なし: テーマの色（ライト/ダーク）。透過: テーマの色を半透明で。ぼかし: 壁紙を強くぼかした下地にテーマの色を重ねる"),
+                new[] { ("Solid", L.T("透過なし")), ("Transparent", L.T("透過")), ("Blur", L.T("ぼかし")) }, _s.StartMenuBackground.ToString(), v => _s.StartMenuBackground = Enum.Parse<SurfaceStyle>(v)),
+            SliderRow(L.T("不透明度"), L.T("重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ"),
                 _s.StartMenuOpacity, v => _s.StartMenuOpacity = v, _s.StartMenuBackground != SurfaceStyle.Solid));
 
-        Group(p, "\uE75B", "タスクバー", "タスクバーと、そこから開くプレビュー・一覧・メニューの背景",
-            DropDownRow("背景", "透過なし: テーマの色（ライト/ダーク）。透過: テーマの色を半透明で。ぼかし: 壁紙を強くぼかした下地にテーマの色を重ねる",
-                new[] { ("Solid", "透過なし"), ("Transparent", "透過"), ("Blur", "ぼかし") }, _s.TaskbarBackground.ToString(), v => _s.TaskbarBackground = Enum.Parse<SurfaceStyle>(v), _s.UseCustomTaskbar),
-            SliderRow("不透明度", "重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ",
+        Group(p, "\uE75B", L.T("タスクバー"), L.T("タスクバーと、そこから開くプレビュー・一覧・メニューの背景"),
+            DropDownRow(L.T("背景"), L.T("透過なし: テーマの色（ライト/ダーク）。透過: テーマの色を半透明で。ぼかし: 壁紙を強くぼかした下地にテーマの色を重ねる"),
+                new[] { ("Solid", L.T("透過なし")), ("Transparent", L.T("透過")), ("Blur", L.T("ぼかし")) }, _s.TaskbarBackground.ToString(), v => _s.TaskbarBackground = Enum.Parse<SurfaceStyle>(v), _s.UseCustomTaskbar),
+            SliderRow(L.T("不透明度"), L.T("重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ"),
                 _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.UseCustomTaskbar && _s.TaskbarBackground != SurfaceStyle.Solid));
 
-        Group(p, "\uE916", "アニメーション", "開くときに滑り込ませるか、パッと表示するか",
-            ToggleRow("スタート メニュー", "下から滑り込みながら表示します（フォルダーを開くときの拡大も）", _s.AnimateStartMenu, v => _s.AnimateStartMenu = v),
-            ToggleRow("ウィンドウのプレビューと仮想デスクトップの一覧", "", _s.AnimatePreviews, v => _s.AnimatePreviews = v),
-            ToggleRow("通知領域（「^」）の展開", "", _s.AnimateTrayOverflow, v => _s.AnimateTrayOverflow = v),
-            ToggleRow("右クリック メニュー・ジャンプリスト・ドロップダウン", "", _s.AnimateMenus, v => _s.AnimateMenus = v));
+        Group(p, "\uE916", L.T("アニメーション"), L.T("開くときに滑り込ませるか、パッと表示するか"),
+            ToggleRow(L.T("スタート メニュー"), L.T("下から滑り込みながら表示します（フォルダーを開くときの拡大も）"), _s.AnimateStartMenu, v => _s.AnimateStartMenu = v),
+            ToggleRow(L.T("ウィンドウのプレビューと仮想デスクトップの一覧"), "", _s.AnimatePreviews, v => _s.AnimatePreviews = v),
+            ToggleRow(L.T("通知領域（「^」）の展開"), "", _s.AnimateTrayOverflow, v => _s.AnimateTrayOverflow = v),
+            ToggleRow(L.T("右クリック メニュー・ジャンプリスト・ドロップダウン"), "", _s.AnimateMenus, v => _s.AnimateMenus = v));
 
-        Group(p, "", "形と文字", "",
-            DropDownRow("角の丸み", "", new[] { ("0", "なし"), ("4", "小"), ("8", "標準"), ("12", "大") },
+        Group(p, "", L.T("形と文字"), "",
+            FontRow(),
+            DropDownRow(L.T("角の丸み"), "", new[] { ("0", L.T("なし")), ("4", L.T("小")), ("8", L.T("標準")), ("12", L.T("大")) },
                 ((int)_s.CornerRadius).ToString(), v => _s.CornerRadius = double.Parse(v)),
-            DropDownRow("メニューの文字サイズ", "右クリックメニュー・ジャンプリスト・サブメニュー共通",
-                new[] { ("12", "12 px（小）"), ("13", "13 px"), ("14", "14 px（標準）"), ("15", "15 px"), ("16", "16 px（大）") },
+            DropDownRow(L.T("メニューの文字サイズ"), L.T("右クリックメニュー・ジャンプリスト・サブメニュー共通"),
+                new[] { ("12", L.T("12 px（小）")), ("13", "13 px"), ("14", L.T("14 px（標準）")), ("15", "15 px"), ("16", L.T("16 px（大）")) },
                 _s.MenuFontSize.ToString(), v => _s.MenuFontSize = int.Parse(v)));
 
         if (!_flat)
-            p.Children.Add(InfoBar("ぼかしについて",
-                "「ぼかし」は、後ろのウィンドウではなく壁紙をぼかした色を下地にします（Windows 11 の Mica と同じ考え方）。" +
-                "GPU を使わずに描けて、画面共有やスクリーンショットにもそのまま写ります。"));
+            p.Children.Add(InfoBar(L.T("ぼかしについて"),
+                L.T("「ぼかし」は、後ろのウィンドウではなく壁紙をぼかした色を下地にします（Windows 11 の Mica と同じ考え方）。") +
+                L.T("GPU を使わずに描けて、画面共有やスクリーンショットにもそのまま写ります。")));
     }
 
     private void GeneralPage(StackPanel p)
     {
-        p.Children.Add(ToggleRow("サインイン時に起動", "Windows にサインインすると自動で常駐します",
+        p.Children.Add(DropDownRow(L.T("表示言語"), L.T("ModernShell の画面とメニューの言語"),
+            new[] { ("", L.T("自動（Windows に合わせる）")), ("ja", "日本語"), ("en", "English") },
+            _s.Language, v => _s.Language = v));
+        p.Children.Add(ToggleRow(L.T("サインイン時に起動"), L.T("Windows にサインインすると自動で常駐します"),
             _s.RunAtStartup, v => { _s.RunAtStartup = v; SystemActions.SetRunAtStartup(v); }));
-        p.Children.Add(ToggleRow("描画に GPU を使う",
-            "オフにすると GPU ドライバーを読み込まないので、使用メモリが減ります（アニメーションは CPU で描画）。見た目は変わりません。変更すると ModernShell を再起動します",
+        p.Children.Add(ToggleRow(L.T("描画に GPU を使う"),
+            L.T("オフにすると GPU ドライバーを読み込まないので、使用メモリが減ります（アニメーションは CPU で描画）。見た目は変わりません。変更すると ModernShell を再起動します"),
             _s.UseGpuRendering, v =>
             {
                 _s.UseGpuRendering = v;
                 _s.SaveQuiet();
-                if (Confirm("ModernShell を再起動して反映しますか？")) RestartRequested?.Invoke();
+                if (Confirm(L.T("ModernShell を再起動して反映しますか？"))) RestartRequested?.Invoke();
             }));
 
-        p.Children.Add(Section("設定の管理"));
-        Group(p, "", "バックアップ", "設定（ピン留め・並び順・アイコンを含む）を 1 つのファイルに保存して、別の PC に移したり元に戻したりできます",
-            ButtonRow("設定を書き出す", "settings.json を好きな場所に保存します", "書き出す", ExportSettings),
-            ButtonRow("設定を読み込む", "書き出したファイルで今の設定を置き換えて、ModernShell を再起動します", "読み込む", ImportSettings),
-            ButtonRow("設定を初期状態に戻す", "すべての設定を最初の状態に戻して、ModernShell を再起動します", "初期化", ResetSettings));
+        p.Children.Add(Section(L.T("設定の管理")));
+        Group(p, "", L.T("バックアップ"), L.T("設定（ピン留め・並び順・アイコンを含む）を 1 つのファイルに保存して、別の PC に移したり元に戻したりできます"),
+            ButtonRow(L.T("設定を書き出す"), L.T("settings.json を好きな場所に保存します"), L.T("書き出す"), ExportSettings),
+            ButtonRow(L.T("設定を読み込む"), L.T("書き出したファイルで今の設定を置き換えて、ModernShell を再起動します"), L.T("読み込む"), ImportSettings),
+            ButtonRow(L.T("設定を初期状態に戻す"), L.T("すべての設定を最初の状態に戻して、ModernShell を再起動します"), L.T("初期化"), ResetSettings));
 
-        p.Children.Add(Section("トラブルシューティング"));
-        p.Children.Add(ButtonRow("設定とログ", @"%AppData%\ModernShell に settings.json と modernshell.log があります",
-            "フォルダーを開く", () => Process.Start("explorer.exe", "\"" + Settings.Directory + "\"")));
-        p.Children.Add(ButtonRow("ModernShell を終了", "スタートメニューとタスクバーが純正に戻ります（Ctrl + Alt + Shift + F12 でも可）",
-            "終了", () => ExitRequested?.Invoke(), accent: true));
-        p.Children.Add(Note(@"終了できなくなった場合は、ModernShell.exe --restore を実行するか PC を再起動してください。"));
+        p.Children.Add(Section(L.T("トラブルシューティング")));
+        p.Children.Add(ButtonRow(L.T("設定とログ"), L.T("%AppData%\\ModernShell に settings.json と modernshell.log があります"),
+            L.T("フォルダーを開く"), () => Process.Start("explorer.exe", "\"" + Settings.Directory + "\"")));
+        p.Children.Add(ButtonRow(L.T("ModernShell を終了"), L.T("スタートメニューとタスクバーが純正に戻ります（Ctrl + Alt + Shift + F12 でも可）"),
+            L.T("終了"), () => ExitRequested?.Invoke(), accent: true));
+        p.Children.Add(Note(L.T("終了できなくなった場合は、ModernShell.exe --restore を実行するか PC を再起動してください。")));
     }
 
     private void ExportSettings()
     {
         var dlg = new Microsoft.Win32.SaveFileDialog
         {
-            Title = "設定を書き出す", Filter = "ModernShell の設定 (*.json)|*.json", DefaultExt = ".json",
+            Title = L.T("設定を書き出す"), Filter = L.T("ModernShell の設定 (*.json)|*.json"), DefaultExt = ".json",
             FileName = $"ModernShell-settings-{DateTime.Now:yyyyMMdd}.json",
         };
         if (dlg.ShowDialog(this) != true) return;
@@ -527,13 +537,13 @@ public sealed class SettingsWindow : Window
 
     private void ImportSettings()
     {
-        var dlg = new Microsoft.Win32.OpenFileDialog { Title = "設定を読み込む", Filter = "ModernShell の設定 (*.json)|*.json|すべてのファイル (*.*)|*.*" };
+        var dlg = new Microsoft.Win32.OpenFileDialog { Title = L.T("設定を読み込む"), Filter = L.T("ModernShell の設定 (*.json)|*.json|すべてのファイル (*.*)|*.*") };
         if (dlg.ShowDialog(this) != true) return;
         try
         {
             var text = File.ReadAllText(dlg.FileName);
-            if (!Settings.IsValid(text)) { MessageBox.Show(this, "ModernShell の設定ファイルではないようです。", "読み込めませんでした", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-            if (!Confirm("今の設定を置き換えて、ModernShell を再起動しますか？")) return;
+            if (!Settings.IsValid(text)) { MessageBox.Show(this, L.T("ModernShell の設定ファイルではないようです。"), L.T("読み込めませんでした"), MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            if (!Confirm(L.T("今の設定を置き換えて、ModernShell を再起動しますか？"))) return;
             Settings.Replace(text);
             RestartRequested?.Invoke();
         }
@@ -542,7 +552,7 @@ public sealed class SettingsWindow : Window
 
     private void ResetSettings()
     {
-        if (!Confirm("すべての設定を初期状態に戻して、ModernShell を再起動しますか？\n（今の設定を残したいときは、先に「設定を書き出す」をしてください）")) return;
+        if (!Confirm(L.T("すべての設定を初期状態に戻して、ModernShell を再起動しますか？\n（今の設定を残したいときは、先に「設定を書き出す」をしてください）"))) return;
         Settings.Replace(null);
         RestartRequested?.Invoke();
     }
@@ -552,10 +562,10 @@ public sealed class SettingsWindow : Window
 
     private void AboutPage(StackPanel p)
     {
-        p.Children.Add(ButtonRow("ModernShell " + Version, "explorer.exe にコードを注入しない、別プロセス型のスタートメニュー / タスクバー",
-            "Releases を開く", () => Open("https://github.com/c0dei/ModernShell/releases")));
-        p.Children.Add(ButtonRow("ソースコード", "github.com/c0dei/ModernShell", "GitHub で開く", () => Open("https://github.com/c0dei/ModernShell")));
-        p.Children.Add(Note("通知領域とタスク一覧には ManagedShell (Apache-2.0, cairoshell) を使用しています。"));
+        p.Children.Add(ButtonRow("ModernShell " + Version, L.T("explorer.exe にコードを注入しない、別プロセス型のスタートメニュー / タスクバー"),
+            L.T("Releases を開く"), () => Open("https://github.com/c0dei/ModernShell/releases")));
+        p.Children.Add(ButtonRow(L.T("ソースコード"), "github.com/c0dei/ModernShell", L.T("GitHub で開く"), () => Open("https://github.com/c0dei/ModernShell")));
+        p.Children.Add(Note(L.T("通知領域とタスク一覧には ManagedShell (Apache-2.0, cairoshell) を使用しています。")));
     }
 
     private static void Open(string url)
@@ -650,6 +660,28 @@ public sealed class SettingsWindow : Window
         var sw = new ToggleSwitch(value);
         sw.Toggled += v => { set(v); Commit(); };
         return Card(Texts(title, desc), sw, enabled);
+    }
+
+    /// <summary>
+    /// フォントの選択。一覧の各フォント名はそのフォントで表示する。名前は表示言語に合わせて（日本語なら「游ゴシック」など）。
+    /// タスクバー・スタートメニュー・メニューに使い、設定画面はシステムのフォントのまま。
+    /// </summary>
+    private Border FontRow()
+    {
+        var lang = System.Windows.Markup.XmlLanguage.GetLanguage(L.IsEnglish ? "en-us" : "ja-jp");
+        var fonts = Fonts.SystemFontFamilies
+            .Where(f => !f.Source.StartsWith("@"))
+            .Select(f => (value: f.Source, label: f.FamilyNames.TryGetValue(lang, out var n) ? n : f.Source))
+            .GroupBy(x => x.value).Select(g => g.First())
+            .OrderBy(x => x.label, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        fonts.Insert(0, ("", L.T("標準（Segoe UI Variable）")));
+        var combo = new FluentComboBox(fonts.ToArray(), _s.UiFont, v => { _s.UiFont = v; Commit(); })
+        {
+            ItemFont = v => v.Length == 0 ? Theme.TextFont : new FontFamily(v),
+        };
+        // 検索で全フォント名に一致しないよう、選択肢は検索用の文字に入れない
+        return Card(Texts(L.T("フォント"), L.T("タスクバー・スタート メニュー・メニューの文字。設定画面には使いません")), combo);
     }
 
     private Border DropDownRow(string title, string desc, (string value, string label)[] options, string current, Action<string> set, bool enabled = true)
@@ -944,7 +976,7 @@ public sealed class SettingsWindow : Window
         }
         else
         {
-            var l = UiKit.Label("純正タスクバーを使用中", 13, Brushes.White);
+            var l = UiKit.Label(L.T("純正タスクバーを使用中"), 13, Brushes.White);
             l.HorizontalAlignment = HorizontalAlignment.Center;
             area.Children.Add(l);
         }
@@ -968,14 +1000,14 @@ public sealed class SettingsWindow : Window
             bool sel = string.Equals(_s.AccentColor, hex, StringComparison.OrdinalIgnoreCase);
             var fill = hex.Length == 0 ? new SolidColorBrush(Theme.SystemAccent()) : new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
             var inner = new Grid();
-            if (hex.Length == 0) inner.Children.Add(UiKit.Label("自動", 10, Brushes.White));
+            if (hex.Length == 0) inner.Children.Add(UiKit.Label(L.T("自動"), 10, Brushes.White));
             if (sel) inner.Children.Add(UiKit.Glyph("", 14, Brushes.White));
             foreach (UIElement c in inner.Children) if (c is FrameworkElement fe) { fe.HorizontalAlignment = HorizontalAlignment.Center; fe.VerticalAlignment = VerticalAlignment.Center; }
             var tile = new Tile
             {
                 Width = 44, Height = 44, Margin = new Thickness(0, 0, 8, 8), CornerRadius = T.Corner(4), Background = fill,
                 BorderThickness = new Thickness(2), BorderBrush = sel ? T.Text : Brushes.Transparent, Child = inner,
-                ToolTip = hex.Length == 0 ? "Windows のアクセント カラー" : hex,
+                ToolTip = hex.Length == 0 ? L.T("Windows のアクセント カラー") : hex,
             };
             tile.MouseLeave += (_, _) => { tile.Background = fill; tile.BorderBrush = sel ? T.Text : Brushes.Transparent; };
             tile.MouseEnter += (_, _) => tile.Background = fill;
@@ -988,7 +1020,7 @@ public sealed class SettingsWindow : Window
         var plus = new Tile
         {
             Width = 44, Height = 44, Margin = new Thickness(0, 0, 8, 8), CornerRadius = T.Corner(4), Background = T.ControlFill,
-            BorderThickness = new Thickness(1), BorderBrush = T.ControlBorder, Child = UiKit.Glyph("\uE710", 16), ToolTip = "色を選ぶ",
+            BorderThickness = new Thickness(1), BorderBrush = T.ControlBorder, Child = UiKit.Glyph("\uE710", 16), ToolTip = L.T("色を選ぶ"),
         };
         plus.MouseLeave += (_, _) => { plus.Background = T.ControlFill; plus.BorderBrush = T.ControlBorder; };
         plus.Click += _ => { _pickerOpen = !_pickerOpen; Commit(); };
@@ -1007,7 +1039,7 @@ public sealed class SettingsWindow : Window
         var card = new Border
         {
             Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6),
-            Padding = new Thickness(20, 14, 12, 6), Child = content, Tag = "アクセント カラー 色",
+            Padding = new Thickness(20, 14, 12, 6), Child = content, Tag = L.T("アクセント カラー 色"),
         };
         return card;
     }
@@ -1056,7 +1088,7 @@ public sealed class ToggleSwitch : StackPanel
     private void Refresh()
     {
         var t = Theme.Current;
-        _label.Text = _on ? "オン" : "オフ";
+        _label.Text = _on ? L.T("オン") : L.T("オフ");
         _track.Background = _on ? t.AccentBrush : Brushes.Transparent;
         _track.BorderBrush = _on ? t.AccentBrush : t.TextSecondary;
         _knob.Fill = _on ? t.OnAccent : t.TextSecondary;

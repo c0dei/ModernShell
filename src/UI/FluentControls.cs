@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -42,7 +43,8 @@ public static class FluentSurface
             Placement = placement,
             PopupAnimation = PopupAnimation.None,
         };
-        var state = new LookState { Content = (FrameworkElement)content };
+        // ポップアップは開いた場所のフォントを受け継ぐ（タスクバー・スタートからなら設定のフォント、設定画面ならシステムのフォント）
+        var state = new LookState { Content = (FrameworkElement)content, Font = TextElement.GetFontFamily(target) };
         _looks.Add(popup, state);
         var s = Settings.Current ?? new Settings();
         Paint(popup, state, s.StartMenuBackground, s.StartMenuOpacity);
@@ -88,6 +90,7 @@ public static class FluentSurface
     private sealed class LookState
     {
         public required FrameworkElement Content;
+        public FontFamily? Font;
         public SurfacePaint.Painted? Painted;
         public EventHandler? Follow;
         public bool Taskbar;
@@ -99,6 +102,7 @@ public static class FluentSurface
         if (state.Content.Parent is Border old) old.Child = null;
         popup.Child = null;
         state.Painted = SurfacePaint.Wrap(state.Content, style, opacity, new CornerRadius(Math.Max(0, Theme.Current.Radius)), shadow: true);
+        if (state.Font != null) TextElement.SetFontFamily(state.Painted.Root, state.Font);
         popup.Child = state.Painted.Root;
     }
 
@@ -193,6 +197,12 @@ public sealed class FluentComboBox : Border
     private string _value;
     private bool _pressed;
     private Popup? _popup;
+
+    /// <summary>一覧の各項目をそのフォントで表示する（フォントの選択用）。null ならふつうのフォント。</summary>
+    public Func<string, FontFamily?>? ItemFont { get; init; }
+
+    /// <summary>一度に見せる項目の数。これより多いと一覧をスクロールにして、ボタンの下に出す。</summary>
+    private const int MaxVisible = 12;
 
     public FluentComboBox((string value, string label)[] options, string current, Action<string> onSelect)
     {
@@ -291,6 +301,7 @@ public sealed class FluentComboBox : Border
             });
             var text = UiKit.Label(label, 14);
             text.Margin = new Thickness(12, 0, 0, 0);
+            if (ItemFont?.Invoke(value) is { } font) text.FontFamily = font;
             row.Children.Add(text);
             var item = new Tile { Height = ItemHeight, Margin = new Thickness(4, 2, 4, 2), Padding = new Thickness(0, 0, 12, 0), Child = row, IsSelected = sel };
             var v = value;
@@ -306,20 +317,34 @@ public sealed class FluentComboBox : Border
             list.Children.Add(item);
         }
 
+        // 項目が多いとき（フォントの一覧など）はスクロールにして、ボタンの下に出す
+        bool scroll = _options.Length > MaxVisible;
+        FrameworkElement content = list;
+        if (scroll)
+            content = new ScrollViewer
+            {
+                Content = list, MaxHeight = ListPadding * 2 + MaxVisible * ItemPitch, Focusable = false,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            };
+
         // 選択中の項目がボタンの上にぴったり重なる位置に出す（WinUI の ComboBox と同じ）
-        _popup = FluentSurface.Create(list, this, PlacementMode.Relative);
+        _popup = FluentSurface.Create(content, this, PlacementMode.Relative);
         // 周りに影の余白があるので、その分広げてずらし、一覧がボタンにぴったり重なるようにする
         const double pad = SurfacePaint.ShadowPad;
-        _popup.Width = ActualWidth + pad * 2;
+        _popup.Width = Math.Max(ActualWidth, scroll ? 280 : 0) + pad * 2;
         _popup.HorizontalOffset = -pad;
-        _popup.VerticalOffset = (ActualHeight - ItemHeight) / 2 - (ListPadding + 2 + index * ItemPitch) - pad;
+        _popup.VerticalOffset = scroll
+            ? ActualHeight + 4 - pad
+            : (ActualHeight - ItemHeight) / 2 - (ListPadding + 2 + index * ItemPitch) - pad;
         _popup.KeyDown += (_, e) => { if (e.Key == Key.Escape) _popup.IsOpen = false; };
         _popup.Closed += (_, _) => Focus();
         _popup.IsOpen = true;
         Flyout.ToggleGuard(_popup, this);
 
         double total = ListPadding * 2 + _options.Length * ItemPitch;
-        if (Settings.Current?.AnimateMenus != false) FluentSurface.AnimateOpen(list, (ListPadding + index * ItemPitch + ItemPitch / 2) / total);
+        if (Settings.Current?.AnimateMenus != false) FluentSurface.AnimateOpen(list, scroll ? 0 : (ListPadding + index * ItemPitch + ItemPitch / 2) / total);
+        if (scroll && content is ScrollViewer sv)
+            sv.Dispatcher.BeginInvoke(() => sv.ScrollToVerticalOffset(Math.Max(0, index - MaxVisible / 2) * ItemPitch), System.Windows.Threading.DispatcherPriority.Loaded);
         selectedTile?.Focus();
     }
 }

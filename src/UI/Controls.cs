@@ -111,7 +111,7 @@ public static class UiKit
     public static TextBlock Label(string text, double size = 13, Brush? fg = null, FontWeight? weight = null) => new()
     {
         Text = text,
-        FontFamily = Theme.TextFont,
+        // フォントは置かれたウィンドウから受け継ぐ（タスクバー・スタートは設定のフォント、設定画面はシステムのフォント）
         FontSize = size,
         FontWeight = weight ?? FontWeights.Normal,
         Foreground = fg ?? Theme.Current.Text,

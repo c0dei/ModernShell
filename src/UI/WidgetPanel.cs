@@ -80,7 +80,7 @@ public sealed class WidgetPanel : ScrollViewer
     {
         var now = DateTime.Now;
         if (_clockTime != null) _clockTime.Text = now.ToString("H:mm");
-        if (_clockDate != null) _clockDate.Text = now.ToString("M月d日 (ddd)", CultureInfo.GetCultureInfo("ja-JP"));
+        if (_clockDate != null) _clockDate.Text = (L.IsEnglish ? now.ToString("ddd, MMM d", L.Culture) : now.ToString("M月d日 (ddd)", L.Culture));
 
         if (_cpu != null && _ticks++ % 2 == 0)
         {
@@ -89,7 +89,7 @@ public sealed class WidgetPanel : ScrollViewer
             var (mp, used, total) = _stats.Memory();
             Set(_mem!.Value, mp, $"{used:0.0} / {total:0} GB");
             var (dp, free) = _stats.SystemDrive();
-            Set(_disk!.Value, dp, $"空き {free:0} GB");
+            Set(_disk!.Value, dp, L.F("空き {0:0} GB", free));
         }
 
         static void Set((ProgressBar bar, TextBlock text) x, double v, string s) { x.bar.Value = v; x.text.Text = s; }
@@ -114,7 +114,7 @@ public sealed class WidgetPanel : ScrollViewer
         card.RenderTransform = new TranslateTransform();
         if (card.Child is not StackPanel { Children.Count: > 0 } s || s.Children[0] is not FrameworkElement header) return;
         header.Cursor = Cursors.SizeAll;
-        header.ToolTip = "ドラッグで並べ替え";
+        header.ToolTip = L.T("ドラッグで並べ替え");
         header.MouseLeftButtonDown += (_, e) => { BeginDrag(card, e); header.CaptureMouse(); e.Handled = true; };
         header.MouseMove += (_, e) => { if (_dragCard == card) DragMove(e); };
         header.MouseLeftButtonUp += (_, _) => { header.ReleaseMouseCapture(); EndDrag(); };
@@ -244,7 +244,7 @@ public sealed class WidgetPanel : ScrollViewer
         body.Children.Add(_clockTime);
         body.Children.Add(_clockDate);
         body.Children.Add(Calendar(t));
-        return Card(t, "時計とカレンダー", body);
+        return Card(t, L.T("時計とカレンダー"), body);
     }
 
     /// <summary>今月のカレンダー（今日を強調）。</summary>
@@ -253,7 +253,7 @@ public sealed class WidgetPanel : ScrollViewer
         var today = DateTime.Today;
         var first = new DateTime(today.Year, today.Month, 1);
         var grid = new UniformGrid { Columns = 7, Margin = new Thickness(0, 10, 0, 0) };
-        foreach (var d in new[] { "日", "月", "火", "水", "木", "金", "土" })
+        foreach (var d in new[] { L.T("日"), L.T("月"), L.T("火"), L.T("水"), L.T("木"), L.T("金"), L.T("土") })
         {
             var l = UiKit.Label(d, 11, t.TextSecondary);
             l.HorizontalAlignment = HorizontalAlignment.Center;
@@ -277,7 +277,7 @@ public sealed class WidgetPanel : ScrollViewer
     private Border WeatherCard(Theme t)
     {
         var temp = UiKit.Label("—", 30, t.Text, FontWeights.SemiBold);
-        var desc = UiKit.Label("読み込み中…", 13, t.TextSecondary);
+        var desc = UiKit.Label(L.T("読み込み中…"), 13, t.TextSecondary);
         var range = UiKit.Label("", 12, t.TextSecondary);
         var glyph = UiKit.Glyph("", 34, t.AccentBrush);
         glyph.Margin = new Thickness(0, 0, 16, 0);
@@ -286,17 +286,17 @@ public sealed class WidgetPanel : ScrollViewer
         text.Children.Add(desc);
         text.Children.Add(range);
         var row = UiKit.Row(glyph, text);
-        var card = Card(t, "天気 · " + _settings.WeatherCity, row);
+        var card = Card(t, L.T("天気 · ") + _settings.WeatherCity, row);
 
         Task.Run(() => Weather.GetAsync(_settings.WeatherCity)).ContinueWith(r =>
         {
             var w = r.Result;
             Dispatcher.BeginInvoke(() =>
             {
-                if (w == null) { desc.Text = "取得できませんでした（設定で地点を確認）"; return; }
+                if (w == null) { desc.Text = L.T("取得できませんでした（設定で地点を確認）"); return; }
                 temp.Text = $"{w.Temperature:0}°";
                 desc.Text = $"{w.Place}  {w.Description}";
-                range.Text = $"最高 {w.Max:0}° / 最低 {w.Min:0}°";
+                range.Text = L.F("最高 {0:0}° / 最低 {1:0}°", w.Max, w.Min);
                 glyph.Text = w.IsClear ? "" : "";
             });
         }, TaskScheduler.Default);
@@ -328,9 +328,9 @@ public sealed class WidgetPanel : ScrollViewer
             return (bar, val);
         }
         _cpu = Row("CPU");
-        _mem = Row("メモリ");
-        _disk = Row("ディスク");
-        return Card(t, "システム", body);
+        _mem = Row(L.T("メモリ"));
+        _disk = Row(L.T("ディスク"));
+        return Card(t, L.T("システム"), body);
     }
 
     private Border FoldersCard(Theme t)
@@ -349,14 +349,14 @@ public sealed class WidgetPanel : ScrollViewer
             tile.Click += _ => Open(path);
             grid.Children.Add(tile);
         }
-        return Card(t, "フォルダー", grid);
+        return Card(t, L.T("フォルダー"), grid);
     }
 
     private Border RecentCard(Theme t)
     {
         var list = new StackPanel();
         var items = UserFolders.Recent(6);
-        if (items.Count == 0) list.Children.Add(UiKit.Label("最近使ったファイルはありません", 12, t.TextSecondary));
+        if (items.Count == 0) list.Children.Add(UiKit.Label(L.T("最近使ったファイルはありません"), 12, t.TextSecondary));
         foreach (var (name, lnk) in items)
         {
             var img = UiKit.Icon(null, 20);
@@ -373,7 +373,7 @@ public sealed class WidgetPanel : ScrollViewer
             tile.Click += _ => Open(lnk);
             list.Children.Add(tile);
         }
-        return Card(t, "最近使ったファイル", list);
+        return Card(t, L.T("最近使ったファイル"), list);
     }
 
     private Border NotesCard(Theme t)
@@ -388,7 +388,7 @@ public sealed class WidgetPanel : ScrollViewer
         save.Stop();
         box.TextChanged += (_, _) => { save.Stop(); save.Start(); };
         box.LostFocus += (_, _) => Notes.Save(box.Text);
-        return Card(t, "メモ", box);
+        return Card(t, L.T("メモ"), box);
     }
 
     private void Open(string path)
