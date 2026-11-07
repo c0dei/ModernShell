@@ -42,6 +42,10 @@ internal static class IconHelper
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
     private static extern int SHCreateItemFromParsingName(string path, IntPtr pbc, ref Guid riid, [MarshalAs(UnmanagedType.Interface)] out IShellItemImageFactory? item);
 
+    /// <summary>作り置きがあればそれを返す（無ければ読み込まずに null）。UI を止めずに済むかの確認用。</summary>
+    public static bool TryGetCached(string parsingName, int size, out ImageSource? icon) =>
+        Cache.TryGetValue(parsingName + "|" + size, out icon);
+
     /// <summary>parsingName は "shell:AppsFolder\..." やファイルパス。STA/MTA どちらでも可。</summary>
     public static ImageSource? Get(string parsingName, int size = 48)
     {

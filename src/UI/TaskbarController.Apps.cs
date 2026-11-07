@@ -316,7 +316,7 @@ public sealed partial class TaskbarController
 
         if (app != null)
         {
-            items.Add(new MenuItemSpec("", app.Name, () => app.Launch()) { Icon = CustomIcon(g) ?? app.Icon(32) ?? w0?.Icon, SubMenu = () => AppItemMenu(app) });
+            items.Add(new MenuItemSpec("", app.Name, () => app.Launch()) { Icon = CustomIcon(g) ?? ButtonIcon(g) ?? w0?.Icon, // ButtonIcon はシェルからの読み込みで UI を止めない SubMenu = () => AppItemMenu(app) });
             if (IsWindowsPin(app))
             {
                 // Windows のピン留めはアプリから変更できない（Windows が API を提供していない）
@@ -374,7 +374,28 @@ public sealed partial class TaskbarController
         var exe = app?.ExePath ?? (w0 != null ? ExePath(w0) : null);
         if (exe != null && !exe.EndsWith("ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase)
             && ModernShell.Core.IconHelper.Exact(exe, 0, px) is { } fromExe) return fromExe;
-        return app?.Icon(64);
+        return app != null ? ShellIconAsync(app) : null;
+    }
+
+    private readonly HashSet<string> _iconsLoading = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// アプリ一覧（シェル）からのアイコン。「設定」などの Windows のアプリは exe もショートカットも無く、シェルに頼むしかないが、
+    /// 起動直後は 1 つに数秒〜10 秒かかることがあり、その間タスクバー全体が固まってしまう。
+    /// そこで別スレッドで読み込み、できたらボタンを作り直す（それまではアイコン無し、実行中ならウィンドウのアイコン）。
+    /// </summary>
+    private ImageSource? ShellIconAsync(AppEntry app)
+    {
+        if (ModernShell.Core.IconHelper.TryGetCached(app.ShellPath, 64, out var cached)) return cached;
+        if (!_iconsLoading.Add(app.ShellPath)) return null;
+        var path = app.ShellPath;
+        System.Threading.Tasks.Task.Run(() => ModernShell.Core.IconHelper.Get(path, 64)).ContinueWith(_ =>
+            _dispatcher.BeginInvoke(() =>
+            {
+                _iconsLoading.Remove(path);
+                if (!_disposed) Kick(_appsDebounce);
+            }), System.Threading.Tasks.TaskScheduler.Default);
+        return null;
     }
 
     // ---- アイコンの差し替え ----
