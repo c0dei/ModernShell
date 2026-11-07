@@ -28,7 +28,9 @@ public sealed class WidgetPanel : ScrollViewer
     private readonly SystemStats _stats = new();
     private readonly DispatcherTimer _tick;
     private TextBlock? _clockTime, _clockDate;
-    private (ProgressBar bar, TextBlock text)? _cpu, _mem, _disk;
+    private (ProgressBar bar, TextBlock text)? _cpu, _mem;
+    /// <summary>ドライブごとの行（C:, D: …）。</summary>
+    private readonly List<(string root, ProgressBar bar, TextBlock text)> _disks = new();
     private int _ticks;
 
     public event Action? LaunchedSomething;
@@ -64,7 +66,9 @@ public sealed class WidgetPanel : ScrollViewer
         var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 16) };
         _stack = stack;
         _cards.Clear();
-        _cpu = _mem = _disk = null;
+        _cpu = _mem = null;
+        _disks.Clear();
+        _netIcon = _netKind = _netDown = _netUp = null;
         _clockTime = _clockDate = null;
         foreach (var id in _settings.OrderedWidgets().Where(_settings.IsWidgetEnabled))
         {
@@ -91,8 +95,12 @@ public sealed class WidgetPanel : ScrollViewer
             Set(_cpu.Value, cpu, $"{cpu:0}%");
             var (mp, used, total) = _stats.Memory();
             Set(_mem!.Value, mp, $"{used:0.0} / {total:0} GB");
-            var (dp, free) = _stats.SystemDrive();
-            Set(_disk!.Value, dp, L.F("空き {0:0} GB", free));
+            foreach (var (root, bar, text) in _disks)
+            {
+                var (dp, dUsed, dTotal) = SystemStats.Drive(root);
+                Set((bar, text), dp, $"{dUsed:0} / {dTotal:0} GB");
+            }
+            RefreshNetwork();
         }
 
         static void Set((ProgressBar bar, TextBlock text) x, double v, string s) { x.bar.Value = v; x.text.Text = s; }
@@ -312,7 +320,7 @@ public sealed class WidgetPanel : ScrollViewer
         (ProgressBar, TextBlock) Row(string label)
         {
             var g = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Fs(84)) });
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
             g.Children.Add(UiKit.Label(label, Fs(12)));
@@ -332,8 +340,63 @@ public sealed class WidgetPanel : ScrollViewer
         }
         _cpu = Row("CPU");
         _mem = Row(L.T("メモリ"));
-        _disk = Row(L.T("ディスク"));
+        // ディスク: 内蔵・外付けの固定ドライブをすべて（C: が最初）。1 台だけなら「ディスク」とだけ表示
+        var drives = SystemStats.FixedDrives();
+        foreach (var root in drives)
+        {
+            var (bar, text) = Row(drives.Count == 1 ? L.T("ディスク") : L.T("ディスク") + " " + root.TrimEnd('\\'));
+            _disks.Add((root, bar, text));
+        }
+
+        // ネットワーク: 接続の種類（Wi-Fi / 有線）のアイコンと、下り・上りの速さ
+        var net = new Grid();
+        net.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Fs(84)) });
+        net.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        net.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        _netIcon = UiKit.Glyph("\uE839", Fs(14));
+        _netKind = UiKit.Label("", Fs(12));
+        _netKind.Margin = new Thickness(6, 0, 0, 0);
+        var kind = UiKit.Row(_netIcon, _netKind);
+        net.Children.Add(kind);
+        _netDown = UiKit.Label("↓ -", Fs(12), t.TextSecondary);
+        _netDown.HorizontalAlignment = HorizontalAlignment.Right;
+        Grid.SetColumn(_netDown, 1);
+        net.Children.Add(_netDown);
+        _netUp = UiKit.Label("↑ -", Fs(12), t.TextSecondary);
+        _netUp.HorizontalAlignment = HorizontalAlignment.Right;
+        Grid.SetColumn(_netUp, 2);
+        net.Children.Add(_netUp);
+        body.Children.Add(net);
+        RefreshNetwork();
         return Card(t, L.T("システム"), body);
+    }
+
+    private TextBlock? _netIcon, _netKind, _netDown, _netUp;
+    private int _netBusy;
+
+    /// <summary>ネットワークの速さを別スレッドで測って表示する（アダプターの一覧を読むのは遅いことがあるため）。</summary>
+    private void RefreshNetwork()
+    {
+        if (_netIcon == null || System.Threading.Interlocked.Exchange(ref _netBusy, 1) == 1) return;
+        Task.Run(() =>
+        {
+            var (kind, down, up) = _stats.Network();
+            _netBusy = 0;
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (_netIcon == null || _netKind == null || _netDown == null || _netUp == null) return;
+                (_netIcon.Text, _netKind.Text) = kind switch
+                {
+                    SystemStats.NetKind.Wifi => ("\uE701", "Wi-Fi"),
+                    SystemStats.NetKind.Ethernet => ("\uE839", L.T("有線")),
+                    SystemStats.NetKind.Other => ("\uE968", L.T("ネット")),
+                    _ => ("\uF384", L.T("未接続")),
+                };
+                bool on = kind != SystemStats.NetKind.None;
+                _netDown.Text = on ? "↓ " + SystemStats.Speed(down) : "";
+                _netUp.Text = on ? "↑ " + SystemStats.Speed(up) : "";
+            });
+        });
     }
 
     private Border FoldersCard(Theme t)

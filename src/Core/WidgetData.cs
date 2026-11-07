@@ -119,15 +119,93 @@ public sealed class SystemStats
         return (m.dwMemoryLoad, used, total);
     }
 
-    public (double percent, double freeGb) SystemDrive()
+    /// <summary>内蔵・外付けの固定ドライブのルート（"C:\\" など）。システムドライブを先頭に。</summary>
+    public static List<string> FixedDrives()
+    {
+        var system = Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\";
+        try
+        {
+            return DriveInfo.GetDrives()
+                .Where(d => d.DriveType == DriveType.Fixed && d.IsReady)
+                .Select(d => d.RootDirectory.FullName)
+                .OrderBy(r => string.Equals(r, system, StringComparison.OrdinalIgnoreCase) ? 0 : 1).ThenBy(r => r)
+                .ToList();
+        }
+        catch { return new List<string> { system }; }
+    }
+
+    /// <summary>ドライブの使用率・使用量・全体 (GB)。</summary>
+    public static (double percent, double usedGb, double totalGb) Drive(string root)
     {
         try
         {
-            var d = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\");
-            return (100.0 * (d.TotalSize - d.AvailableFreeSpace) / d.TotalSize, d.AvailableFreeSpace / 1073741824.0);
+            var d = new DriveInfo(root);
+            double used = d.TotalSize - d.AvailableFreeSpace;
+            return (100.0 * used / d.TotalSize, used / 1073741824.0, d.TotalSize / 1073741824.0);
         }
-        catch { return (0, 0); }
+        catch { return (0, 0, 0); }
     }
+
+    public enum NetKind { None, Wifi, Ethernet, Other }
+
+    private long _lastRx, _lastTx;
+    private readonly System.Diagnostics.Stopwatch _netClock = new();
+
+    /// <summary>
+    /// インターネットにつながっているアダプター（既定のゲートウェイがあるもの）の、前回からの受信・送信の速さ (バイト/秒) と接続の種類。
+    /// アダプターの一覧を読むのは数秒かかることがあるので、UI スレッドでは呼ばないこと。
+    /// </summary>
+    public (NetKind kind, double downBps, double upBps) Network()
+    {
+        long rx = 0, tx = 0;
+        var kind = NetKind.None;
+        long best = -1;
+        try
+        {
+            foreach (var n in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (n.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+                if (n.NetworkInterfaceType is System.Net.NetworkInformation.NetworkInterfaceType.Loopback
+                    or System.Net.NetworkInformation.NetworkInterfaceType.Tunnel) continue;
+                var props = n.GetIPProperties();
+                if (props.GatewayAddresses.Count == 0) continue; // ネットにつながっていない（仮想スイッチなど）
+                var s = n.GetIPStatistics();
+                rx += s.BytesReceived;
+                tx += s.BytesSent;
+                // いちばん通信量の多いアダプターの種類を「接続の種類」にする
+                long total = s.BytesReceived + s.BytesSent;
+                if (total > best)
+                {
+                    best = total;
+                    kind = n.NetworkInterfaceType switch
+                    {
+                        System.Net.NetworkInformation.NetworkInterfaceType.Wireless80211 => NetKind.Wifi,
+                        System.Net.NetworkInformation.NetworkInterfaceType.Ethernet
+                            or System.Net.NetworkInformation.NetworkInterfaceType.GigabitEthernet
+                            or System.Net.NetworkInformation.NetworkInterfaceType.FastEthernetT
+                            or System.Net.NetworkInformation.NetworkInterfaceType.FastEthernetFx => NetKind.Ethernet,
+                        _ => NetKind.Other,
+                    };
+                }
+            }
+        }
+        catch { }
+        double sec = _netClock.IsRunning ? _netClock.Elapsed.TotalSeconds : 0;
+        double down = sec > 0 && rx >= _lastRx ? (rx - _lastRx) / sec : 0;
+        double up = sec > 0 && tx >= _lastTx ? (tx - _lastTx) / sec : 0;
+        _lastRx = rx;
+        _lastTx = tx;
+        _netClock.Restart();
+        return (kind, down, up);
+    }
+
+    /// <summary>速さを「1.2 MB/s」のように読みやすく。</summary>
+    public static string Speed(double bytesPerSec) => bytesPerSec switch
+    {
+        >= 1024 * 1024 => $"{bytesPerSec / 1048576:0.0} MB/s",
+        >= 1024 => $"{bytesPerSec / 1024:0} KB/s",
+        _ => $"{bytesPerSec:0} B/s",
+    };
 }
 
 public static class UserFolders

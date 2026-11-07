@@ -334,5 +334,8 @@ public static partial class L
         ["90%（小）"] = "90% (small)",
         ["100%（標準）"] = "100% (default)",
         ["125%（大）"] = "125% (large)",
+        ["有線"] = "Wired",
+        ["ネット"] = "Network",
+        ["未接続"] = "Offline",
     };
 }
