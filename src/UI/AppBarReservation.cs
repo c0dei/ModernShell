@@ -36,6 +36,61 @@ public sealed class AppBarReservation : IDisposable
         };
         _src = new HwndSource(p);
         _src.AddHook(WndProc);
+
+        // 全画面アプリの判定: Windows の ABN_FULLSCREENAPP 通知は当てにならない（Win+D で全画面のゲームを
+        // 最小化しても「終わった」が来ないことがあり、タスクバーが背面のままデスクトップの裏に隠れる）。
+        // 前面のウィンドウが変わる・最小化される・動くたびに、自分で全画面かどうかを確かめる
+        _winEvent = (_, _, _, _, _, _, _) => _src.Dispatcher.BeginInvoke(CheckFullscreen);
+        foreach (var (min, max) in new[] { (0x0003u, 0x0003u) /*FOREGROUND*/, (0x0016u, 0x0017u) /*MINIMIZESTART/END*/ })
+            _hooks.Add(SetWinEventHook(min, max, IntPtr.Zero, _winEvent, 0, 0, 0 /*WINEVENT_OUTOFCONTEXT*/));
+        // ゲームが起動後に全画面へ切り替わる場合など、イベントを取りこぼしたとき用に 1 秒ごとにも確かめる
+        _fullscreenTimer = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromSeconds(1),
+            System.Windows.Threading.DispatcherPriority.Background, (_, _) => CheckFullscreen(), _src.Dispatcher);
+        _fullscreenTimer.Start();
+    }
+
+    private delegate void WinEventProc(IntPtr hook, uint evt, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
+    [DllImport("user32.dll")] private static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr mod, WinEventProc proc, uint pid, uint tid, uint flags);
+    [DllImport("user32.dll")] private static extern bool UnhookWinEvent(IntPtr hook);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, System.Text.StringBuilder name, int max);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+    private readonly WinEventProc _winEvent; // ガベージコレクションで消されないよう保持
+    private readonly System.Collections.Generic.List<IntPtr> _hooks = new();
+    private readonly System.Windows.Threading.DispatcherTimer _fullscreenTimer;
+
+    /// <summary>前面のウィンドウがタスクバーのある画面全体を覆っているか（デスクトップや ModernShell 自身は除く）。</summary>
+    private void CheckFullscreen()
+    {
+        bool fs = false;
+        try
+        {
+            var fg = Win32.GetForegroundWindow();
+            if (fg != IntPtr.Zero && IsWindowVisible(fg) && !IsIconic(fg) && !Win32.IsCloaked(fg))
+            {
+                Win32.GetWindowThreadProcessId(fg, out var pid);
+                var cls = new System.Text.StringBuilder(64);
+                GetClassName(fg, cls, cls.Capacity);
+                bool shell = cls.ToString() is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
+                if (!shell && pid != (uint)Environment.ProcessId && Win32.GetWindowRect(fg, out var r))
+                {
+                    var mi = new Win32.MONITORINFO { cbSize = Marshal.SizeOf<Win32.MONITORINFO>() };
+                    if (Win32.GetMonitorInfo(MonitorFromWindow(fg, 2 /*NEAREST*/), ref mi))
+                    {
+                        var m = mi.rcMonitor;
+                        var bar = PrimaryMonitor();
+                        bool sameMonitor = m.Left == bar.Left && m.Top == bar.Top && m.Right == bar.Right && m.Bottom == bar.Bottom;
+                        fs = sameMonitor && r.Left <= m.Left && r.Top <= m.Top && r.Right >= m.Right && r.Bottom >= m.Bottom;
+                    }
+                }
+            }
+        }
+        catch { }
+        if (fs == IsFullscreenAppActive) return;
+        IsFullscreenAppActive = fs;
+        FullscreenChanged?.Invoke(fs);
     }
 
     /// <summary>プライマリモニターの DPI 倍率。</summary>
@@ -91,8 +146,8 @@ public sealed class AppBarReservation : IDisposable
                     if (_registered) Apply();
                     break;
                 case Win32.ABN_FULLSCREENAPP:
-                    IsFullscreenAppActive = lParam != IntPtr.Zero;
-                    FullscreenChanged?.Invoke(IsFullscreenAppActive);
+                    // 通知の中身は信用せず、きっかけとして自分で確かめる
+                    CheckFullscreen();
                     break;
             }
             handled = true;
@@ -114,6 +169,9 @@ public sealed class AppBarReservation : IDisposable
 
     public void Dispose()
     {
+        _fullscreenTimer.Stop();
+        foreach (var h in _hooks) if (h != IntPtr.Zero) UnhookWinEvent(h);
+        _hooks.Clear();
         Remove();
         _src.Dispose();
     }
