@@ -120,10 +120,19 @@ public sealed class StartMenuWindow : Window
         // 一瞬ずれた位置に出てから跳ねて見える
         var (x, y, scale) = PositionMenu();
         int slide = animate ? (int)Math.Round((top ? -1 : 1) * 40 * scale) : 0;
-        if (slide != 0) Win32.SetWindowPos(Handle, IntPtr.Zero, x, y + slide, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        if (slide != 0)
+        {
+            // ここからスライドが終わるまで、ぼかしの下地は開き終わった位置に合わせたまま固定する
+            StopSlide();
+            _slideTarget = (x, y);
+            _blurPlacedForSlide = false;
+            Win32.SetWindowPos(Handle, IntPtr.Zero, x, y + slide, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+            PlaceBlur();
+        }
         _root.BeginAnimation(OpacityProperty, null);
         _root.RenderTransform = null;
-        _root.Opacity = animate ? 0 : 1;
+        // スライドだけで見せる（中身のフェードは毎コマ全体を描き直すことになり、大きなスタートメニューではカクつく）
+        _root.Opacity = 1;
         // WPF は Show のときに自分の Left/Top を当て直すので、同じ値にしておく
         Left = x / scale;
         Top = (y + slide) / scale;
@@ -182,7 +191,8 @@ public sealed class StartMenuWindow : Window
     /// </summary>
     private void SlideIn(int x, int y, int from)
     {
-        StopSlide();
+        if (_slide != null) CompositionTarget.Rendering -= _slide; // 位置（_slideTarget）はそのまま
+        _slide = null;
         _slideFrames = 0;
         const double ms = 220;
         Stopwatch? clock = null;
@@ -191,7 +201,6 @@ public sealed class StartMenuWindow : Window
             if (clock == null)
             {
                 clock = Stopwatch.StartNew();
-                _root.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
                 return;
             }
             _slideFrames++;
@@ -353,10 +362,25 @@ public sealed class StartMenuWindow : Window
     /// <summary>スタートメニュー（とウィジェット）の文字の大きさ。設定の「スタート メニューの文字サイズ」（%）を掛ける。</summary>
     internal static double Fs(double size) => Math.Round(size * Math.Clamp(Settings.Current?.StartMenuTextScale ?? 100, 50, 200) / 100.0, 1);
 
+    /// <summary>
+    /// ぼかしの下地を今の位置に合わせる。スライド中は、開き終わった位置に合わせたまま動かさない
+    /// （位置が変わるたびに切り出し直すと、毎コマ全体を描き直すことになってカクつく）。
+    /// </summary>
     private void PlaceBlur()
     {
-        if (!_closed) _painted?.Place(Handle);
+        if (_closed) return;
+        if (_slideTarget is { } target)
+        {
+            if (_blurPlacedForSlide) return;
+            _blurPlacedForSlide = true;
+            int dy = Win32.GetWindowRect(Handle, out var r) ? target.y - r.Top : 0;
+            _painted?.Place(Handle, dy);
+            return;
+        }
+        _painted?.Place(Handle);
     }
+
+    private bool _blurPlacedForSlide;
 
     private FrameworkElement BuildFooter(Theme t)
     {

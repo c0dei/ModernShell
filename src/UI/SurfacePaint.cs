@@ -23,9 +23,12 @@ public static class SurfacePaint
         public double Inset { get; init; }
 
         /// <summary>ぼかしの画像を、ウィンドウ（物理 px の矩形）の位置に合わせる。</summary>
-        public void Place(IntPtr hwnd)
+        /// <param name="offsetY">実際の位置からずらして合わせる量（物理 px）。スライド中に、開き終わった位置に合わせておくため。</param>
+        public void Place(IntPtr hwnd, int offsetY = 0)
         {
             if (Blur == null || !Win32.GetWindowRect(hwnd, out var r) || r.Width <= 0) return;
+            r.Top += offsetY;
+            r.Bottom += offsetY;
             uint dpi = Win32.GetDpiForWindow(hwnd);
             int inset = (int)Math.Round(Inset * (dpi > 0 ? dpi / 96.0 : 1));
             var rect = new System.Drawing.Rectangle(r.Left + inset, r.Top + inset, Math.Max(1, r.Width - inset * 2), Math.Max(1, r.Height - inset * 2));
