@@ -283,6 +283,8 @@ public sealed partial class TaskbarController : IDisposable
         StallDetector.Phase = "taskbar: show windows";
         foreach (var s in _surfaces) s.Show();
         Arrange();
+        // ここから先は WPF が画面に描く処理（このあと固まったら、描画の準備で待たされている）
+        StallDetector.Phase = "taskbar: waiting for WPF to draw";
     }
 
     private static void Place(Grid g, FrameworkElement e, int col, HorizontalAlignment ha)

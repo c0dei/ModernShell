@@ -28,14 +28,22 @@ public static class StallDetector
                     var sw = Stopwatch.StartNew();
                     var op = dispatcher.BeginInvoke(DispatcherPriority.Send, new Action(() => { }));
                     string? atDetection = null;
+                    string last = "";
+                    long nextReport = 1000;
                     while (op.Status is DispatcherOperationStatus.Pending or DispatcherOperationStatus.Executing)
                     {
                         Thread.Sleep(100);
-                        if (atDetection == null && sw.ElapsedMilliseconds >= 1000)
+                        if (sw.ElapsedMilliseconds < nextReport) continue;
+                        // 止まっている間も 2 秒ごとに、今何の処理中かを記録する（変わったときだけ）
+                        nextReport += 2000;
+                        var now = Phase;
+                        if (atDetection == null)
                         {
-                            atDetection = Phase;
-                            Log.Info($"ui stall: not responding (phase: {atDetection})");
+                            atDetection = now;
+                            Log.Info($"ui stall: not responding (phase: {now})");
                         }
+                        else if (now != last) Log.Info($"ui stall: still not responding after {sw.ElapsedMilliseconds} ms (phase: {now})");
+                        last = now;
                     }
                     if (atDetection != null)
                         Log.Info($"ui stall: recovered after {sw.ElapsedMilliseconds} ms (phase at start: {atDetection}, now: {Phase})");
