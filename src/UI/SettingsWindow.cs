@@ -479,6 +479,9 @@ public sealed class SettingsWindow : Window
             FontRow(),
             DropDownRow(L.T("角の丸み"), "", new[] { ("0", L.T("なし")), ("4", L.T("小")), ("8", L.T("標準")), ("12", L.T("大")) },
                 ((int)_s.CornerRadius).ToString(), v => _s.CornerRadius = double.Parse(v)),
+            DropDownRow(L.T("スタート メニューの文字サイズ"), L.T("アプリ名・見出し・検索欄・ウィジェットなど、スタート メニューの文字すべて"),
+                new[] { ("90", L.T("90%（小）")), ("100", L.T("100%（標準）")), ("110", "110%"), ("125", L.T("125%（大）")), ("150", "150%") },
+                _s.StartMenuTextScale.ToString(), v => _s.StartMenuTextScale = int.Parse(v)),
             DropDownRow(L.T("メニューの文字サイズ"), L.T("右クリックメニュー・ジャンプリスト・サブメニュー共通"),
                 new[] { ("12", L.T("12 px（小）")), ("13", "13 px"), ("14", L.T("14 px（標準）")), ("15", "15 px"), ("16", L.T("16 px（大）")) },
                 _s.MenuFontSize.ToString(), v => _s.MenuFontSize = int.Parse(v)));

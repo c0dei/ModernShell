@@ -303,11 +303,11 @@ public sealed class StartMenuWindow : Window
             Background = Brushes.Transparent,
             Foreground = t.Text,
             CaretBrush = t.Text,
-            FontSize = 14,
+            FontSize = Fs(14),
             VerticalContentAlignment = VerticalAlignment.Center,
             Margin = new Thickness(36, 0, 12, 0),
         };
-        _placeholder = UiKit.Label(L.T("アプリ、設定、ドキュメントを検索"), 14, t.TextSecondary);
+        _placeholder = UiKit.Label(L.T("アプリ、設定、ドキュメントを検索"), Fs(14), t.TextSecondary);
         _placeholder.Margin = new Thickness(38, 0, 0, 0);
         _placeholder.IsHitTestVisible = false;
         var searchIcon = UiKit.Glyph("", 14, t.TextSecondary);
@@ -349,6 +349,9 @@ public sealed class StartMenuWindow : Window
 
     private SurfacePaint.Painted? _painted;
 
+    /// <summary>スタートメニュー（とウィジェット）の文字の大きさ。設定の「スタート メニューの文字サイズ」（%）を掛ける。</summary>
+    internal static double Fs(double size) => Math.Round(size * Math.Clamp(Settings.Current?.StartMenuTextScale ?? 100, 50, 200) / 100.0, 1);
+
     private void PlaceBlur()
     {
         if (!_closed) _painted?.Place(Handle);
@@ -367,14 +370,14 @@ public sealed class StartMenuWindow : Window
         var avatar = new Border
         {
             Width = 32, Height = 32, CornerRadius = new CornerRadius(16), Background = t.AccentBrush,
-            Child = UiKit.Label(name.Length > 0 ? name.Substring(0, 1).ToUpper() : "?", 14, t.OnAccent, FontWeights.SemiBold),
+            Child = UiKit.Label(name.Length > 0 ? name.Substring(0, 1).ToUpper() : "?", Fs(14), t.OnAccent, FontWeights.SemiBold),
         };
         ((TextBlock)avatar.Child).HorizontalAlignment = HorizontalAlignment.Center;
         var user = new Tile
         {
             Margin = new Thickness(40, 0, 0, 0), Padding = new Thickness(10, 6, 14, 6),
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center,
-            Child = UiKit.Row(avatar, Spaced(UiKit.Label(name, 13), 12)),
+            Child = UiKit.Row(avatar, Spaced(UiKit.Label(name, Fs(13)), 12)),
         };
         user.Click += _ => { HideMenu(); SystemActions.OpenUserAccount(); };
         user.RightClick += tile => OpenFlyout(tile, new[]
@@ -440,8 +443,8 @@ public sealed class StartMenuWindow : Window
     {
         var t = Theme.Current;
         var g = new Grid { Margin = new Thickness(20, 8, 8, 8) };
-        g.Children.Add(UiKit.Label(title, 14, t.Text, FontWeights.SemiBold));
-        var label = UiKit.Label(buttonText, 12);
+        g.Children.Add(UiKit.Label(title, Fs(14), t.Text, FontWeights.SemiBold));
+        var label = UiKit.Label(buttonText, Fs(12));
         var icon = UiKit.Glyph(glyph, 10);
         var row = glyphFirst ? UiKit.Row(icon, Spaced(label, 8)) : UiKit.Row(label, Spaced(icon, 8));
         var btn = new Tile
@@ -477,7 +480,7 @@ public sealed class StartMenuWindow : Window
 
         if (pinned.Count == 0)
         {
-            var hint = UiKit.Label(_catalog.Apps.Count == 0 ? L.T("アプリを読み込んでいます…") : L.T("「すべてのアプリ」で右クリック →「スタートにピン留め」"), 13, Theme.Current.TextSecondary);
+            var hint = UiKit.Label(_catalog.Apps.Count == 0 ? L.T("アプリを読み込んでいます…") : L.T("「すべてのアプリ」で右クリック →「スタートにピン留め」"), Fs(13), Theme.Current.TextSecondary);
             hint.Margin = new Thickness(20);
             dock.Children.Add(hint);
         }
@@ -489,7 +492,7 @@ public sealed class StartMenuWindow : Window
     {
         var img = UiKit.Icon(null, 32);
         LoadIconAsync(img, app, 32);
-        var label = UiKit.Label(app.Name, 12);
+        var label = UiKit.Label(app.Name, Fs(12));
         label.TextAlignment = TextAlignment.Center;
         label.TextWrapping = TextWrapping.Wrap;
         label.MaxHeight = 32;
@@ -547,7 +550,7 @@ public sealed class StartMenuWindow : Window
             .OrderBy(e => e.name, StringComparer.CurrentCultureIgnoreCase);
         foreach (var group in entries.GroupBy(e => GroupKey(e.name)))
         {
-            var h = UiKit.Label(group.Key, 13, Theme.Current.Text, FontWeights.SemiBold);
+            var h = UiKit.Label(group.Key, Fs(13), Theme.Current.Text, FontWeights.SemiBold);
             h.Margin = new Thickness(12, 12, 0, 4);
             list.Children.Add(h);
             foreach (var e in group)
@@ -568,7 +571,7 @@ public sealed class StartMenuWindow : Window
             IconThread.Get(path, 48).ContinueWith(r => { if (r.Result != null) img.Dispatcher.BeginInvoke(() => img.Source = r.Result); }, TaskScheduler.Default);
         else
             img.Source = null;
-        var label = UiKit.Label(name, 13);
+        var label = UiKit.Label(name, Fs(13));
         label.Margin = new Thickness(14, 0, 0, 0);
         var row = UiKit.Row(img, label);
         row.VerticalAlignment = VerticalAlignment.Center;
@@ -587,7 +590,7 @@ public sealed class StartMenuWindow : Window
         {
             var img = UiKit.Icon(null, 32);
             LoadIconAsync(img, app, 32);
-            var label = UiKit.Label(app.Name, 12);
+            var label = UiKit.Label(app.Name, Fs(12));
             label.TextAlignment = TextAlignment.Center;
             label.TextWrapping = TextWrapping.Wrap;
             label.MaxHeight = 32;
@@ -602,7 +605,7 @@ public sealed class StartMenuWindow : Window
             tile.RightClick += x => OpenFlyout(x, AppMenu(a, pinnedPage: false));
             wrap.Children.Add(tile);
         }
-        var title = UiKit.Label(name, 20, t.Text, FontWeights.SemiBold);
+        var title = UiKit.Label(name, Fs(20), t.Text, FontWeights.SemiBold);
         title.HorizontalAlignment = HorizontalAlignment.Center;
         title.Margin = new Thickness(0, 0, 0, 20);
         var body = new StackPanel();
@@ -648,8 +651,8 @@ public sealed class StartMenuWindow : Window
         var img = UiKit.Icon(null, 24);
         LoadIconAsync(img, app, 24);
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 0, 0) };
-        text.Children.Add(UiKit.Label(app.Name, 13));
-        if (subtitle != null) text.Children.Add(UiKit.Label(subtitle, 11, Theme.Current.TextSecondary));
+        text.Children.Add(UiKit.Label(app.Name, Fs(13)));
+        if (subtitle != null) text.Children.Add(UiKit.Label(subtitle, Fs(11), Theme.Current.TextSecondary));
         var tile = new Tile { Height = subtitle == null ? 40 : 48, Padding = new Thickness(12, 0, 12, 0), Payload = app, Child = UiKit.Row(img, text) };
         ((StackPanel)tile.Child).VerticalAlignment = VerticalAlignment.Center;
         tile.Click += _ => Launch(app);
@@ -696,7 +699,7 @@ public sealed class StartMenuWindow : Window
         var matches = Rank(_catalog.Apps, query).Take(12).ToList();
         if (matches.Count > 0)
         {
-            var h = UiKit.Label(L.T("アプリ"), 13, t.Text, FontWeights.SemiBold);
+            var h = UiKit.Label(L.T("アプリ"), Fs(13), t.Text, FontWeights.SemiBold);
             h.Margin = new Thickness(12, 0, 0, 6);
             list.Children.Add(h);
             foreach (var app in matches)
@@ -707,7 +710,7 @@ public sealed class StartMenuWindow : Window
             }
         }
 
-        var h2 = UiKit.Label(L.T("その他"), 13, t.Text, FontWeights.SemiBold);
+        var h2 = UiKit.Label(L.T("その他"), Fs(13), t.Text, FontWeights.SemiBold);
         h2.Margin = new Thickness(12, 12, 0, 6);
         list.Children.Add(h2);
         var run = ActionTile("", L.F("実行: {0}", query), () => { if (SystemActions.TryRun(query)) HideMenu(); });
@@ -723,7 +726,7 @@ public sealed class StartMenuWindow : Window
     private Tile ActionTile(string glyph, string text, Action action)
     {
         var box = new Border { Width = 24, Height = 24, Child = UiKit.Glyph(glyph, 16) };
-        var label = UiKit.Label(text, 13);
+        var label = UiKit.Label(text, Fs(13));
         label.Margin = new Thickness(14, 0, 0, 0);
         var row = UiKit.Row(box, label);
         row.VerticalAlignment = VerticalAlignment.Center;

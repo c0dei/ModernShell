@@ -329,5 +329,10 @@ public static partial class L
         ["標準（Segoe UI Variable）"] = "Default (Segoe UI Variable)",
         ["フォント"] = "Font",
         ["タスクバー・スタート メニュー・メニューの文字。設定画面には使いません"] = "Text in the taskbar, Start menu and menus. Not used in this settings window",
+        ["スタート メニューの文字サイズ"] = "Start menu text size",
+        ["アプリ名・見出し・検索欄・ウィジェットなど、スタート メニューの文字すべて"] = "All text in the Start menu: app names, headings, the search box, widgets and more",
+        ["90%（小）"] = "90% (small)",
+        ["100%（標準）"] = "100% (default)",
+        ["125%（大）"] = "125% (large)",
     };
 }

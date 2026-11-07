@@ -21,6 +21,9 @@ namespace ModernShell.UI;
 /// </summary>
 public sealed class WidgetPanel : ScrollViewer
 {
+    /// <summary>文字の大きさ（スタートメニューと同じ設定に従う）。</summary>
+    private static double Fs(double size) => StartMenuWindow.Fs(size);
+
     private readonly Settings _settings;
     private readonly SystemStats _stats = new();
     private readonly DispatcherTimer _tick;
@@ -225,7 +228,7 @@ public sealed class WidgetPanel : ScrollViewer
         var grip = UiKit.Glyph("\uE76F", 12, t.TextSecondary);
         DockPanel.SetDock(grip, Dock.Right);
         h.Children.Add(grip);
-        h.Children.Add(UiKit.Label(title, 12, t.TextSecondary, FontWeights.SemiBold));
+        h.Children.Add(UiKit.Label(title, Fs(12), t.TextSecondary, FontWeights.SemiBold));
         stack.Children.Add(h);
         stack.Children.Add(body);
         return new Border
@@ -238,8 +241,8 @@ public sealed class WidgetPanel : ScrollViewer
 
     private Border ClockCard(Theme t)
     {
-        _clockTime = UiKit.Label("", 34, t.Text, FontWeights.SemiBold);
-        _clockDate = UiKit.Label("", 13, t.TextSecondary);
+        _clockTime = UiKit.Label("", Fs(34), t.Text, FontWeights.SemiBold);
+        _clockDate = UiKit.Label("", Fs(13), t.TextSecondary);
         var body = new StackPanel();
         body.Children.Add(_clockTime);
         body.Children.Add(_clockDate);
@@ -255,7 +258,7 @@ public sealed class WidgetPanel : ScrollViewer
         var grid = new UniformGrid { Columns = 7, Margin = new Thickness(0, 10, 0, 0) };
         foreach (var d in new[] { L.T("日"), L.T("月"), L.T("火"), L.T("水"), L.T("木"), L.T("金"), L.T("土") })
         {
-            var l = UiKit.Label(d, 11, t.TextSecondary);
+            var l = UiKit.Label(d, Fs(11), t.TextSecondary);
             l.HorizontalAlignment = HorizontalAlignment.Center;
             grid.Children.Add(l);
         }
@@ -263,7 +266,7 @@ public sealed class WidgetPanel : ScrollViewer
         for (int day = 1; day <= DateTime.DaysInMonth(today.Year, today.Month); day++)
         {
             bool isToday = day == today.Day;
-            var l = UiKit.Label(day.ToString(), 12, isToday ? t.OnAccent : t.Text, isToday ? FontWeights.SemiBold : FontWeights.Normal);
+            var l = UiKit.Label(day.ToString(), Fs(12), isToday ? t.OnAccent : t.Text, isToday ? FontWeights.SemiBold : FontWeights.Normal);
             l.HorizontalAlignment = HorizontalAlignment.Center;
             grid.Children.Add(new Border
             {
@@ -276,9 +279,9 @@ public sealed class WidgetPanel : ScrollViewer
 
     private Border WeatherCard(Theme t)
     {
-        var temp = UiKit.Label("—", 30, t.Text, FontWeights.SemiBold);
-        var desc = UiKit.Label(L.T("読み込み中…"), 13, t.TextSecondary);
-        var range = UiKit.Label("", 12, t.TextSecondary);
+        var temp = UiKit.Label("—", Fs(30), t.Text, FontWeights.SemiBold);
+        var desc = UiKit.Label(L.T("読み込み中…"), Fs(13), t.TextSecondary);
+        var range = UiKit.Label("", Fs(12), t.TextSecondary);
         var glyph = UiKit.Glyph("", 34, t.AccentBrush);
         glyph.Margin = new Thickness(0, 0, 16, 0);
         var text = new StackPanel();
@@ -312,7 +315,7 @@ public sealed class WidgetPanel : ScrollViewer
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(64) });
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
-            g.Children.Add(UiKit.Label(label, 12));
+            g.Children.Add(UiKit.Label(label, Fs(12)));
             var bar = new ProgressBar
             {
                 Height = 4, Maximum = 100, VerticalAlignment = VerticalAlignment.Center, BorderThickness = new Thickness(0),
@@ -320,7 +323,7 @@ public sealed class WidgetPanel : ScrollViewer
             };
             Grid.SetColumn(bar, 1);
             g.Children.Add(bar);
-            var val = UiKit.Label("", 12, t.TextSecondary);
+            var val = UiKit.Label("", Fs(12), t.TextSecondary);
             val.HorizontalAlignment = HorizontalAlignment.Right;
             Grid.SetColumn(val, 2);
             g.Children.Add(val);
@@ -340,7 +343,7 @@ public sealed class WidgetPanel : ScrollViewer
         {
             var stack = new StackPanel();
             stack.Children.Add(UiKit.Glyph(glyph, 20, t.AccentBrush));
-            var l = UiKit.Label(name, 11);
+            var l = UiKit.Label(name, Fs(11));
             l.HorizontalAlignment = HorizontalAlignment.Center;
             l.Margin = new Thickness(0, 6, 0, 0);
             stack.Children.Add(l);
@@ -356,7 +359,7 @@ public sealed class WidgetPanel : ScrollViewer
     {
         var list = new StackPanel();
         var items = UserFolders.Recent(6);
-        if (items.Count == 0) list.Children.Add(UiKit.Label(L.T("最近使ったファイルはありません"), 12, t.TextSecondary));
+        if (items.Count == 0) list.Children.Add(UiKit.Label(L.T("最近使ったファイルはありません"), Fs(12), t.TextSecondary));
         foreach (var (name, lnk) in items)
         {
             var img = UiKit.Icon(null, 20);
@@ -364,7 +367,7 @@ public sealed class WidgetPanel : ScrollViewer
             {
                 if (r.Result != null) Dispatcher.BeginInvoke(() => img.Source = r.Result);
             }, TaskScheduler.Default);
-            var label = UiKit.Label(name, 12);
+            var label = UiKit.Label(name, Fs(12));
             label.Margin = new Thickness(10, 0, 0, 0);
             label.MaxWidth = 230;
             var row = UiKit.Row(img, label);
@@ -382,7 +385,7 @@ public sealed class WidgetPanel : ScrollViewer
         {
             Text = Notes.Load(), AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 90, MaxHeight = 200,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Background = Brushes.Transparent, Foreground = t.Text,
-            CaretBrush = t.Text, BorderThickness = new Thickness(0), FontSize = 13,
+            CaretBrush = t.Text, BorderThickness = new Thickness(0), FontSize = Fs(13),
         };
         var save = new DispatcherTimer(TimeSpan.FromMilliseconds(600), DispatcherPriority.Background, (s, _) => { ((DispatcherTimer)s!).Stop(); Notes.Save(box.Text); }, Dispatcher);
         save.Stop();

@@ -87,6 +87,8 @@ public sealed class Settings
     public double CornerRadius { get; set; } = 8;
     /// <summary>メニュー（右クリック・ジャンプリスト・サブメニュー）の文字サイズ (px)。</summary>
     public int MenuFontSize { get; set; } = 14;
+    /// <summary>スタートメニュー（ウィジェットを含む）の文字の大きさ (%)。100 が標準。</summary>
+    public int StartMenuTextScale { get; set; } = 100;
     /// <summary>タスクバー（とそこから開くプレビュー・一覧・メニュー）の背景。</summary>
     public SurfaceStyle TaskbarBackground { get; set; } = SurfaceStyle.Blur;
     /// <summary>タスクバー背景の上に重ねるテーマ色の濃さ (0 = 下地のまま ～ 100 = 不透明)。透過・ぼかしのとき有効。</summary>
