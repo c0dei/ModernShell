@@ -564,7 +564,7 @@ public sealed class StartMenuWindow : Window
         var path = new[] { Environment.SpecialFolder.CommonPrograms, Environment.SpecialFolder.Programs }
             .Select(f => System.IO.Path.Combine(Environment.GetFolderPath(f), name)).FirstOrDefault(System.IO.Directory.Exists);
         if (path != null)
-            Task.Run(() => IconHelper.Get(path, 48)).ContinueWith(r => { if (r.Result != null) img.Dispatcher.BeginInvoke(() => img.Source = r.Result); }, TaskScheduler.Default);
+            IconThread.Get(path, 48).ContinueWith(r => { if (r.Result != null) img.Dispatcher.BeginInvoke(() => img.Source = r.Result); }, TaskScheduler.Default);
         else
             img.Source = null;
         var label = UiKit.Label(name, 13);

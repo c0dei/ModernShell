@@ -360,7 +360,7 @@ public sealed class WidgetPanel : ScrollViewer
         foreach (var (name, lnk) in items)
         {
             var img = UiKit.Icon(null, 20);
-            Task.Run(() => IconHelper.Get(lnk, 40)).ContinueWith(r =>
+            IconThread.Get(lnk, 40).ContinueWith(r =>
             {
                 if (r.Result != null) Dispatcher.BeginInvoke(() => img.Source = r.Result);
             }, TaskScheduler.Default);

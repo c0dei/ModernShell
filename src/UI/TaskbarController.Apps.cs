@@ -389,7 +389,7 @@ public sealed partial class TaskbarController
         if (ModernShell.Core.IconHelper.TryGetCached(app.ShellPath, 64, out var cached)) return cached;
         if (!_iconsLoading.Add(app.ShellPath)) return null;
         var path = app.ShellPath;
-        System.Threading.Tasks.Task.Run(() => ModernShell.Core.IconHelper.Get(path, 64)).ContinueWith(_ =>
+        ModernShell.Core.IconThread.Get(path, 64).ContinueWith(_ =>
             _dispatcher.BeginInvoke(() =>
             {
                 _iconsLoading.Remove(path);
