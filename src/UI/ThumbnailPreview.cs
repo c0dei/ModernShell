@@ -98,6 +98,7 @@ public sealed class ThumbnailPreview
 
     private void Show(FrameworkElement anchor, IReadOnlyList<ApplicationWindow> windows, bool top)
     {
+        StallDetector.Phase = "preview: show";
         Close();
         if (windows.Count == 0 || !anchor.IsLoaded) return;
         _anchor = anchor;
@@ -157,6 +158,7 @@ public sealed class ThumbnailPreview
     /// <summary>ポップアップが開いたら、各カードの位置に DWM サムネイルを登録する。</summary>
     private void RegisterThumbnails(StackPanel row, Session session)
     {
+        StallDetector.Phase = "preview: register thumbnails";
         if (session.Closed || PresentationSource.FromVisual(row) is not HwndSource src) return;
         session.Source = src;
         var (maxW, maxH) = MaxSize;

@@ -66,6 +66,7 @@ public static class MicaLike
     /// <summary>壁紙（ファイル・更新日時・配置・画面の縦横比）が変わっていれば作り直す。</summary>
     public static void Refresh(bool force = false)
     {
+        StallDetector.Phase = "blur: refresh";
         if (_loading) return;
         var wall = VirtualDesktops.List().FirstOrDefault(d => d.IsCurrent)?.Wallpaper;
         var (style, tile, fill) = WallpaperStyle();

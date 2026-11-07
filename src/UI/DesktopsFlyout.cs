@@ -49,6 +49,7 @@ public sealed class DesktopsFlyout
 
     private void Show(FrameworkElement anchor, bool top)
     {
+        StallDetector.Phase = "desktops flyout";
         Close();
         var t = Theme.Current;
         var desktops = VirtualDesktops.List();

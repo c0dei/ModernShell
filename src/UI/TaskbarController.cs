@@ -215,6 +215,7 @@ public sealed partial class TaskbarController : IDisposable
 
     public void Rebuild()
     {
+        StallDetector.Phase = "taskbar: rebuild";
         _layoutKey = LayoutKey();
         foreach (var s in _surfaces) s.Close();
         _surfaces.Clear();
@@ -326,6 +327,7 @@ public sealed partial class TaskbarController : IDisposable
     /// <summary>確保領域の中に各ウィンドウを配置する（すべて物理ピクセル）。</summary>
     private void Arrange()
     {
+        StallDetector.Phase = "taskbar: arrange";
         if (_disposed) return;
         var r = _reservation.Rect;
         bool bottomMost = _reservation.IsFullscreenAppActive; // 全画面アプリ中は最前面をやめる

@@ -302,6 +302,7 @@ internal static class Log
         try { using var p = System.Diagnostics.Process.GetCurrentProcess(); ms = (DateTime.Now - p.StartTime).TotalMilliseconds; }
         catch { ms = -1; }
         Write("INFO ", $"timing: {phase} (+{ms:0} ms from launch)");
+        StallDetector.Phase = phase;
     }
     public static void Error(string where, Exception ex) => Write("ERROR", $"{where}: {ex}");
 

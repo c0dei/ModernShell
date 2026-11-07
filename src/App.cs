@@ -107,6 +107,7 @@ public static class Program
     {
         Log.Info("start");
         Log.Timing("start");
+        StallDetector.Start(app.Dispatcher);
         _settings = Settings.Load();
         // 「サインイン時に起動」の登録を今の exe の場所に合わせる（単一 exe 版から zip 版へ移したときなど、古い場所を指したままにしない）
         if (_settings.RunAtStartup) SystemActions.SetRunAtStartup(true);

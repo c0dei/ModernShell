@@ -33,6 +33,7 @@ public sealed class ShellHost : IDisposable
 
     public ShellHost(Settings settings)
     {
+        StallDetector.Phase = "shell host (tray/tasks)";
         // 強制終了されても次回起動時 / ウォッチドッグで元に戻せるよう、純正タスクバーの状態を先に記録
         NativeTaskbar.RememberOriginalState();
 

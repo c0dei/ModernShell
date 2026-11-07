@@ -46,6 +46,7 @@ public sealed partial class TaskbarController
 
     private void RebuildApps()
     {
+        StallDetector.Phase = "taskbar: apps";
         if (_apps == null) return;
         // メニューを開いている間に作り直すと、メニューの基準のボタンが消えて画面左上に飛んでしまうので後回しにする
         if (FluentSurface.AnyOpen) { Kick(_appsDebounce); return; }
@@ -363,6 +364,7 @@ public sealed partial class TaskbarController
     /// </summary>
     private ImageSource? AppIcon(Group g)
     {
+        StallDetector.Phase = $"taskbar: icon {g.Pinned?.Name ?? g.Key}";
         // 表示倍率: タスクバーがまだ無いとき（作り直しの途中など）は Windows 全体の倍率を使う（1.0 と決め打ちすると小さい絵になる）
         double scale = _surfaces.FirstOrDefault()?.Scale ?? (Win32.GetDpiForSystem() is var d and > 0 ? d / 96.0 : 1.0);
         int px = (int)Math.Round(IconSz * scale);

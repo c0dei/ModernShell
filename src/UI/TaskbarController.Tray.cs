@@ -91,6 +91,7 @@ public sealed partial class TaskbarController
 
     private void RebuildTray()
     {
+        StallDetector.Phase = "taskbar: tray";
         if (_trayIcons == null || _overflowButton == null) return;
         _trayIcons.Children.Clear();
         var pinned = Icons(_shell.Tray?.PinnedIcons).OrderBy(i => i.PinOrder).ToList();
