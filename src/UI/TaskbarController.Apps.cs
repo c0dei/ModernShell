@@ -133,7 +133,8 @@ public sealed partial class TaskbarController
         {
             MinWidth = TileW, Height = TileH, Margin = new Thickness(2, 0, 2, 0), Child = content,
             Background = active ? t.Hover : Brushes.Transparent,
-            ToolTip = running ? string.Join("\n", g.Windows.Select(w => w.Title)) : g.Pinned?.Name,
+            // 実行中はプレビューにウィンドウ名が出るので、ツールチップは出さない（Windows と同じ）
+            ToolTip = running ? (_settings.ShowThumbnailPreview ? null : string.Join("\n", g.Windows.Select(w => w.Title))) : g.Pinned?.Name,
         };
         tile.MouseLeave += (_, _) => { if (active) tile.Background = t.Hover; };
         if (_settings.MagnifyOnHover) AddMagnify(tile, icon);

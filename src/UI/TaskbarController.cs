@@ -85,6 +85,7 @@ public sealed partial class TaskbarController : IDisposable
         _windowsPins = new WindowsPins(catalog);
         _preview = new ThumbnailPreview(settings, dispatcher);
         _desktops = new DesktopsFlyout(settings, dispatcher);
+        RegisterToolTipPlacement();
         _windowsPins.Changed += OnPinsChanged;
 
         _clock = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Normal, (_, _) => UpdateClock(), dispatcher);
@@ -102,6 +103,27 @@ public sealed partial class TaskbarController : IDisposable
         _reservation.PositionChanged += Arrange;
         _reservation.FullscreenChanged += _ => Arrange();
         NetworkChange.NetworkAvailabilityChanged += OnNetworkChanged;
+    }
+
+    private static bool _toolTipHooked;
+
+    /// <summary>
+    /// タスクバーのボタンのツールチップは、カーソルの位置ではなくボタンの上（タスクバーが上なら下）に出す。
+    /// 画面の一番下ではカーソルの下に出る場所が無く、ツールチップがカーソルに重なって「ボタンから出た」扱いになり、
+    /// アイコンの拡大・縮小とツールチップの表示・非表示が繰り返されてしまうため。
+    /// </summary>
+    private static void RegisterToolTipPlacement()
+    {
+        if (_toolTipHooked) return;
+        _toolTipHooked = true;
+        EventManager.RegisterClassHandler(typeof(Tile), FrameworkElement.ToolTipOpeningEvent, new ToolTipEventHandler((s, _) =>
+        {
+            if (s is not Tile tile || Window.GetWindow(tile) is not BarSurface) return;
+            bool top = Settings.Current?.TaskbarEdge == TaskbarEdge.Top;
+            ToolTipService.SetPlacement(tile, top ? PlacementMode.Bottom : PlacementMode.Top);
+            ToolTipService.SetVerticalOffset(tile, top ? 6 : -6);
+            ToolTipService.SetHorizontalOffset(tile, 0);
+        }));
     }
 
     private DispatcherTimer Debouncer(Action a)
