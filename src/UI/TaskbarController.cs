@@ -36,7 +36,7 @@ public sealed partial class TaskbarController : IDisposable
     private readonly Dispatcher _dispatcher;
     private readonly AppBarReservation _reservation = new();
     private readonly List<BarSurface> _surfaces = new();
-    private readonly DispatcherTimer _clock, _status, _appsDebounce, _trayDebounce;
+    private readonly DispatcherTimer _clock, _status, _appsDebounce, _appsSoftDebounce, _trayDebounce;
     private readonly List<string> _order = new(); // 実行中ボタンの並び順を安定させる
     private readonly HashSet<INotifyPropertyChanged> _watched = new();
     private bool _disposed;
@@ -91,6 +91,13 @@ public sealed partial class TaskbarController : IDisposable
         _clock = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Normal, (_, _) => UpdateClock(), dispatcher);
         _status = new DispatcherTimer(TimeSpan.FromSeconds(10), DispatcherPriority.Background, (_, _) => UpdateStatus(), dispatcher);
         _appsDebounce = Debouncer(RebuildApps);
+        // ウィンドウのタイトル・状態が変わっただけのときの作り直し。カーソルがアプリのボタンの上にある間は後回しにする
+        // （作り直すとカーソルの下のボタンが新しくなり、ホバーの拡大がやり直しになって拡大・縮小を繰り返して見えるため）
+        _appsSoftDebounce = Debouncer(() =>
+        {
+            if (_apps?.IsMouseOver == true) { Kick(_appsSoftDebounce!); return; }
+            RebuildApps();
+        });
         _trayDebounce = Debouncer(RebuildTray);
 
         if (_shell.Tasks?.GroupedWindows is INotifyCollectionChanged tasks) tasks.CollectionChanged += OnTasksChanged;
@@ -148,7 +155,7 @@ public sealed partial class TaskbarController : IDisposable
     private void OnItemChanged(object? s, PropertyChangedEventArgs e)
     {
         if (s is ApplicationWindow && e.PropertyName is "State" or "Title" or "Icon" or "ProgressState" or "ProgressValue")
-            _dispatcher.BeginInvoke(() => Kick(_appsDebounce));
+            _dispatcher.BeginInvoke(() => Kick(_appsSoftDebounce));
         else if (s is ManagedShell.WindowsTray.NotifyIcon && e.PropertyName is "Icon" or "Title" or "IsHidden")
             _dispatcher.BeginInvoke(() => Kick(_trayDebounce));
     }
@@ -449,6 +456,7 @@ public sealed partial class TaskbarController : IDisposable
         _clock.Stop();
         _status.Stop();
         _appsDebounce.Stop();
+        _appsSoftDebounce.Stop();
         _trayDebounce.Stop();
         if (_shell.Tasks?.GroupedWindows is INotifyCollectionChanged tasks) tasks.CollectionChanged -= OnTasksChanged;
         if (_shell.Tray?.PinnedIcons is INotifyCollectionChanged pinned) pinned.CollectionChanged -= OnTrayChanged;

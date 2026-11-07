@@ -394,7 +394,7 @@ public sealed partial class TaskbarController
             _dispatcher.BeginInvoke(() =>
             {
                 _iconsLoading.Remove(path);
-                if (!_disposed) Kick(_appsDebounce);
+                if (!_disposed) Kick(_appsSoftDebounce); // アイコンが届いただけなので、ホバー中は後回し
             }), System.Threading.Tasks.TaskScheduler.Default);
         return null;
     }
