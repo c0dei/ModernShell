@@ -68,10 +68,18 @@ public sealed class Theme
     public static Theme Current { get; private set; } = Build(new Settings());
     public static event Action? Changed;
 
+    /// <summary>
+    /// 設定と Windows の状態からテーマを作り直す。見た目（ライト/ダーク・アクセント色・角の丸み）が変わったときだけ
+    /// Changed を出す。Windows の「設定が変わった」通知は、作業領域の変化や他のアプリの通知などでも頻繁に来るので、
+    /// 毎回出すとそのたびにタスクバーやスタートメニューが丸ごと作り直されてしまう。
+    /// </summary>
     public static void Apply(Settings s)
     {
-        Current = Build(s);
-        Changed?.Invoke();
+        var next = Build(s);
+        static string Key(Theme t) => $"{t.IsDark}|{t.Accent}|{t.Radius}";
+        bool changed = Key(next) != Key(Current);
+        Current = next;
+        if (changed) Changed?.Invoke();
     }
 
     private static Theme Build(Settings s)

@@ -56,7 +56,9 @@ public static class MicaLike
             _watch = new DispatcherTimer(TimeSpan.FromSeconds(3), DispatcherPriority.Background, (_, _) => Refresh(), Dispatcher.CurrentDispatcher);
             SystemEvents.UserPreferenceChanged += (_, e) =>
             {
-                if (e.Category == UserPreferenceCategory.Desktop) _watch.Dispatcher.BeginInvoke(() => Refresh(force: true));
+                // 壁紙の変更も「デスクトップ」の通知で来るが、作業領域の変化などでも来るので、壁紙（ファイル・更新日時・配置）が
+                // 本当に変わったときだけ作り直す（Refresh が比べる）
+                if (e.Category == UserPreferenceCategory.Desktop) _watch.Dispatcher.BeginInvoke(() => Refresh());
             };
         }
         _watch.Start();
