@@ -47,7 +47,10 @@ public static class FluentSurface
         var state = new LookState { Content = (FrameworkElement)content, Font = TextElement.GetFontFamily(target) };
         _looks.Add(popup, state);
         var s = Settings.Current ?? new Settings();
-        Paint(popup, state, s.StartMenuBackground, s.StartMenuOpacity);
+        // 設定画面から開くもの（ドロップダウンなど）は、スタートメニューの背景設定とは関係なく単色にする。
+        // それ以外（スタートメニュー・ウィジェットなど）はスタートメニューと同じ背景、タスクバーからのものは UseTaskbarLook で切り替える
+        if (Window.GetWindow(target) is SettingsWindow) Paint(popup, state, SurfaceStyle.Solid, 100);
+        else Paint(popup, state, s.StartMenuBackground, s.StartMenuOpacity);
         // タスクバー等に重ならないよう、上下に出すときは少し離す（Windows のメニューと同じくらいの間隔）。
         // 周りに影の余白があるので、その分ずらして見た目の位置を合わせる
         const double pad = SurfacePaint.ShadowPad;
