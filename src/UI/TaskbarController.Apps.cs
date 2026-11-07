@@ -316,7 +316,7 @@ public sealed partial class TaskbarController
 
         if (app != null)
         {
-            items.Add(new MenuItemSpec("", app.Name, () => app.Launch()) { Icon = CustomIcon(g) ?? ButtonIcon(g) ?? w0?.Icon, // ButtonIcon はシェルからの読み込みで UI を止めない SubMenu = () => AppItemMenu(app) });
+            items.Add(new MenuItemSpec("", app.Name, () => app.Launch()) { Icon = CustomIcon(g) ?? ButtonIcon(g) ?? w0?.Icon, SubMenu = () => AppItemMenu(app) });
             if (IsWindowsPin(app))
             {
                 // Windows のピン留めはアプリから変更できない（Windows が API を提供していない）
