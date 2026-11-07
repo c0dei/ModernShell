@@ -55,6 +55,12 @@ public sealed class BarSurface : Window
         long ex = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE);
         // TOOLWINDOW: Alt+Tab に出さない / NOACTIVATE: クリックしても前面ウィンドウを奪わない（最小化トグル判定に必須）
         Win32.SetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE, (IntPtr)(ex | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_NOACTIVATE));
+        // WPF はタスクバーのボタン一覧に出さないウィンドウに、見えない「親ウィンドウ」を付ける。
+        // 「デスクトップの表示」(Win+D) はその親ウィンドウも最小化し、親が最小化されると子のタスクバーも一緒に隠れてしまう。
+        // 親から切り離し（TOOLWINDOW なので一覧には出ない）、デスクトップのプレビュー（Aero Peek）でも透けないようにする
+        Win32.SetWindowLongPtr(hwnd, -8 /*GWLP_HWNDPARENT*/, IntPtr.Zero);
+        int excluded = 1;
+        Win32.DwmSetWindowAttribute(hwnd, 12 /*DWMWA_EXCLUDED_FROM_PEEK*/, ref excluded, sizeof(int));
         HwndSource.FromHwnd(hwnd)!.AddHook(WndProc);
 
         SizeChanged += (_, _) => { ContentSizeChanged?.Invoke(); PlaceBlur(); };
