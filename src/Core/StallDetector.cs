@@ -15,10 +15,40 @@ public static class StallDetector
     /// <summary>UI スレッドで今やっている処理の名前（各処理の入口で書き換える）。</summary>
     public static volatile string Phase = "idle";
 
+    private static System.Reflection.PropertyInfo? _nameProp;
+    private static System.Reflection.FieldInfo? _methodField;
+
+    /// <summary>ディスパッチャーの仕事の名前（呼び出すメソッド名。WPF の内部情報なので取れなければ優先度だけ）。</summary>
+    private static string OperationName(DispatcherOperation op)
+    {
+        try
+        {
+            const System.Reflection.BindingFlags F = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public;
+            _nameProp ??= typeof(DispatcherOperation).GetProperty("Name", F);
+            if (_nameProp?.GetValue(op) is string name && name.Length > 0) return $"{name} [{op.Priority}]";
+            _methodField ??= typeof(DispatcherOperation).GetField("_method", F);
+            if (_methodField?.GetValue(op) is Delegate d) return $"{d.Method.DeclaringType?.Name}.{d.Method.Name} [{op.Priority}]";
+        }
+        catch { }
+        return op.Priority.ToString();
+    }
+
     public static void Start(Dispatcher dispatcher)
     {
         // 手が空いたら「待機中」に戻す（どこで固まったかを取り違えないように）
         dispatcher.Hooks.DispatcherInactive += (_, _) => Phase = "idle";
+        // 起動から 60 秒間は、UI スレッドで実行する処理（ディスパッチャーの仕事）の名前も記録する。
+        // ModernShell のコード以外（WPF の描画や ManagedShell）で固まっているときに、どれかを見分けるため
+        var until = DateTime.Now.AddSeconds(60);
+        dispatcher.Hooks.OperationStarted += (_, e) =>
+        {
+            if (DateTime.Now > until) return;
+            Phase = "ui job: " + OperationName(e.Operation);
+        };
+        dispatcher.Hooks.OperationCompleted += (_, e) =>
+        {
+            if (DateTime.Now <= until) Phase = "idle (after " + OperationName(e.Operation) + ")";
+        };
         new Thread(() =>
         {
             while (true)

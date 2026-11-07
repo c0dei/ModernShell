@@ -143,12 +143,14 @@ public static class Program
 
         ApplyTaskbarMode();
 
+        StallDetector.Phase = "start: after taskbar";
         // 純正スタートボタン位置の監視（純正タスクバー使用時のみ意味がある）
         _startButtonWatcher = NativeTaskbar.WatchStartButton(
             r => _hooks.NativeStartButtonRect = r,
             () => _settings.InterceptNativeStartButton && !_settings.UseCustomTaskbar);
 
         _settings.Changed += () => app.Dispatcher.BeginInvoke(OnSettingsChanged);
+        StallDetector.Phase = "start: system events";
         SystemEvents.UserPreferenceChanged += (_, e) =>
         {
             if (e.Category is UserPreferenceCategory.General or UserPreferenceCategory.Color or UserPreferenceCategory.VisualStyle)
@@ -161,7 +163,9 @@ public static class Program
         var showSettings = new EventWaitHandle(false, EventResetMode.AutoReset, ShowSettingsEvent);
         new Thread(() => { while (showSettings.WaitOne()) app.Dispatcher.BeginInvoke(ShowSettings); }) { IsBackground = true }.Start();
 
+        StallDetector.Phase = "start: ModernShell tray icon";
         CreateTrayIcon();
+        StallDetector.Phase = "start: done";
         if (_openSettingsOnStart) app.Dispatcher.BeginInvoke(ShowSettings, DispatcherPriority.ApplicationIdle);
     }
 
