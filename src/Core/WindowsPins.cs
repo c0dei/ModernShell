@@ -80,7 +80,6 @@ public sealed class WindowsPins : IDisposable
 
     private List<AppEntry> Build(byte[] blob, string[] lnkFiles)
     {
-        StallDetector.Phase = "windows pins";
         // バイナリを UTF-16 として 2 通りの境界で読み、文字列の出現位置を並び順の手がかりにする
         string text0 = Encoding.Unicode.GetString(blob);
         string text1 = blob.Length > 1 ? Encoding.Unicode.GetString(blob, 1, blob.Length - 1) : "";

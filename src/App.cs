@@ -246,6 +246,7 @@ public static class Program
             Log.Timing("before taskbar");
             _taskbar.Start();
             Log.Timing("taskbar built");
+            StallDetector.Phase = "taskbar: waiting for WPF to draw";
             SyncNativeStartAlignment();
         }
         else
