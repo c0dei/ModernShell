@@ -37,6 +37,26 @@ public static class SurfacePaint
     public const double ShadowPad = 12;
 
     /// <summary>
+    /// 影の部分ではマウスを受け取らず、下のウィンドウ（同じスレッドのタスクバーなど）へ通す。
+    /// 影は薄く色が付いているので、そのままだと Windows はそこもウィンドウの一部として扱う。
+    /// プレビューの影がタスクバーのボタンに少し重なると、ボタンから「出た」ことになって、
+    /// アイコンの拡大・縮小とプレビューの表示・非表示が繰り返されてしまう。
+    /// </summary>
+    public static void PassShadowClicks(System.Windows.Interop.HwndSource src)
+    {
+        src.AddHook((IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) =>
+        {
+            if (msg != 0x0084 /*WM_NCHITTEST*/ || !Win32.GetWindowRect(hwnd, out var r)) return IntPtr.Zero;
+            int x = unchecked((short)((long)lParam & 0xFFFF)), y = unchecked((short)(((long)lParam >> 16) & 0xFFFF));
+            uint dpi = Win32.GetDpiForWindow(hwnd);
+            int pad = (int)Math.Round(ShadowPad * (dpi > 0 ? dpi / 96.0 : 1));
+            if (x >= r.Left + pad && x < r.Right - pad && y >= r.Top + pad && y < r.Bottom - pad) return IntPtr.Zero;
+            handled = true;
+            return new IntPtr(-1); // HTTRANSPARENT: 下のウィンドウへ
+        });
+    }
+
+    /// <summary>
     /// content を背景で包む。opacity は重ねるテーマ色の濃さ (0–100)。
     /// 透過・ぼかしでも、クリックが裏へ抜けないようにごく薄く色を残す。
     /// </summary>

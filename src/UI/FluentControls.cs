@@ -57,7 +57,16 @@ public static class FluentSurface
         if (placement == PlacementMode.Top) { popup.VerticalOffset = -8 + pad; popup.HorizontalOffset = -pad; }
         else if (placement == PlacementMode.Bottom) { popup.VerticalOffset = 8 - pad; popup.HorizontalOffset = -pad; }
         else if (placement == PlacementMode.MousePoint) { popup.VerticalOffset = -pad; popup.HorizontalOffset = -pad; }
-        popup.Opened += (_, _) => { _openList.Add(popup); FollowBlur(popup, state); };
+        popup.Opened += (_, _) =>
+        {
+            _openList.Add(popup);
+            FollowBlur(popup, state);
+            if (!state.Hooked && popup.Child != null && PresentationSource.FromVisual(popup.Child) is HwndSource src)
+            {
+                state.Hooked = true;
+                SurfacePaint.PassShadowClicks(src);
+            }
+        };
         popup.Closed += (_, _) =>
         {
             _openList.Remove(popup);
@@ -94,6 +103,7 @@ public static class FluentSurface
     {
         public required FrameworkElement Content;
         public FontFamily? Font;
+        public bool Hooked;
         public SurfacePaint.Painted? Painted;
         public EventHandler? Follow;
         public bool Taskbar;

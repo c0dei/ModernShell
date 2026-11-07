@@ -82,6 +82,7 @@ public sealed class StartMenuWindow : Window
 
         // 不可視のままハンドルを作っておく（TaskbarCreated 等のブロードキャストを受け取るため）
         var hwnd = new WindowInteropHelper(this).EnsureHandle();
+        SurfacePaint.PassShadowClicks(HwndSource.FromHwnd(hwnd)!); // 影の部分のクリックは下へ通す
         long ex = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE);
         Win32.SetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE, (IntPtr)(ex | Win32.WS_EX_TOOLWINDOW));
         // ぼかしの画像を、ウィンドウの位置（開く位置・スライド中）に合わせて切り出す
