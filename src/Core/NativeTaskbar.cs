@@ -99,7 +99,9 @@ public static class NativeTaskbar
                 System.IO.File.WriteAllText(AlignFile, current.ToString());
             }
             key.SetValue("TaskbarAl", want, Microsoft.Win32.RegistryValueKind.DWord);
-            NotifyTraySettings();
+            // 全ウィンドウへの通知は 1 つにつき最大 1 秒待つので、開いているウィンドウが多いと数秒〜十数秒かかる。
+            // タスクバーのスレッドで待つと固まる（起動直後に砂時計・クリックできない）ので、別スレッドで送る
+            System.Threading.Tasks.Task.Run(NotifyTraySettings);
         }
         catch (Exception ex) { Log.Error("start alignment", ex); }
     }
@@ -123,8 +125,12 @@ public static class NativeTaskbar
     private static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, IntPtr wParam, string lParam, uint flags, uint timeout, out IntPtr result);
 
     /// <summary>explorer に設定の変更を知らせる（Windows の設定アプリで切り替えたときと同じ通知）。</summary>
-    private static void NotifyTraySettings() =>
+    private static void NotifyTraySettings()
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         SendMessageTimeout((IntPtr)0xFFFF, Win32.WM_SETTINGCHANGE, IntPtr.Zero, "TraySettings", 0x2 /*SMTO_ABORTIFHUNG*/, 1000, out _);
+        Log.Info($"timing: tray settings broadcast took {sw.ElapsedMilliseconds} ms");
+    }
 
     private static int LoadPersisted()
     {
