@@ -3,9 +3,15 @@ name: build
 on:
   push:
     branches: [main]
-    tags: ['v*']          # v0.1.0 のようなタグを push すると Release を作成
+    tags: ['v*', '[0-9]*']  # v1.0.0 / 1.0.0 のようなタグを push すると、そのリリースにファイルを添付
+  release:
+    types: [published]      # GitHub の画面でリリースを公開したとき（タグを画面で作った場合も）
   pull_request:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'ファイルを添付するリリースのタグ（例: v1.0.0）。空ならビルドだけ'
+        required: false
 
 permissions:
   contents: write         # Release 作成に必要
@@ -26,9 +32,16 @@ jobs:
       - name: Determine version
         id: ver
         shell: bash
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          # リリースに添付するタグ: 画面でのリリース公開 > 手動実行の指定 > タグの push
+          tag="${RELEASE_TAG:-$INPUT_TAG}"
+          if [[ -z "$tag" && "$GITHUB_REF" == refs/tags/* ]]; then tag="$GITHUB_REF_NAME"; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [[ -n "$tag" ]]; then
+            echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
           else
             base=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' ModernShell.csproj)
             echo "version=${base}-ci.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
@@ -78,11 +91,12 @@ jobs:
           name: ModernShell-${{ matrix.rid }}-single
           path: publish/*.exe
 
+      # リリースにファイルを添付する（リリースが無ければ作る。リリースノートは画面で書いたものをそのまま残す）
       - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.ver.outputs.tag != ''
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ steps.ver.outputs.tag }}
           files: |
             dist/*.zip
             publish/*.exe
-          generate_release_notes: true
