@@ -39,10 +39,27 @@ public sealed partial class TaskbarController
         };
         // タスクバーはクリックしてもアクティブにならないので、前面のアプリの IME をそのまま切り替えられる
         tile.Click += _ => { ToggleIme(); UpdateIme(); };
-        _imeTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, (_, _) => UpdateIme(), _dispatcher);
+        // 変化のきっかけ（IME に関係するキー・前面のアプリの切り替え）ですぐ読み直す。
+        // マウスで IME を切り替えた場合などの取りこぼしに備えて、1 秒ごとにも読み直す
+        _imeTimer ??= new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => UpdateIme(), _dispatcher);
         _imeTimer.Start();
         UpdateIme();
         return tile;
+    }
+
+    private DispatcherTimer? _imeSoon, _imeLater;
+
+    /// <summary>
+    /// IME の状態が変わったかもしれないとき（キー操作・アプリの切り替え）に呼ぶ。IME はキーを受け取ってから少し遅れて
+    /// 状態を変えるので、少し待って読み、念のためもう一度読む。
+    /// </summary>
+    public void ImeMayHaveChanged()
+    {
+        if (_imeText == null || _disposed) return;
+        _imeSoon ??= new DispatcherTimer(TimeSpan.FromMilliseconds(40), DispatcherPriority.Normal, (s, _) => { ((DispatcherTimer)s!).Stop(); UpdateIme(); }, _dispatcher);
+        _imeLater ??= new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Normal, (s, _) => { ((DispatcherTimer)s!).Stop(); UpdateIme(); }, _dispatcher);
+        _imeSoon.Stop(); _imeSoon.Start();
+        _imeLater.Stop(); _imeLater.Start();
     }
 
     /// <summary>前面のアプリの IME のウィンドウ（IME への問い合わせ先）とキーボードの言語。</summary>

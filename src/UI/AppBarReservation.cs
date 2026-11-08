@@ -24,6 +24,8 @@ public sealed class AppBarReservation : IDisposable
 
     public event Action? PositionChanged;
     public event Action<bool>? FullscreenChanged;
+    /// <summary>前面のウィンドウが変わった（IME の表示の更新などに使う）。</summary>
+    public event Action? ForegroundChanged;
 
     public AppBarReservation()
     {
@@ -40,7 +42,11 @@ public sealed class AppBarReservation : IDisposable
         // 全画面アプリの判定: Windows の ABN_FULLSCREENAPP 通知は当てにならない（Win+D で全画面のゲームを
         // 最小化しても「終わった」が来ないことがあり、タスクバーが背面のままデスクトップの裏に隠れる）。
         // 前面のウィンドウが変わる・最小化される・動くたびに、自分で全画面かどうかを確かめる
-        _winEvent = (_, _, _, _, _, _, _) => _src.Dispatcher.BeginInvoke(CheckFullscreen);
+        _winEvent = (_, evt, _, _, _, _, _) => _src.Dispatcher.BeginInvoke(() =>
+        {
+            CheckFullscreen();
+            if (evt == 0x0003) ForegroundChanged?.Invoke();
+        });
         foreach (var (min, max) in new[] { (0x0003u, 0x0003u) /*FOREGROUND*/, (0x0016u, 0x0017u) /*MINIMIZESTART/END*/ })
             _hooks.Add(SetWinEventHook(min, max, IntPtr.Zero, _winEvent, 0, 0, 0 /*WINEVENT_OUTOFCONTEXT*/));
         // ゲームが起動後に全画面へ切り替わる場合など、イベントを取りこぼしたとき用に 1 秒ごとにも確かめる

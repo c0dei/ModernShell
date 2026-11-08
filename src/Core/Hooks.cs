@@ -63,6 +63,19 @@ public sealed class InputHooks : IDisposable
     /// <summary>メニュー表示中に Esc が押された。UI スレッドで実行。</summary>
     public event Action? MenuEscape;
 
+    /// <summary>IME の状態を変えうるキー（半角/全角・変換・無変換・Win+Space など）が離された。UI スレッドで実行。</summary>
+    public event Action? ImeKeyReleased;
+
+    /// <summary>
+    /// IME の状態を変えうるキー。文字キーは含めない（打つたびに問い合わせないように）。
+    /// 修飾キーは Alt+Shift・Win+Space・Ctrl+Space などの組み合わせで入力言語や IME を切り替えるため含める。
+    /// </summary>
+    private static bool IsImeKey(uint vk) => vk is 0x14 /*CapsLock（Ctrl/Shift+Caps でかな・カタカナ）*/
+        or 0x15 /*かな*/ or 0x16 /*IME オン*/ or 0x19 /*漢字*/ or 0x1A /*IME オフ*/ or 0x1C /*変換*/ or 0x1D /*無変換*/
+        or >= 0xF0 and <= 0xF4 /*英数・カタカナひらがな・半角/全角*/
+        or 0x20 /*Space（Win/Ctrl+Space）*/ or 0x10 or 0x11 or 0x12 or >= 0xA0 and <= 0xA5 /*Shift・Ctrl・Alt*/
+        or Win32.VK_LWIN or Win32.VK_RWIN;
+
     /// <summary>ここが true の間だけ純正タスクバーのスタートボタンのクリックを横取りする（Win キーとは別に設定できる）。</summary>
     public Func<bool> InterceptStartButton { get; set; } = () => true;
 
@@ -110,6 +123,7 @@ public sealed class InputHooks : IDisposable
         int msg = (int)wParam;
         bool down = msg is Win32.WM_KEYDOWN or Win32.WM_SYSKEYDOWN;
         bool up = msg is Win32.WM_KEYUP or Win32.WM_SYSKEYUP;
+        if (up && ImeKeyReleased != null && IsImeKey(k.vkCode)) _dispatcher.BeginInvoke(() => ImeKeyReleased?.Invoke());
 
         // メニュー表示中の Esc はメニューを閉じるのに使い、前面のアプリには渡さない（Windows のメニューと同じ）
         if (k.vkCode == Win32.VK_ESCAPE && IsMenuOpen())

@@ -109,6 +109,7 @@ public sealed partial class TaskbarController : IDisposable
         Theme.Changed += OnThemeChanged;
         _reservation.PositionChanged += Arrange;
         _reservation.FullscreenChanged += _ => Arrange();
+        _reservation.ForegroundChanged += ImeMayHaveChanged;
         NetworkChange.NetworkAvailabilityChanged += OnNetworkChanged;
     }
 
