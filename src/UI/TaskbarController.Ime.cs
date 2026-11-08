@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -24,7 +25,7 @@ public sealed partial class TaskbarController
     private static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
 
     private const uint WM_IME_CONTROL = 0x0283;
-    private const int IMC_GETCONVERSIONMODE = 0x0001, IMC_GETOPENSTATUS = 0x0005, IMC_SETOPENSTATUS = 0x0006;
+    private const int IMC_GETCONVERSIONMODE = 0x0001, IMC_SETCONVERSIONMODE = 0x0002, IMC_GETOPENSTATUS = 0x0005, IMC_SETOPENSTATUS = 0x0006;
     private const int IME_CMODE_NATIVE = 0x1, IME_CMODE_KATAKANA = 0x2, IME_CMODE_FULLSHAPE = 0x8;
 
     private Tile ImeTile()
@@ -39,6 +40,8 @@ public sealed partial class TaskbarController
         };
         // タスクバーはクリックしてもアクティブにならないので、前面のアプリの IME をそのまま切り替えられる
         tile.Click += _ => { ToggleIme(); UpdateIme(); };
+        // 右クリックで入力モードのメニュー（純正タスクバーの IME メニューの主な項目）
+        tile.RightClick += x => Flyout.Show(x, ImeMenu(), FlyoutPlacement);
         // 変化のきっかけ（IME に関係するキー・前面のアプリの切り替え）ですぐ読み直す。
         // マウスで IME を切り替えた場合などの取りこぼしに備えて、1 秒ごとにも読み直す
         _imeTimer ??= new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => UpdateIme(), _dispatcher);
@@ -102,6 +105,54 @@ public sealed partial class TaskbarController
                     : full ? "Ａ" : "A";
         }
         if (_imeText.Text != text) _imeText.Text = text;
+    }
+
+    /// <summary>
+    /// 入力モードのメニュー。モードの切り替えは前面のアプリの IME に直接頼む（タスクバーもメニューもアクティブにならないので、
+    /// 前面のアプリはそのまま）。「半角英数」は日本語入力をオフにする（純正の「A」と同じ）。
+    /// </summary>
+    private IEnumerable<MenuItemSpec> ImeMenu()
+    {
+        var (ime, lang) = ForegroundIme();
+        bool usable = ime != IntPtr.Zero && (lang == 0 || lang == 0x0411);
+        int open = usable ? ImeQuery(ime, IMC_GETOPENSTATUS) : -1;
+        int mode = open > 0 ? ImeQuery(ime, IMC_GETCONVERSIONMODE) : 0;
+        const int H = IME_CMODE_NATIVE | IME_CMODE_FULLSHAPE, K = IME_CMODE_NATIVE | IME_CMODE_KATAKANA | IME_CMODE_FULLSHAPE,
+            A = IME_CMODE_FULLSHAPE, k = IME_CMODE_NATIVE | IME_CMODE_KATAKANA, Mask = IME_CMODE_NATIVE | IME_CMODE_KATAKANA | IME_CMODE_FULLSHAPE;
+        int current = open > 0 ? mode & Mask : -1;
+
+        // メニューを開いた時点の前面のアプリの IME に対して切り替える（メニューの操作中に前面が変わっても対象を間違えない）
+        MenuItemSpec Mode(string text, int value) =>
+            new(current == value ? "\uE73E" : "", text, () => SetImeMode(ime, value)) { Enabled = usable };
+        var items = new List<MenuItemSpec>
+        {
+            Mode(L.T("ひらがな"), H),
+            Mode(L.T("全角カタカナ"), K),
+            Mode(L.T("全角英数"), A),
+            Mode(L.T("半角カタカナ"), k),
+            new(open == 0 ? "\uE73E" : "", L.T("半角英数"), () => SetImeMode(ime, -1)) { Enabled = usable },
+            MenuItemSpec.Separator,
+            new("\uE713", L.T("IME の設定"), () =>
+            {
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ms-settings:regionlanguage-jpnime") { UseShellExecute = true }); }
+                catch (Exception ex) { Log.Error("ime settings", ex); }
+            }),
+        };
+        return items;
+    }
+
+    /// <summary>入力モードを変える。value が -1 なら日本語入力をオフ（半角英数）。</summary>
+    private void SetImeMode(IntPtr ime, int value)
+    {
+        if (ime == IntPtr.Zero) return;
+        if (value < 0)
+            SendMessageTimeout(ime, WM_IME_CONTROL, (IntPtr)IMC_SETOPENSTATUS, IntPtr.Zero, 0x2, 100, out _);
+        else
+        {
+            SendMessageTimeout(ime, WM_IME_CONTROL, (IntPtr)IMC_SETOPENSTATUS, (IntPtr)1, 0x2, 100, out _);
+            SendMessageTimeout(ime, WM_IME_CONTROL, (IntPtr)IMC_SETCONVERSIONMODE, (IntPtr)value, 0x2, 100, out _);
+        }
+        ImeMayHaveChanged();
     }
 
     private static void ToggleIme()
