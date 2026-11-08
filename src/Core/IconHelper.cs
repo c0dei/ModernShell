@@ -71,6 +71,33 @@ internal static class IconHelper
         return Get(app.ShellPath, sizePx);
     }
 
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct SHSTOCKICONINFO
+    {
+        public uint cbSize;
+        public IntPtr hIcon;
+        public int iSysImageIndex, iIcon;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szPath;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern int SHGetStockIconInfo(uint siid, uint flags, ref SHSTOCKICONINFO info);
+
+    /// <summary>
+    /// Windows 標準のフォルダーのアイコン。シェルに大きいサイズで頼むと台紙付きの画像になることがあるので、
+    /// アイコンのある場所（imageres.dll の何番目か）を Windows に教えてもらい、表示サイズの絵を直接取り出す。
+    /// </summary>
+    public static ImageSource? StockFolder(int sizePx)
+    {
+        try
+        {
+            var info = new SHSTOCKICONINFO { cbSize = (uint)Marshal.SizeOf<SHSTOCKICONINFO>() };
+            if (SHGetStockIconInfo(3 /*SIID_FOLDER*/, 0 /*SHGSI_ICONLOCATION*/, ref info) != 0 || string.IsNullOrEmpty(info.szPath)) return null;
+            return Exact(Environment.ExpandEnvironmentVariables(info.szPath), info.iIcon, sizePx);
+        }
+        catch { return null; }
+    }
+
     /// <summary>作り置きのキーで直接確かめる。</summary>
     public static bool TryGetCachedKey(string key, out ImageSource? icon) => Cache.TryGetValue(key, out icon);
 

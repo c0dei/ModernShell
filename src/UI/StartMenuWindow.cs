@@ -592,10 +592,10 @@ public sealed class StartMenuWindow : Window
         var img = UiKit.Icon(null, 24);
         var path = new[] { Environment.SpecialFolder.CommonPrograms, Environment.SpecialFolder.Programs }
             .Select(f => System.IO.Path.Combine(Environment.GetFolderPath(f), name)).FirstOrDefault(System.IO.Directory.Exists);
-        if (path != null)
-            IconThread.Get(path, 48).ContinueWith(r => { if (r.Result != null) img.Dispatcher.BeginInvoke(() => img.Source = r.Result); }, TaskScheduler.Default);
-        else
-            img.Source = null;
+        // フォルダーは Windows 標準のフォルダーのアイコンを表示サイズで直接取り出す（シェルに頼むと台紙付きになることがある）
+        int px = (int)Math.Ceiling(24 * Math.Max(1.0, Win32.GetDpiForSystem() / 96.0));
+        IconThread.Run(() => IconHelper.StockFolder(px) ?? (path != null ? IconHelper.Get(path, 48) : null))
+            .ContinueWith(r => { if (r.Result != null) img.Dispatcher.BeginInvoke(() => img.Source = r.Result); }, TaskScheduler.Default);
         var label = UiKit.Label(name, Fs(13));
         label.Margin = new Thickness(14, 0, 0, 0);
         var row = UiKit.Row(img, label);
