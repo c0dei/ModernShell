@@ -13,7 +13,7 @@
     <StartupObject>ModernShell.Program</StartupObject>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>assets\ModernShell.ico</ApplicationIcon>
-    <Version>0.2.0</Version>
+    <Version>1.0.0</Version>
     <!-- Linux/macOS からのクロスビルドも可能にする -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <!-- WinForms 用の高 DPI 警告。DPI は app.manifest (PerMonitorV2) で WPF と共通に設定している -->
