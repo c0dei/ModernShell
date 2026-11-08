@@ -16,6 +16,12 @@ on:
 permissions:
   contents: write         # Release 作成に必要
 
+# 画面でタグを作ってリリースを公開すると「タグの作成」と「リリースの公開」の両方で動くので、
+# 同じタグ（ブランチ）のビルドが重なったら古いほうを止める（結果は同じなので 1 回で足りる）
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
