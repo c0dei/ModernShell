@@ -112,6 +112,13 @@ public sealed partial class TaskbarController : IDisposable
         NetworkChange.NetworkAvailabilityChanged += OnNetworkChanged;
     }
 
+    private static bool IsInside(DependencyObject d, DependencyObject ancestor)
+    {
+        for (var x = d; x != null; x = x is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(x) : LogicalTreeHelper.GetParent(x))
+            if (ReferenceEquals(x, ancestor)) return true;
+        return false;
+    }
+
     private static bool _toolTipHooked;
 
     /// <summary>
@@ -360,6 +367,13 @@ public sealed partial class TaskbarController : IDisposable
         };
         s.ContentSizeChanged += Arrange;
         s.ContentRendered += (_, _) => FirstDrawn?.Invoke();
+        // 「^」の一覧が開いているときに、タスクバーの他の場所を押したら閉じる（「^」自体は開閉の切り替えに任せる）
+        s.PreviewMouseDown += (_, e) =>
+        {
+            if (_overflowPopup?.IsOpen != true) return;
+            if (e.OriginalSource is DependencyObject d && _overflowButton != null && IsInside(d, _overflowButton)) return;
+            _overflowPopup.IsOpen = false;
+        };
         s.Loaded += (_, _) => Arrange();
         _surfaces.Add(s);
     }

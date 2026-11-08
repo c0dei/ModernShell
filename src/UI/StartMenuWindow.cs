@@ -579,7 +579,7 @@ public sealed class StartMenuWindow : Window
             h.Margin = new Thickness(12, 12, 0, 4);
             list.Children.Add(h);
             foreach (var e in group)
-                list.Children.Add(e.app != null ? ListTile(e.app, AppMenu(e.app, pinnedPage: false)) : FolderTile(e.name, e.items!));
+                list.Children.Add(e.app != null ? ListTile(e.app, () => AppMenu(e.app, pinnedPage: false)) : FolderTile(e.name, e.items!));
         }
         dock.Children.Add(Scroll(list));
         return dock;
@@ -671,7 +671,8 @@ public sealed class StartMenuWindow : Window
         _folderOverlay = null;
     }
 
-    private Tile ListTile(AppEntry app, IEnumerable<MenuItemSpec> menu, string? subtitle = null)
+    /// <param name="menu">右クリックメニューの中身。開くたびに作る（ピン留めの状態などが、行を作ったあとで変わっても正しく出すため）。</param>
+    private Tile ListTile(AppEntry app, Func<IEnumerable<MenuItemSpec>> menu, string? subtitle = null)
     {
         var img = UiKit.Icon(null, 24);
         LoadIconAsync(img, app, 24);
@@ -681,7 +682,7 @@ public sealed class StartMenuWindow : Window
         var tile = new Tile { Height = subtitle == null ? 40 : 48, Padding = new Thickness(12, 0, 12, 0), Payload = app, Child = UiKit.Row(img, text) };
         ((StackPanel)tile.Child).VerticalAlignment = VerticalAlignment.Center;
         tile.Click += _ => Launch(app);
-        tile.RightClick += t => OpenFlyout(t, menu);
+        tile.RightClick += t => OpenFlyout(t, menu());
         return tile;
     }
 
@@ -729,7 +730,7 @@ public sealed class StartMenuWindow : Window
             list.Children.Add(h);
             foreach (var app in matches)
             {
-                var tile = ListTile(app, AppMenu(app, pinnedPage: false), app.IsStoreApp ? L.T("アプリ") : L.T("デスクトップアプリ"));
+                var tile = ListTile(app, () => AppMenu(app, pinnedPage: false), app.IsStoreApp ? L.T("アプリ") : L.T("デスクトップアプリ"));
                 _results.Add(tile);
                 list.Children.Add(tile);
             }
@@ -857,7 +858,8 @@ public sealed class StartMenuWindow : Window
 
     private static void LoadIconAsync(Image img, AppEntry app, int size)
     {
-        Task.Run(() => app.Icon(size * 2)).ContinueWith(t =>
+        // シェルのアイコンは専用スレッドで読む（スレッド プールから読むと UI スレッドで処理されて固まることがある）
+        IconThread.Get(app.ShellPath, size * 2).ContinueWith(t =>
         {
             if (t.Result != null) img.Dispatcher.BeginInvoke(() => img.Source = t.Result);
         }, TaskScheduler.Default);

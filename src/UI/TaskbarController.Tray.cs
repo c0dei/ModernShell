@@ -192,7 +192,8 @@ public sealed partial class TaskbarController
             }
             SetPlacement(icon, tile);
             icon.IconMouseUp(e.ChangedButton, MouseHelper.GetCursorPositionParam(), dbl);
-            if (_overflowPopup != null) _overflowPopup.IsOpen = false;
+            // 「^」の一覧はアイコンをクリックしても閉じない（Windows と同じ。ダブルクリックや、右クリックメニューを
+            // 出したままどのアイコンかを見られるように）。外をクリック・Esc・「^」で閉じる
             e.Handled = true;
         };
         return tile;
@@ -408,9 +409,7 @@ public sealed partial class TaskbarController
         edit.Click += _ =>
         {
             _trayEditMode = !_trayEditMode;
-            // 編集中はドラッグでマウスを奪っても閉じないよう固定表示（「完了」か「^」で閉じる）
-            if (_overflowPopup != null) _overflowPopup.StaysOpen = _trayEditMode;
-            if (_trayEditMode) anchor.IsHitTestVisible = true; // 固定表示中は「^」を押して閉じられるように
+            if (_trayEditMode) anchor.IsHitTestVisible = true; // 編集中は「^」を押して閉じられるように
             UpdateEdit(); FillOverflow(); RebuildTray();
         };
         UpdateEdit();
@@ -422,6 +421,9 @@ public sealed partial class TaskbarController
         stack.Children.Add(edit);
 
         _overflowPopup = FluentSurface.Create(stack, anchor, FlyoutPlacement);
+        // アイコンのアプリがメニューやウィンドウを出してもすぐには閉じない。閉じるのは、ModernShell 以外の場所のクリック
+        // （全体のマウス監視）、タスクバーの他の場所のクリック、Esc、「^」
+        _overflowPopup.StaysOpen = true;
         // Windows と同じく「^」ボタンを基準に左右中央へ出す（画面端では自動で内側にずれる）
         FluentSurface.PlaceCentered(_overflowPopup, anchor, IsTop);
         _overflowPopup.Closed += (_, _) => { if (_trayEditMode) { _trayEditMode = false; RebuildTray(); } };
