@@ -42,6 +42,23 @@ internal static class IconHelper
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
     private static extern int SHCreateItemFromParsingName(string path, IntPtr pbc, ref Guid riid, [MarshalAs(UnmanagedType.Interface)] out IShellItemImageFactory? item);
 
+    /// <summary>
+    /// パッケージ版アプリ（AUMID が "ファミリー名!アプリ ID"）のタスクバー用アイコン。パッケージの中の「台紙なし」の画像を使い、
+    /// 無ければシェルのアイコン。ファイルを探すので UI スレッドでは呼ばず、<see cref="IconThread"/> などから呼ぶ。
+    /// </summary>
+    public static ImageSource? PackagedAppIcon(string aumid, int sizePx, bool lightTheme)
+    {
+        var key = "logo|" + aumid + "|" + sizePx + "|" + lightTheme;
+        return Cached(key, _ =>
+        {
+            var file = PackageInfo.UnplatedLogo(aumid, sizePx, lightTheme);
+            return file != null ? PackageInfo.LoadImage(file, Math.Max(sizePx, 32)) : Get(@"shell:AppsFolder\" + aumid, 64);
+        });
+    }
+
+    /// <summary>作り置きのキーで直接確かめる。</summary>
+    public static bool TryGetCachedKey(string key, out ImageSource? icon) => Cache.TryGetValue(key, out icon);
+
     /// <summary>作り置きがあればそれを返す（無ければ読み込まずに null）。UI を止めずに済むかの確認用。</summary>
     public static bool TryGetCached(string parsingName, int size, out ImageSource? icon) =>
         Cache.TryGetValue(parsingName + "|" + size, out icon);

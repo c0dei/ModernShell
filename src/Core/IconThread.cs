@@ -30,6 +30,14 @@ public static class IconThread
         t.Start();
     }
 
+    /// <summary>任意のアイコンの読み込みを専用スレッドで行う。</summary>
+    public static Task<ImageSource?> Run(Func<ImageSource?> load)
+    {
+        var tcs = new TaskCompletionSource<ImageSource?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Queue.Add(() => tcs.SetResult(load()));
+        return tcs.Task;
+    }
+
     /// <summary>parsingName（"shell:AppsFolder\…" やファイル）のアイコンを専用スレッドで読む。</summary>
     public static Task<ImageSource?> Get(string parsingName, int size)
     {

@@ -375,7 +375,26 @@ public sealed partial class TaskbarController
         var exe = app?.ExePath ?? (w0 != null ? ExePath(w0) : null);
         if (exe != null && !exe.EndsWith("ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase)
             && ModernShell.Core.IconHelper.Exact(exe, 0, px) is { } fromExe) return fromExe;
+        // パッケージ版アプリは、パッケージの中の「台紙なし」の画像（純正タスクバーと同じ）を使う
+        var aumid = app?.Aumid ?? (app != null && app.Id.Contains('!') && !app.Id.Contains('\\') ? app.Id : null) ?? (w0 != null ? Aumid(w0) : null);
+        if (aumid != null && aumid.Contains('!')) return PackagedIconAsync(aumid, px);
         return app != null ? ShellIconAsync(app) : null;
+    }
+
+    /// <summary>パッケージ版アプリのアイコン（専用スレッドで読み込み、できたらボタンを作り直す）。</summary>
+    private ImageSource? PackagedIconAsync(string aumid, int px)
+    {
+        bool light = !Theme.Current.IsDark;
+        if (ModernShell.Core.IconHelper.TryGetCachedKey("logo|" + aumid + "|" + px + "|" + light, out var cached)) return cached;
+        var key = "logo|" + aumid;
+        if (!_iconsLoading.Add(key)) return null;
+        ModernShell.Core.IconThread.Run(() => ModernShell.Core.IconHelper.PackagedAppIcon(aumid, px, light)).ContinueWith(_ =>
+            _dispatcher.BeginInvoke(() =>
+            {
+                _iconsLoading.Remove(key);
+                if (!_disposed) Kick(_appsSoftDebounce);
+            }), System.Threading.Tasks.TaskScheduler.Default);
+        return null;
     }
 
     private readonly HashSet<string> _iconsLoading = new(StringComparer.OrdinalIgnoreCase);
