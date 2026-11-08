@@ -337,5 +337,8 @@ public static partial class L
         ["有線"] = "Wired",
         ["ネット"] = "Network",
         ["未接続"] = "Offline",
+        ["IME の状態を表示"] = "Show the IME status",
+        ["日本語入力の状態（あ / A など）。クリックでオン/オフを切り替えます"] = "The input method status (such as あ / A). Click to turn it on or off",
+        ["IME（クリックで日本語入力のオン/オフ）"] = "IME (click to turn Japanese input on or off)",
     };
 }

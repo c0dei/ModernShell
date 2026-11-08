@@ -93,6 +93,9 @@ public static class Program
         Forms.Application.ThreadException += (_, e) => Log.Error("winforms", e.Exception);
 
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        // PC の終了・再起動では最後の後片付けまでたどり着かないことがあるので、終了の知らせが来た時点で
+        // 純正タスクバーの「自動的に隠す」設定を戻しておく（次回の起動直後もタスクバーが見えるように）
+        app.SessionEnding += (_, _) => { Log.Info("session ending"); NativeTaskbar.RestoreAutoHideSetting(); };
         app.DispatcherUnhandledException += (_, e) =>
         {
             Log.Error("dispatcher", e.Exception);

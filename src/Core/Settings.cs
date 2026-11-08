@@ -55,6 +55,8 @@ public sealed class Settings
     public int BandMargin { get; set; } = 0;
     /// <summary>アイランド型のときホバーでアイコンを拡大する。</summary>
     public bool MagnifyOnHover { get; set; } = true;
+    /// <summary>タスクバーに IME の状態（あ / A）を表示する。</summary>
+    public bool ShowImeIndicator { get; set; } = true;
     /// <summary>開くときのアニメーション（それぞれ切り替えられる）。</summary>
     public bool AnimateStartMenu { get; set; } = true;
     public bool AnimatePreviews { get; set; } = true;

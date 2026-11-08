@@ -57,6 +57,7 @@ public sealed partial class TaskbarController
         // Win+A / Win+N のキー操作で開く。管理者として動くアプリ（タスク マネージャーなど）が前面だと、
         // Windows は他のアプリからのキー操作をそこへ届けない（UIPI）ので、先にタスクバーが前面になってから送る
         quick.Click += x => { TakeForeground(x); SystemActions.QuickSettings(); };
+        if (_settings.ShowImeIndicator) p.Children.Add(ImeTile());
         p.Children.Add(quick);
 
         _time = UiKit.Label("", 12);

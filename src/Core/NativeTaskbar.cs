@@ -41,6 +41,25 @@ public static class NativeTaskbar
         }
     }
 
+    /// <summary>
+    /// Windows の終了・再起動・サインアウトのとき、純正タスクバーの「自動的に隠す」設定だけを元に戻す（表示はしない）。
+    /// ManagedShell は隠すために自動的に隠す設定をオンにしており、それが Windows に保存されたまま終わると、
+    /// 次回の起動時に ModernShell が立ち上がるまでタスクバーが見えない状態になるため。
+    /// </summary>
+    public static void RestoreAutoHideSetting()
+    {
+        lock (Gate)
+        {
+            int state = LoadPersisted();
+            if (state < 0) return;
+            var main = Win32.FindWindow("Shell_TrayWnd", null);
+            if (main == IntPtr.Zero) return;
+            var abd = Win32.APPBARDATA.Create(main);
+            abd.lParam = (IntPtr)state;
+            Win32.SHAppBarMessage(Win32.ABM_SETSTATE, ref abd);
+        }
+    }
+
     /// <summary>記録があれば純正タスクバーを元の状態に戻して表示する。記録がなければ何もしない。</summary>
     public static bool Restore()
     {

@@ -245,7 +245,7 @@ public sealed partial class TaskbarController : IDisposable
         _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarHeight, _settings.TaskbarIconSize, _settings.IslandMargin,
         _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds,
         _settings.MagnifyOnHover, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
-        _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMargin, _settings.Language);
+        _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMargin, _settings.Language, _settings.ShowImeIndicator);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e)
     {
         _online = e.IsAvailable;
@@ -468,6 +468,7 @@ public sealed partial class TaskbarController : IDisposable
         if (_disposed) return;
         _disposed = true;
         _clock.Stop();
+        _imeTimer?.Stop();
         _status.Stop();
         _appsDebounce.Stop();
         _appsSoftDebounce.Stop();
