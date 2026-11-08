@@ -56,6 +56,21 @@ internal static class IconHelper
         });
     }
 
+    /// <summary>
+    /// アプリのアイコンを、表示サイズに合った「台紙なし」の絵で取り出す（タスクバーとスタートメニューで共通の順番）。
+    /// ショートカットのアイコン → exe のアイコン（どちらもサイズを指定して直接取り出す） → パッケージ版アプリの台紙なし画像 → シェル。
+    /// シェルに大きいサイズを頼むと、その大きさの絵を持たないアプリでは小さいアイコンを白い台紙に載せた画像が返り、枠のように見えるため。
+    /// ファイルや COM を使うので UI スレッドでは呼ばず、<see cref="IconThread"/> から呼ぶ。
+    /// </summary>
+    public static ImageSource? ForApp(AppEntry app, int sizePx, bool lightTheme)
+    {
+        if (app.ShortcutPath is { } lnk && System.IO.File.Exists(lnk) && ForShortcut(lnk, sizePx) is { } fromLnk) return fromLnk;
+        if (app.ExePath is { } exe && Exact(exe, 0, sizePx) is { } fromExe) return fromExe;
+        var aumid = app.IsStoreApp ? app.Id : app.Aumid is { } a && a.Contains('!') ? a : null;
+        if (aumid != null) return PackagedAppIcon(aumid, sizePx, lightTheme);
+        return Get(app.ShellPath, sizePx);
+    }
+
     /// <summary>作り置きのキーで直接確かめる。</summary>
     public static bool TryGetCachedKey(string key, out ImageSource? icon) => Cache.TryGetValue(key, out icon);
 

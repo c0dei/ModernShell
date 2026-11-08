@@ -861,12 +861,10 @@ public sealed class StartMenuWindow : Window
         // シェルのアイコンは専用スレッドで読む（スレッド プールから読むと UI スレッドで処理されて固まることがある）。
         // パッケージ版アプリ（ストアアプリなど）は、シェルの台紙付きのアイコンではなく、パッケージの中の「台紙なし」の画像を使う
         // （台紙の色がアイコンの周りの枠のように見えるため。純正のスタート・タスクバーと同じ）
-        var aumid = app.IsStoreApp ? app.Id : app.Aumid is { } a && a.Contains('!') ? a : null;
+        // デスクトップアプリはショートカット・exe のアイコンを表示サイズに合わせて直接取り出す（タスクバーと同じ順番）
         bool light = !Theme.Current.IsDark;
-        var load = aumid != null
-            ? IconThread.Run(() => IconHelper.PackagedAppIcon(aumid, size * 2, light))
-            : IconThread.Get(app.ShellPath, size * 2);
-        load.ContinueWith(t =>
+        int px = (int)Math.Ceiling(size * Math.Max(1.0, Win32.GetDpiForSystem() / 96.0)); // 表示倍率（画面に置く前なので Windows 全体の倍率）
+        IconThread.Run(() => IconHelper.ForApp(app, px, light)).ContinueWith(t =>
         {
             if (t.Result != null) img.Dispatcher.BeginInvoke(() => img.Source = t.Result);
         }, TaskScheduler.Default);
