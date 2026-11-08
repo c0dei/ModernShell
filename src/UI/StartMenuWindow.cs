@@ -858,8 +858,15 @@ public sealed class StartMenuWindow : Window
 
     private static void LoadIconAsync(Image img, AppEntry app, int size)
     {
-        // シェルのアイコンは専用スレッドで読む（スレッド プールから読むと UI スレッドで処理されて固まることがある）
-        IconThread.Get(app.ShellPath, size * 2).ContinueWith(t =>
+        // シェルのアイコンは専用スレッドで読む（スレッド プールから読むと UI スレッドで処理されて固まることがある）。
+        // パッケージ版アプリ（ストアアプリなど）は、シェルの台紙付きのアイコンではなく、パッケージの中の「台紙なし」の画像を使う
+        // （台紙の色がアイコンの周りの枠のように見えるため。純正のスタート・タスクバーと同じ）
+        var aumid = app.IsStoreApp ? app.Id : app.Aumid is { } a && a.Contains('!') ? a : null;
+        bool light = !Theme.Current.IsDark;
+        var load = aumid != null
+            ? IconThread.Run(() => IconHelper.PackagedAppIcon(aumid, size * 2, light))
+            : IconThread.Get(app.ShellPath, size * 2);
+        load.ContinueWith(t =>
         {
             if (t.Result != null) img.Dispatcher.BeginInvoke(() => img.Source = t.Result);
         }, TaskScheduler.Default);
