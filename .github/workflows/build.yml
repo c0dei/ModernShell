@@ -97,12 +97,29 @@ jobs:
           name: ModernShell-${{ matrix.rid }}-single
           path: publish/*.exe
 
-      # リリースにファイルを添付する（リリースが無ければ作る。リリースノートは画面で書いたものをそのまま残す）
+      # リリースノート: release-notes/<タグ>.md があれば、それを本文にしてリリースを作る（Claude などがタグを push するだけでリリースできる）。
+      # 無ければ、画面で書いた本文をそのまま残す
+      - name: Release notes
+        id: notes
+        if: steps.ver.outputs.tag != ''
+        shell: bash
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          f="release-notes/${TAG}.md"
+          if [[ -f "$f" ]]; then
+            echo "path=$f" >> "$GITHUB_OUTPUT"
+            echo "name=ModernShell ${TAG}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # リリースにファイルを添付する（リリースが無ければ作る）
       - name: Release
         if: steps.ver.outputs.tag != ''
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.notes.outputs.name }}
+          body_path: ${{ steps.notes.outputs.path }}
           files: |
             dist/*.zip
             publish/*.exe
