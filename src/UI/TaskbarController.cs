@@ -338,16 +338,24 @@ public sealed partial class TaskbarController : IDisposable
             _reservation.Reserve(Edge, h + across * 2);
         }
 
-        RebuildApps();
-        RebuildTray();
+        // どれかの処理が失敗しても、バーのウィンドウは必ず表示する（途中で止まると、領域だけ確保されて何も見えなくなる）
+        Safe("apps", RebuildApps);
+        Safe("tray", RebuildTray);
         StallDetector.Phase = "taskbar: clock";
-        UpdateClock();
-        UpdateStatus();
+        Safe("clock", UpdateClock);
+        Safe("status", UpdateStatus);
         StallDetector.Phase = "taskbar: show windows";
         foreach (var s in _surfaces) s.Show();
         Arrange();
+        Log.Info($"taskbar built: edge={Edge} style={(Floating ? "island" : "band")} surfaces={_surfaces.Count} reserved={_reservation.Rect.Left},{_reservation.Rect.Top},{_reservation.Rect.Right},{_reservation.Rect.Bottom}");
         // ここから先は WPF が画面に描く処理（このあと固まったら、描画の準備で待たされている）
         StallDetector.Phase = "taskbar: waiting for WPF to draw";
+    }
+
+    private static void Safe(string what, Action a)
+    {
+        try { a(); }
+        catch (Exception ex) { Log.Error($"taskbar rebuild ({what})", ex); }
     }
 
     /// <summary>並べる向きでの位置（横のバーなら 左・中央・右、縦のバーなら 上・中央・下）。</summary>
@@ -477,6 +485,28 @@ public sealed partial class TaskbarController : IDisposable
             }
         }
         UpdateTrayHostData();
+        LogArrange();
+    }
+
+    private string _lastArrangeLog = "";
+
+    /// <summary>各ウィンドウの実際の位置と大きさ（画面の物理ピクセル）。変わったときだけ記録する（見えないときの調査用）。</summary>
+    private void LogArrange()
+    {
+        try
+        {
+            var sb = new System.Text.StringBuilder($"taskbar arrange: edge={Edge} fullscreen={_reservation.IsFullscreenAppActive}");
+            foreach (var s in _surfaces)
+            {
+                Win32.GetWindowRect(s.Handle, out var wr);
+                sb.Append($" | {s.Placement} loaded={s.IsLoaded} visible={s.IsVisible} rect={wr.Left},{wr.Top},{wr.Right},{wr.Bottom}");
+            }
+            var text = sb.ToString();
+            if (text == _lastArrangeLog) return;
+            _lastArrangeLog = text;
+            Log.Info(text);
+        }
+        catch { }
     }
 
     // ------------------------------------------------------------------
