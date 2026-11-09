@@ -111,7 +111,14 @@ public sealed partial class TaskbarController
         var target = GetGUIThreadInfo(0, ref info) && info.hwndFocus != IntPtr.Zero ? info.hwndFocus : fg;
         uint thread = Win32.GetWindowThreadProcessId(target, out _);
         int lang = (int)((long)GetKeyboardLayout(thread) & 0xFFFF);
-        return (ImmGetDefaultIMEWnd(target), lang);
+        var ime = ImmGetDefaultIMEWnd(target);
+        // 入力欄の IME が答えないときは、アプリの枠の IME にも聞いてみる（アプリによってはこちらが答える）
+        if (target != fg && (ime == IntPtr.Zero || ImeQuery(ime, IMC_GETOPENSTATUS) < 0))
+        {
+            var top = ImmGetDefaultIMEWnd(fg);
+            if (top != IntPtr.Zero && ImeQuery(top, IMC_GETOPENSTATUS) >= 0) ime = top;
+        }
+        return (ime, lang);
     }
 
     private static IntPtr _imeLoggedFor;
@@ -125,14 +132,29 @@ public sealed partial class TaskbarController
         var info = new GUITHREADINFO { cbSize = Marshal.SizeOf<GUITHREADINFO>() };
         GetGUIThreadInfo(0, ref info);
         string Cls(IntPtr h) { var sb = new System.Text.StringBuilder(128); if (h != IntPtr.Zero) GetClassName(h, sb, sb.Capacity); return sb.ToString(); }
-        Log.Info($"ime: app={Cls(fg)} focus={Cls(info.hwndFocus)} imeWnd={(ime != IntPtr.Zero)} lang=0x{lang:X4} open={open} mode=0x{mode:X}");
+        Log.Info($"ime: app={Cls(fg)} focus={Cls(info.hwndFocus)} imeWnd={(ime != IntPtr.Zero)} lang=0x{lang:X4} open={open} mode=0x{mode:X}" +
+                 (open < 0 ? $" error={_imeLastError} os={Environment.OSVersion.Version}" : ""));
     }
+
+    /// <summary>直前の問い合わせが失敗したときの Windows のエラー番号（5 = 管理者のアプリへの問い合わせを拒否、1460 = 時間切れ）。</summary>
+    private static int _imeLastError;
+
+    /// <summary>答えなかった IME のウィンドウと、次に問い合わせてよい時刻（答えないところに毎回待たされてタスクバーが固まらないように）。</summary>
+    private static readonly Dictionary<IntPtr, DateTime> _imeSilentUntil = new();
 
     private static int ImeQuery(IntPtr ime, int command)
     {
+        if (_imeSilentUntil.TryGetValue(ime, out var until) && DateTime.Now < until) return -1;
         // 応答しないアプリで止まらないよう、短い時間で打ち切る
-        return SendMessageTimeout(ime, WM_IME_CONTROL, (IntPtr)command, IntPtr.Zero, 0x2 /*SMTO_ABORTIFHUNG*/, 100, out var r) == IntPtr.Zero
-            ? -1 : (int)(long)r;
+        if (SendMessageTimeout(ime, WM_IME_CONTROL, (IntPtr)command, IntPtr.Zero, 0x2 /*SMTO_ABORTIFHUNG*/, 300, out var r) == IntPtr.Zero)
+        {
+            _imeLastError = Marshal.GetLastWin32Error();
+            if (_imeSilentUntil.Count > 100) _imeSilentUntil.Clear();
+            _imeSilentUntil[ime] = DateTime.Now.AddSeconds(10);
+            return -1;
+        }
+        _imeSilentUntil.Remove(ime);
+        return (int)(long)r;
     }
 
     private void UpdateIme()
