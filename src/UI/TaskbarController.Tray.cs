@@ -70,13 +70,20 @@ public sealed partial class TaskbarController
         if (_settings.ShowImeIndicator) p.Children.Add(ImeTile());
         p.Children.Add(quick);
 
+        MeasureClock();
         _time = UiKit.Label("", 12);
         _date = UiKit.Label("", 12);
-        _time.HorizontalAlignment = _date.HorizontalAlignment = HorizontalAlignment.Right;
+        _time.HorizontalAlignment = _date.HorizontalAlignment = Vertical ? HorizontalAlignment.Center : HorizontalAlignment.Right;
+        // 縦のバーでは文字が省略記号（…）にならないよう、省略せず、中央に揃える
+        if (Vertical)
+        {
+            _time.TextTrimming = _date.TextTrimming = TextTrimming.None;
+            _time.TextAlignment = _date.TextAlignment = TextAlignment.Center;
+        }
         var clockStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         clockStack.Children.Add(_time);
         clockStack.Children.Add(_date);
-        if (Compact) _date.Visibility = Visibility.Collapsed; // 低いバーでは日付を省略（ツールチップで確認）
+        if (Compact || ClockStacked || (Vertical && !_dateFits)) _date.Visibility = Visibility.Collapsed; // 低い・細いバーでは日付を省略（ツールチップで確認）
         var clock = new Tile
         {
             Padding = Vertical ? new Thickness(0, 6, 0, 6) : new Thickness(10, 0, 10, 0), Margin = Vertical ? new Thickness(0, 2, 0, 2) : new Thickness(2, 0, 2, 0),
@@ -522,12 +529,37 @@ public sealed partial class TaskbarController
 
     private static FrameworkElement Spaced(FrameworkElement e) { e.Margin = new Thickness(8, 0, 0, 0); return e; }
 
+    /// <summary>
+    /// 縦のバーが細くて「22:31」が横に収まらないとき（時計のボタンの幅はバーの幅 − 6）、時刻を「時」「分」の 2 段で表示する。
+    /// 使っているフォントで実際に文字の幅を測って決める（フォントによって数字の幅が違うため）。時計を作るときに 1 回だけ測る。
+    /// </summary>
+    private bool _clockStacked, _dateFits = true;
+    private bool ClockStacked => _clockStacked;
+
+    private void MeasureClock()
+    {
+        _clockStacked = false;
+        _dateFits = true;
+        if (!Vertical) return;
+        try
+        {
+            var typeface = new Typeface(Theme.Current.UiFont, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+            double Width(string s) => new FormattedText(s, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, 12, Brushes.Black, 1.0)
+                .WidthIncludingTrailingWhitespace;
+            double room = TileH - 2 - 2; // ボタンの枠（左右 1 px ずつ）と少しの余裕を引いた幅
+            _clockStacked = Width("00:00") > room;
+            _dateFits = Width("00/00") <= room;
+        }
+        catch { _clockStacked = TileH < 36; _dateFits = TileH >= 38; }
+    }
+
     private void UpdateClock()
     {
         if (_time == null || _date == null) return;
         var now = DateTime.Now;
-        // 縦のバーは幅が狭いので、秒は出さず、日付も短くする
-        _time.Text = now.ToString(_settings.ShowSeconds && !Vertical ? "H:mm:ss" : "H:mm");
+        // 縦のバーは幅が狭いので、秒は出さず、日付も短くする。さらに細いバーでは時刻を「時」「分」の 2 段にする
+        _time.Text = ClockStacked ? now.ToString("H") + "\n" + now.ToString("mm")
+            : now.ToString(_settings.ShowSeconds && !Vertical ? "H:mm:ss" : "H:mm");
         _date.Text = now.ToString(Vertical ? "M/d" : L.IsEnglish ? "M/d/yyyy" : "yyyy/MM/dd", L.Culture);
     }
 
