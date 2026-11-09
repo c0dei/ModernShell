@@ -294,10 +294,10 @@ public static class Program
     }
 
     /// <summary>スタートメニューを出す基準位置（タスクバー矩形・上下・中央寄せ）。</summary>
-    private static (Win32.RECT bar, bool top, bool center)? StartAnchor()
+    private static (Win32.RECT bar, TaskbarEdge edge, bool center)? StartAnchor()
     {
         if (_taskbar != null)
-            return (_taskbar.BarRect, _taskbar.IsTop, StartCentered(_taskbar.StartCentered));
+            return (_taskbar.BarRect, _taskbar.Edge, StartCentered(_taskbar.StartCentered));
 
         if (NativeTaskbar.GetTaskbarRect() is not { } r) return null;
         bool center = true;
@@ -308,9 +308,14 @@ public static class Program
             else center = Environment.OSVersion.Version.Build >= 22000;
         }
         catch { }
-        var screenH = (int)(SystemParameters.PrimaryScreenHeight * (Win32.GetDpiForWindow(_start.Handle) / 96.0));
-        bool top = r.Top <= 0 && r.Bottom < screenH / 2;
-        return (r, top, StartCentered(center));
+        var dpi = Win32.GetDpiForWindow(_start.Handle) / 96.0;
+        var screenH = (int)(SystemParameters.PrimaryScreenHeight * dpi);
+        var screenW = (int)(SystemParameters.PrimaryScreenWidth * dpi);
+        // 純正タスクバーの向き: 幅より高さが大きければ縦（Windows 10 などで左右に置いた場合）
+        var edge = r.Width < r.Height
+            ? (r.Left <= 0 && r.Right < screenW / 2 ? TaskbarEdge.Left : TaskbarEdge.Right)
+            : (r.Top <= 0 && r.Bottom < screenH / 2 ? TaskbarEdge.Top : TaskbarEdge.Bottom);
+        return (r, edge, StartCentered(center));
     }
 
     /// <summary>スタートメニューを中央に開くか（設定の「開く位置」。自動ならスタートボタンの位置に合わせる）。</summary>

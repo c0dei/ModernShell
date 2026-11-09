@@ -29,31 +29,41 @@ public sealed partial class TaskbarController
 
     private StackPanel TrayGroup(Theme t)
     {
-        var p = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        var p = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
 
+        // 「^」ボタン: 開く向き（画面の内側）を指す山形
+        string chevron = Edge switch { TaskbarEdge.Top => "\uE70D", TaskbarEdge.Left => "\uE76C", TaskbarEdge.Right => "\uE76B", _ => "\uE70E" };
         _overflowButton = new Tile
         {
-            Width = 28, Height = TileH, Margin = new Thickness(2, 0, 0, 0),
-            Child = UiKit.Glyph(IsTop ? "" : "", 12), ToolTip = L.T("隠れているインジケーターを表示"),
+            Width = Vertical ? TileH : 28, Height = Vertical ? 28 : TileH, Margin = Vertical ? new Thickness(0, 2, 0, 0) : new Thickness(2, 0, 0, 0),
+            Child = UiKit.Glyph(chevron, 12), ToolTip = L.T("隠れているインジケーターを表示"),
         };
         _overflowButton.Click += ShowOverflow;
         MakeOverflowDropTarget(_overflowButton); // 「^」の上に落としてもしまえる
         p.Children.Add(_overflowButton);
 
-        _trayIcons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        _trayIcons = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         p.Children.Add(_trayIcons);
         MakeTrayDropTarget(p);
 
         _network = UiKit.Glyph("", 15);
         _battery = UiKit.Glyph("", 15);
-        _battery.Margin = new Thickness(10, 0, 0, 0);
         var volume = UiKit.Glyph("", 15);
-        volume.Margin = new Thickness(10, 0, 0, 0);
+        // 横のバーでは 3 つのアイコンを横に、縦のバーでは縦に並べる
+        Thickness between = Vertical ? new Thickness(0, 6, 0, 0) : new Thickness(10, 0, 0, 0);
+        _battery.Margin = between;
+        volume.Margin = between;
+        var icons = new StackPanel { Orientation = Flow, HorizontalAlignment = HorizontalAlignment.Center };
+        icons.Children.Add(_network);
+        icons.Children.Add(volume);
+        icons.Children.Add(_battery);
         var quick = new Tile
         {
-            Padding = new Thickness(10, 0, 10, 0), Height = TileH, Margin = new Thickness(2, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
-            Child = UiKit.Row(_network, volume, _battery), ToolTip = L.T("クイック設定 (Win+A)"),
+            Padding = Vertical ? new Thickness(0, 8, 0, 8) : new Thickness(10, 0, 10, 0), Margin = Vertical ? new Thickness(0, 2, 0, 0) : new Thickness(2, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
+            Child = icons, ToolTip = L.T("クイック設定 (Win+A)"),
         };
+        if (Vertical) quick.Width = TileH; else quick.Height = TileH;
         // Win+A / Win+N のキー操作で開く。管理者として動くアプリ（タスク マネージャーなど）が前面だと、
         // Windows は他のアプリからのキー操作をそこへ届けない（UIPI）ので、先にタスクバーが前面になってから送る
         quick.Click += x => { TakeForeground(x); SystemActions.QuickSettings(); };
@@ -63,15 +73,17 @@ public sealed partial class TaskbarController
         _time = UiKit.Label("", 12);
         _date = UiKit.Label("", 12);
         _time.HorizontalAlignment = _date.HorizontalAlignment = HorizontalAlignment.Right;
-        var clockStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var clockStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         clockStack.Children.Add(_time);
         clockStack.Children.Add(_date);
         if (Compact) _date.Visibility = Visibility.Collapsed; // 低いバーでは日付を省略（ツールチップで確認）
         var clock = new Tile
         {
-            Padding = new Thickness(10, 0, 10, 0), Height = TileH, Margin = new Thickness(2, 0, 2, 0),
-            VerticalAlignment = VerticalAlignment.Center, Child = clockStack, ToolTip = L.T("通知とカレンダー (Win+N)"),
+            Padding = Vertical ? new Thickness(0, 6, 0, 6) : new Thickness(10, 0, 10, 0), Margin = Vertical ? new Thickness(0, 2, 0, 2) : new Thickness(2, 0, 2, 0),
+            VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
+            Child = clockStack, ToolTip = L.T("通知とカレンダー (Win+N)"),
         };
+        if (Vertical) clock.Width = TileH; else clock.Height = TileH;
         clock.Click += x => { TakeForeground(x); SystemActions.NotificationCenter(); };
         p.Children.Add(clock);
         return p;
@@ -79,7 +91,12 @@ public sealed partial class TaskbarController
 
     private Tile ShowDesktopSliver()
     {
-        var desk = new Tile { Width = 10, Height = TileH, CornerRadius = new CornerRadius(0), Margin = new Thickness(4, 0, 0, 0), ToolTip = L.T("デスクトップの表示") };
+        // バーの端に置く細い「デスクトップの表示」ボタン（縦のバーでは横長）
+        var desk = new Tile
+        {
+            Width = Vertical ? TileH : 10, Height = Vertical ? 10 : TileH, CornerRadius = new CornerRadius(0),
+            Margin = Vertical ? new Thickness(0, 4, 0, 0) : new Thickness(4, 0, 0, 0), ToolTip = L.T("デスクトップの表示"),
+        };
         desk.Click += _ => SystemActions.ShowDesktop();
         return desk;
     }
@@ -96,7 +113,7 @@ public sealed partial class TaskbarController
         if (_trayIcons == null || _overflowButton == null) return;
         _trayIcons.Children.Clear();
         var pinned = Icons(_shell.Tray?.PinnedIcons).OrderBy(i => i.PinOrder).ToList();
-        var reorder = new LiveReorder(_trayIcons, Orientation.Horizontal, (from, to) => MoveTrayIcon(pinned, from, to))
+        var reorder = new LiveReorder(_trayIcons, Flow, (from, to) => MoveTrayIcon(pinned, from, to))
         {
             // 上へ引き出すと「^」の一覧が開き、そこへ落とせばしまえる（Windows と同じ）
             DragOut = el => { if (el.Tag is ManagedShell.WindowsTray.NotifyIcon ni) StartTrayDrag(ni, el); },
@@ -129,7 +146,12 @@ public sealed partial class TaskbarController
                 Background = icon.IsPinned ? Theme.Current.AccentBrush : Theme.Current.TextSecondary, Margin = new Thickness(0, -4, -6, 0),
             });
         }
-        var tile = new Tile { Width = Compact ? 26 : 32, Height = Math.Min(36, TileH), Margin = new Thickness(1, 0, 1, 0), Child = grid, ToolTip = icon.Title, Tag = icon };
+        double iconLong = Compact ? 26 : 32, iconShort = Math.Min(36, TileH);
+        var tile = new Tile
+        {
+            Width = Vertical ? iconShort : iconLong, Height = Vertical ? iconLong : iconShort,
+            Margin = Vertical ? new Thickness(0, 1, 0, 1) : new Thickness(1, 0, 1, 0), Child = grid, ToolTip = icon.Title, Tag = icon,
+        };
 
         if (editable && _trayEditMode)
         {
@@ -266,7 +288,8 @@ public sealed partial class TaskbarController
         int i = 0;
         foreach (var el in _trayIcons.Children.OfType<FrameworkElement>().Where(x => x.Tag is ManagedShell.WindowsTray.NotifyIcon))
         {
-            if (e.GetPosition(el).X < el.ActualWidth / 2) return i;
+            var pos = e.GetPosition(el);
+            if (Vertical ? pos.Y < el.ActualHeight / 2 : pos.X < el.ActualWidth / 2) return i;
             i++;
         }
         return i;
@@ -284,9 +307,12 @@ public sealed partial class TaskbarController
         double pitch = (Compact ? 26 : 32) + 2;
         var gap = new Border
         {
-            Width = 0, Height = Math.Min(36, TileH) - 8, CornerRadius = new CornerRadius(4), Margin = new Thickness(1, 0, 1, 0),
+            CornerRadius = new CornerRadius(4), Margin = Vertical ? new Thickness(0, 1, 0, 1) : new Thickness(1, 0, 1, 0),
             BorderBrush = Theme.Current.AccentBrush, BorderThickness = new Thickness(1), Background = Theme.Current.Hover, IsHitTestVisible = false,
         };
+        // 並べる向きの大きさを 0 から広げる（もう一方は固定）
+        if (Vertical) { gap.Width = Math.Min(36, TileH) - 8; gap.Height = 0; }
+        else { gap.Width = 0; gap.Height = Math.Min(36, TileH) - 8; }
         // 隙間を除いたアイコンの index 番目の直前に入れる
         int child = 0, seen = 0;
         for (; child < _trayIcons.Children.Count; child++)
@@ -298,16 +324,17 @@ public sealed partial class TaskbarController
             }
         }
         _trayIcons.Children.Insert(child, gap);
-        gap.BeginAnimation(FrameworkElement.WidthProperty, new DoubleAnimation(0, pitch - 2, TimeSpan.FromMilliseconds(160)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+        gap.BeginAnimation(Vertical ? FrameworkElement.HeightProperty : FrameworkElement.WidthProperty,
+            new DoubleAnimation(0, pitch - 2, TimeSpan.FromMilliseconds(160)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
         _dropGap = gap;
     }
 
     private void CollapseGap(Border? gap)
     {
         if (gap == null || _trayIcons == null) return;
-        var a = new DoubleAnimation(gap.ActualWidth, 0, TimeSpan.FromMilliseconds(140)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        var a = new DoubleAnimation(Vertical ? gap.ActualHeight : gap.ActualWidth, 0, TimeSpan.FromMilliseconds(140)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         a.Completed += (_, _) => _trayIcons?.Children.Remove(gap);
-        gap.BeginAnimation(FrameworkElement.WidthProperty, a);
+        gap.BeginAnimation(Vertical ? FrameworkElement.HeightProperty : FrameworkElement.WidthProperty, a);
     }
 
     private void ClearTrayDropLine()
@@ -379,7 +406,13 @@ public sealed partial class TaskbarController
             var br = _trayHost.PointToScreen(new Point(_trayHost.ActualWidth, _trayHost.ActualHeight));
             _shell.Tray.SetTrayHostSizeData(new TrayHostSizeData
             {
-                edge = IsTop ? NativeMethods.ABEdge.ABE_TOP : NativeMethods.ABEdge.ABE_BOTTOM,
+                edge = Edge switch
+                {
+                    TaskbarEdge.Top => NativeMethods.ABEdge.ABE_TOP,
+                    TaskbarEdge.Left => NativeMethods.ABEdge.ABE_LEFT,
+                    TaskbarEdge.Right => NativeMethods.ABEdge.ABE_RIGHT,
+                    _ => NativeMethods.ABEdge.ABE_BOTTOM,
+                },
                 rc = new NativeMethods.Rect((int)tl.X, (int)tl.Y, (int)br.X, (int)br.Y),
             });
         }
@@ -426,10 +459,10 @@ public sealed partial class TaskbarController
         // （全体のマウス監視）、タスクバーの他の場所のクリック、Esc、「^」
         _overflowPopup.StaysOpen = true;
         // Windows と同じく「^」ボタンを基準に左右中央へ出す（画面端では自動で内側にずれる）
-        FluentSurface.PlaceCentered(_overflowPopup, anchor, IsTop);
+        FluentSurface.PlaceCentered(_overflowPopup, anchor, Edge);
         _overflowPopup.Closed += (_, _) => { if (_trayEditMode) { _trayEditMode = false; RebuildTray(); } };
         FillOverflow();
-        if (_settings.AnimateTrayOverflow) FluentSurface.SlideIn(_overflowPopup, fromBelow: !IsTop);
+        if (_settings.AnimateTrayOverflow) FluentSurface.SlideIn(_overflowPopup, Edge);
         _overflowPopup.IsOpen = true;
         Flyout.ToggleGuard(_overflowPopup, anchor);
     }
@@ -493,8 +526,9 @@ public sealed partial class TaskbarController
     {
         if (_time == null || _date == null) return;
         var now = DateTime.Now;
-        _time.Text = now.ToString(_settings.ShowSeconds ? "H:mm:ss" : "H:mm");
-        _date.Text = now.ToString(L.IsEnglish ? "M/d/yyyy" : "yyyy/MM/dd", L.Culture);
+        // 縦のバーは幅が狭いので、秒は出さず、日付も短くする
+        _time.Text = now.ToString(_settings.ShowSeconds && !Vertical ? "H:mm:ss" : "H:mm");
+        _date.Text = now.ToString(Vertical ? "M/d" : L.IsEnglish ? "M/d/yyyy" : "yyyy/MM/dd", L.Culture);
     }
 
     /// <summary>ネットワーク接続とバッテリー残量をアイコンに反映。</summary>

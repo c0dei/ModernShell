@@ -44,7 +44,7 @@ public sealed class StartMenuWindow : Window
     private DateTime _hiddenAt = DateTime.MinValue;
 
     /// <summary>タスクバー側の配置情報（物理ピクセルの矩形と中央寄せかどうか）。App から供給。</summary>
-    public Func<(Win32.RECT bar, bool top, bool center)?>? AnchorProvider { get; set; }
+    public Func<(Win32.RECT bar, TaskbarEdge edge, bool center)?>? AnchorProvider { get; set; }
     public event Action? OpenSettingsRequested;
     public event Action? ExitRequested;
 
@@ -115,18 +115,22 @@ public sealed class StartMenuWindow : Window
         if (_search.Text.Length == 0) ShowPage(_settings.ShowAllAppsFirst ? Page.AllApps : Page.Pinned);
         _widgets?.Open();
         bool animate = _settings.AnimateStartMenu;
-        bool top = AnchorProvider?.Invoke()?.top == true;
+        var anchor = AnchorProvider?.Invoke();
+        var edge = anchor?.edge ?? TaskbarEdge.Bottom;
         // 表示する前に位置と中身の配置を済ませておく。表示してから動かしたり配置し直したりすると、
         // 一瞬ずれた位置に出てから跳ねて見える
-        var (x, y, scale) = PositionMenu();
-        int slide = animate ? (int)Math.Round((top ? -1 : 1) * 40 * scale) : 0;
-        if (slide != 0)
+        var (x, y, scale) = PositionMenu(anchor);
+        // タスクバーのある端の側から、画面の内側へ向かってスライドして現れる（下のバーなら下から、左のバーなら左から）
+        int dist = animate ? (int)Math.Round(40 * scale) : 0;
+        int sx = edge switch { TaskbarEdge.Left => -dist, TaskbarEdge.Right => dist, _ => 0 };
+        int sy = edge switch { TaskbarEdge.Top => -dist, TaskbarEdge.Bottom => dist, _ => 0 };
+        if (dist != 0)
         {
             // ここからスライドが終わるまで、ぼかしの下地は開き終わった位置に合わせたまま固定する
             StopSlide();
             _slideTarget = (x, y);
             _blurPlacedForSlide = false;
-            Win32.SetWindowPos(Handle, IntPtr.Zero, x, y + slide, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+            Win32.SetWindowPos(Handle, IntPtr.Zero, x + sx, y + sy, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
             PlaceBlur();
         }
         _root.BeginAnimation(OpacityProperty, null);
@@ -134,15 +138,15 @@ public sealed class StartMenuWindow : Window
         // スライドだけで見せる（中身のフェードは毎コマ全体を描き直すことになり、大きなスタートメニューではカクつく）
         _root.Opacity = 1;
         // WPF は Show のときに自分の Left/Top を当て直すので、同じ値にしておく
-        Left = x / scale;
-        Top = (y + slide) / scale;
+        Left = (x + sx) / scale;
+        Top = (y + sy) / scale;
         UpdateLayout();
         long layoutMs = clock.ElapsedMilliseconds;
         // 隠したウィンドウを表示し直すと、新しい内容が描かれるまでの一瞬、前回閉じたときの画面が出てちらつく。
         // 見えない状態（DWM のクローク）で表示して、新しい内容を描き終えてから見せる
         Cloak(true);
         Show();
-        Win32.SetWindowPos(Handle, IntPtr.Zero, x, y + slide, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+        Win32.SetWindowPos(Handle, IntPtr.Zero, x + sx, y + sy, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
         Foregrounder.Force(Handle);
         Activate();
         _search.Focus();
@@ -152,7 +156,7 @@ public sealed class StartMenuWindow : Window
             if (!IsVisible) return;
             Cloak(false);
             Log.Info($"timing: start menu {(first ? "first " : "")}open: built+layout {layoutMs} ms, shown after {clock.ElapsedMilliseconds} ms");
-            if (animate) SlideIn(x, y, slide);
+            if (animate) SlideIn(x, y, sx, sy);
         });
     }
 
@@ -189,7 +193,7 @@ public sealed class StartMenuWindow : Window
     /// ウィンドウごと（背景も一緒に）下から滑り込ませる。プレビューやトレイの展開と同じ動き。
     /// 描画のフレームに合わせて位置を動かし、最初のフレームが描かれてから時間を数え始める（表示直後の重い 1 フレームで飛ばないように）。
     /// </summary>
-    private void SlideIn(int x, int y, int from)
+    private void SlideIn(int x, int y, int fromX, int fromY)
     {
         if (_slide != null) CompositionTarget.Rendering -= _slide; // 位置（_slideTarget）はそのまま
         _slide = null;
@@ -207,8 +211,8 @@ public sealed class StartMenuWindow : Window
             double p = Math.Min(1, clock.Elapsed.TotalMilliseconds / ms);
             if (p >= 1) Log.Info($"timing: start menu slide {_slideFrames} frames in {clock.ElapsedMilliseconds} ms");
             double eased = 1 - Math.Pow(1 - p, 3);
-            int dy = (int)Math.Round(from * (1 - eased));
-            Win32.SetWindowPos(Handle, IntPtr.Zero, x, y + dy, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+            int dx = (int)Math.Round(fromX * (1 - eased)), dy = (int)Math.Round(fromY * (1 - eased));
+            Win32.SetWindowPos(Handle, IntPtr.Zero, x + dx, y + dy, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
             if (p >= 1) StopSlide();
         };
         CompositionTarget.Rendering += _slide;
@@ -240,7 +244,7 @@ public sealed class StartMenuWindow : Window
     }
 
     /// <summary>スタートボタンの位置に合わせて置く（物理 px）。表示前でも呼べる。</summary>
-    private (int x, int y, double scale) PositionMenu()
+    private (int x, int y, double scale) PositionMenu((Win32.RECT bar, TaskbarEdge edge, bool center)? anchor)
     {
         var src = PresentationSource.FromVisual(this);
         double scale = src?.CompositionTarget?.TransformToDevice.M11 ?? Win32.GetDpiForWindow(Handle) / 96.0;
@@ -249,13 +253,23 @@ public sealed class StartMenuWindow : Window
         int pad = (int)Math.Round(SurfacePaint.ShadowPad * scale); // 影の余白（ウィンドウはその分大きく、見た目の位置は変えない）
         int gap = (int)(12 * scale);
 
-        var anchor = AnchorProvider?.Invoke();
         var work = SystemParameters.WorkArea; // DIP
         int x, y;
         if (anchor is { } a)
         {
-            x = a.center ? a.bar.Left + (a.bar.Width - w) / 2 : a.bar.Left + gap;
-            y = a.top ? a.bar.Bottom + gap : a.bar.Top - h - gap;
+            if (a.edge is TaskbarEdge.Left or TaskbarEdge.Right)
+            {
+                // 縦のバー: バーの隣に開く。中央寄せならバーの縦の中央、そうでなければバーの上端に合わせる
+                x = a.edge == TaskbarEdge.Left ? a.bar.Right + gap : a.bar.Left - w - gap;
+                y = a.center ? a.bar.Top + (a.bar.Height - h) / 2 : a.bar.Top + gap;
+                var mon = AppBarReservation.PrimaryMonitor();
+                y = Math.Clamp(y, mon.Top + gap, Math.Max(mon.Top + gap, mon.Bottom - h - gap)); // 画面からはみ出さない
+            }
+            else
+            {
+                x = a.center ? a.bar.Left + (a.bar.Width - w) / 2 : a.bar.Left + gap;
+                y = a.edge == TaskbarEdge.Top ? a.bar.Bottom + gap : a.bar.Top - h - gap;
+            }
         }
         else
         {

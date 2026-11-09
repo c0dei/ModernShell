@@ -79,7 +79,7 @@ public sealed partial class TaskbarController
         var pinnedIds = new List<string>();
         LiveReorder? reorder = null;
         if (!PinsFromWindows)
-            reorder = new LiveReorder(_apps, Orientation.Horizontal, (from, to) => CommitPinnedOrder(pinnedIds, from, to));
+            reorder = new LiveReorder(_apps, Flow, (from, to) => CommitPinnedOrder(pinnedIds, from, to));
         foreach (var g in ordered)
         {
             var tile = AppButton(g);
@@ -106,7 +106,7 @@ public sealed partial class TaskbarController
 
         var content = new Grid();
         FrameworkElement main = icon;
-        if (_settings.ShowTaskbarLabels && running)
+        if (_settings.ShowTaskbarLabels && running && !Vertical) // 縦のバーは幅が狭いのでウィンドウ名は出さない
         {
             var title = UiKit.Label(g.Windows[0].Title ?? "", 12);
             title.MaxWidth = 140;
@@ -121,28 +121,40 @@ public sealed partial class TaskbarController
         if (running)
         {
             var indicator = flashing ? new SolidColorBrush(Color.FromRgb(0xF7, 0xA4, 0x00)) : active ? t.AccentBrush : t.TextSecondary;
-            content.Children.Add(new Border
-            {
-                Height = 3, Width = active || flashing ? 16 : 6, CornerRadius = new CornerRadius(1.5), Background = indicator,
-                VerticalAlignment = IsTop ? VerticalAlignment.Top : VerticalAlignment.Bottom,
-                HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, Compact ? 0 : 2, 0, Compact ? 0 : 2),
-            });
+            double len = active || flashing ? 16 : 6;
+            // 実行中の印は、バーのある画面の端の側に付ける（横のバーなら下/上の辺、縦のバーなら左/右の辺）
+            content.Children.Add(Vertical
+                ? new Border
+                {
+                    Width = 3, Height = len, CornerRadius = new CornerRadius(1.5), Background = indicator,
+                    HorizontalAlignment = Edge == TaskbarEdge.Left ? HorizontalAlignment.Left : HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(Compact ? 0 : 2, 0, Compact ? 0 : 2, 0),
+                }
+                : new Border
+                {
+                    Height = 3, Width = len, CornerRadius = new CornerRadius(1.5), Background = indicator,
+                    VerticalAlignment = IsTop ? VerticalAlignment.Top : VerticalAlignment.Bottom,
+                    HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, Compact ? 0 : 2, 0, Compact ? 0 : 2),
+                });
         }
 
         var tile = new Tile
         {
-            MinWidth = TileW, Height = TileH, Margin = new Thickness(2, 0, 2, 0), Child = content,
+            Margin = Gap, Child = content,
             Background = active ? t.Hover : Brushes.Transparent,
             // 実行中はプレビューにウィンドウ名が出るので、ツールチップは出さない（Windows と同じ）
             ToolTip = running ? (_settings.ShowThumbnailPreview ? null : string.Join("\n", g.Windows.Select(w => w.Title))) : g.Pinned?.Name,
         };
+        // 横のバーでは幅は内容に合わせて広がる（ウィンドウ名があるとき）。縦のバーは固定の大きさ
+        if (Vertical) { tile.Width = TileSize.Width; tile.Height = TileSize.Height; }
+        else { tile.MinWidth = TileSize.Width; tile.Height = TileSize.Height; }
         tile.MouseLeave += (_, _) => { if (active) tile.Background = t.Hover; };
         if (_settings.MagnifyOnHover) AddMagnify(tile, icon);
 
         // カーソルを置くとウィンドウのプレビュー（実行中のときだけ）。クリック・右クリック・ドラッグで閉じる
         if (running)
         {
-            tile.MouseEnter += (_, _) => _preview.Hover(tile, () => g.Windows, IsTop);
+            tile.MouseEnter += (_, _) => _preview.Hover(tile, () => g.Windows, Edge);
             tile.MouseLeave += (_, _) => _preview.Leave();
         }
         tile.PreviewMouseDown += (_, _) => _preview.Cancel();
@@ -260,7 +272,14 @@ public sealed partial class TaskbarController
     {
         var scale = new ScaleTransform(1, 1);
         icon.RenderTransform = scale;
-        icon.RenderTransformOrigin = new Point(0.5, IsTop ? 0.2 : 0.8);
+        // 画面の端の側を支点にして、中央側へ向かって大きくなる
+        icon.RenderTransformOrigin = Edge switch
+        {
+            TaskbarEdge.Top => new Point(0.5, 0.2),
+            TaskbarEdge.Left => new Point(0.2, 0.5),
+            TaskbarEdge.Right => new Point(0.8, 0.5),
+            _ => new Point(0.5, 0.8),
+        };
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
         void To(double v)
         {

@@ -279,10 +279,19 @@ public static class Flyout
         }
 
         bool animate = Settings.Current?.AnimateMenus != false;
-        if (animate && placement is PlacementMode.Top or PlacementMode.Bottom) FluentSurface.SlideIn(popup, fromBelow: placement == PlacementMode.Top);
+        // バーから画面の内側へ向かって出る（Top = 下のバー、Right = 左のバー など）
+        bool fromBar = placement is PlacementMode.Top or PlacementMode.Bottom or PlacementMode.Left or PlacementMode.Right;
+        if (animate && fromBar)
+            FluentSurface.SlideIn(popup, placement switch
+            {
+                PlacementMode.Top => TaskbarEdge.Bottom,
+                PlacementMode.Bottom => TaskbarEdge.Top,
+                PlacementMode.Right => TaskbarEdge.Left,
+                _ => TaskbarEdge.Right,
+            });
         popup.IsOpen = true;
         ToggleGuard(popup, target);
-        if (animate && placement is not (PlacementMode.Top or PlacementMode.Bottom)) FluentSurface.AnimateOpen(panel, 0);
+        if (animate && !fromBar) FluentSurface.AnimateOpen(panel, 0);
         if (panel.Children.Count > 0 && panel.Children[0] is Tile first) first.Focus();
         return popup;
     }

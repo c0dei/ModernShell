@@ -26,11 +26,11 @@ public sealed class DesktopsFlyout
         _gate = new HoverGate(dispatcher, Close);
     }
 
-    public void Hover(FrameworkElement anchor, bool top)
+    public void Hover(FrameworkElement anchor, TaskbarEdge edge)
     {
         if (!_settings.ShowDesktopsOnTaskView) return;
         if (_popup?.IsOpen == true) { _gate.KeepOpen(); return; }
-        _gate.ShowAfter(_settings.PreviewDelayMs, () => Show(anchor, top));
+        _gate.ShowAfter(_settings.PreviewDelayMs, () => Show(anchor, edge));
     }
 
     public void Leave() => _gate.Leave(_popup?.IsOpen == true);
@@ -47,7 +47,7 @@ public sealed class DesktopsFlyout
         if (_popup != null) { _popup.IsOpen = false; _popup = null; }
     }
 
-    private void Show(FrameworkElement anchor, bool top)
+    private void Show(FrameworkElement anchor, TaskbarEdge edge)
     {
         StallDetector.Phase = "desktops flyout";
         Close();
@@ -122,9 +122,9 @@ public sealed class DesktopsFlyout
 
         _popup = FluentSurface.Create(row, anchor, PlacementMode.Custom);
         _popup.StaysOpen = true;
-        FluentSurface.PlaceCentered(_popup, anchor, top);
+        FluentSurface.PlaceCentered(_popup, anchor, edge);
         _gate.Attach(row);
-        if (_settings.AnimatePreviews) FluentSurface.SlideIn(_popup, fromBelow: !top);
+        if (_settings.AnimatePreviews) FluentSurface.SlideIn(_popup, edge);
         _popup.IsOpen = true;
     }
 }

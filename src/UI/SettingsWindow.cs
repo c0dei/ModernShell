@@ -280,9 +280,16 @@ public sealed class SettingsWindow : Window
         p.Children.Add(Note(L.T("ピン留めはスタート メニュー上でドラッグして並べ替え、右クリックで追加・削除できます。初期状態に戻すには「ピン留めとアイコン」へ。")));
     }
 
+    /// <summary>余白の選択肢（0 = なし / 画面端に密着）。</summary>
+    private static (string value, string label)[] Margins(bool floating) => new[]
+    {
+        ("0", floating ? "0 px" : L.T("なし（画面端に密着）")), ("4", "4 px"), ("8", "8 px"), ("12", "12 px"), ("16", "16 px"), ("24", "24 px"),
+    };
+
     private void TaskbarPage(StackPanel p)
     {
         bool on = _s.UseCustomTaskbar;
+        bool vertical = _s.TaskbarEdge is TaskbarEdge.Left or TaskbarEdge.Right;
         bool floating = _s.TaskbarStyle == TaskbarStyle.Floating;
 
         if (!_flat) p.Children.Add(Preview());
@@ -310,20 +317,24 @@ public sealed class SettingsWindow : Window
         Group(p, "", L.T("配置と大きさ"), L.T("位置・高さ・余白"),
             DropDownRow(L.T("アプリの配置"), L.T("アプリのボタン（「アプリと一緒」のときはスタートボタンも）の位置"),
                 new[] { ("Center", L.T("中央")), ("Left", L.T("左")) }, _s.TaskbarAlignment.ToString(), v => _s.TaskbarAlignment = Enum.Parse<TaskbarAlignment>(v), on),
-            DropDownRow(L.T("画面上の位置"), "", new[] { ("Bottom", L.T("下")), ("Top", L.T("上")) }, _s.TaskbarEdge.ToString(),
+            DropDownRow(L.T("画面上の位置"), L.T("左・右に置くと、縦向きのタスクバーになります（ボタンが縦に並びます）"),
+                new[] { ("Bottom", L.T("下")), ("Top", L.T("上")), ("Left", L.T("左")), ("Right", L.T("右")) }, _s.TaskbarEdge.ToString(),
                 v => _s.TaskbarEdge = Enum.Parse<TaskbarEdge>(v), on),
-            DropDownRow(L.T("高さ"), L.T("40 px 未満では時計の日付を省略します"),
+            DropDownRow(vertical ? L.T("幅") : L.T("高さ"), vertical ? L.T("縦向きのタスクバーの太さです") : L.T("40 px 未満では時計の日付を省略します"),
                 new[] { ("28", "28 px"), ("32", "32 px"), ("36", "36 px"), ("40", "40 px"), ("44", "44 px"), ("48", L.T("48 px（標準）")), ("56", "56 px"), ("64", "64 px") },
                 _s.TaskbarHeight.ToString(), v => _s.TaskbarHeight = int.Parse(v), on),
             DropDownRow(L.T("アプリ アイコンの大きさ"), "",
                 new[] { ("16", L.T("16 px（小）")), ("20", "20 px"), ("24", L.T("24 px（標準）")), ("28", "28 px"), ("32", L.T("32 px（大）")) },
                 _s.TaskbarIconSize.ToString(), v => _s.TaskbarIconSize = int.Parse(v), on),
-            floating
-                ? DropDownRow(L.T("アイランドの余白"), L.T("画面の端と島のあいだの距離"), new[] { ("4", "4 px"), ("8", "8 px"), ("12", "12 px"), ("16", "16 px") },
-                    _s.IslandMargin.ToString(), v => _s.IslandMargin = int.Parse(v), on)
-                : DropDownRow(L.T("帯の余白"), L.T("画面の端から離します。Windows は画面端に接したウィンドウの角を丸めないので、角丸にしたいときは余白を付けてください"),
-                    new[] { ("0", L.T("なし（画面端に密着）")), ("4", "4 px"), ("8", "8 px"), ("12", "12 px") },
-                    _s.BandMargin.ToString(), v => _s.BandMargin = int.Parse(v), on));
+            // 余白は左右と上下を別々に（画面を基準にした向き）。帯なら 0 で画面端に密着、アイランドなら島と画面の端のあいだの距離
+            DropDownRow(floating ? L.T("アイランドの余白（左右）") : L.T("帯の余白（左右）"),
+                floating ? L.T("島と画面の左右の端とのあいだの距離") : L.T("帯と画面の左右の端とのあいだの距離。0 より大きいと帯は端から離れて角丸になります"),
+                Margins(floating), (floating ? _s.IslandMarginX : _s.BandMarginX).ToString(),
+                v => { if (floating) _s.IslandMarginX = int.Parse(v); else _s.BandMarginX = int.Parse(v); }, on),
+            DropDownRow(floating ? L.T("アイランドの余白（上下）") : L.T("帯の余白（上下）"),
+                floating ? L.T("島と画面の上下の端とのあいだの距離") : L.T("帯と画面の上下の端とのあいだの距離。Windows は画面端に接したウィンドウの角を丸めないので、角丸にしたいときは余白を付けてください"),
+                Margins(floating), (floating ? _s.IslandMarginY : _s.BandMarginY).ToString(),
+                v => { if (floating) _s.IslandMarginY = int.Parse(v); else _s.BandMarginY = int.Parse(v); }, on));
 
         Group(p, "", L.T("ボタン"), L.T("タスクバーに並べるもの"),
             ToggleRow(L.T("検索ボタンを表示"), "", _s.ShowSearchButton, v => _s.ShowSearchButton = v, on),
@@ -939,22 +950,51 @@ public sealed class SettingsWindow : Window
         var area = new Grid { Height = 170, Background = Desktop, ClipToBounds = true };
         if (_s.UseCustomTaskbar)
         {
-            bool top = _s.TaskbarEdge == TaskbarEdge.Top;
+            var edge = _s.TaskbarEdge;
+            bool top = edge == TaskbarEdge.Top, vertical = edge is TaskbarEdge.Left or TaskbarEdge.Right;
+            var flow = vertical ? Orientation.Vertical : Orientation.Horizontal;
             bool floating = _s.TaskbarStyle == TaskbarStyle.Floating;
             bool left = _s.StartButtonPosition == StartButtonPosition.LeftEdge;
             bool center = _s.TaskbarAlignment == TaskbarAlignment.Center;
-            double h = _s.TaskbarHeight * 0.7, m = floating ? _s.IslandMargin : 0;
+            // 余白は左右 X・上下 Y（画面を基準）。プレビューは縮小して描くので 0.7 倍
+            double h = _s.TaskbarHeight * 0.7;
+            double mx = (floating ? _s.IslandMarginX : _s.BandMarginX) * 0.7, my = (floating ? _s.IslandMarginY : _s.BandMarginY) * 0.7;
 
-            var bar = new Grid { Height = h, VerticalAlignment = top ? VerticalAlignment.Top : VerticalAlignment.Bottom, Margin = new Thickness(m) };
+            var bar = vertical
+                ? new Grid
+                {
+                    Width = h, HorizontalAlignment = edge == TaskbarEdge.Left ? HorizontalAlignment.Left : HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(mx, my, mx, my),
+                }
+                : new Grid { Height = h, VerticalAlignment = top ? VerticalAlignment.Top : VerticalAlignment.Bottom, Margin = new Thickness(mx, my, mx, my) };
             if (!floating) bar.Background = T.SolidBackground;
+            // 並べる向きに 2 つ並べる
+            FrameworkElement Stack2(FrameworkElement a, FrameworkElement b)
+            {
+                var p = new StackPanel { Orientation = flow };
+                p.Children.Add(a);
+                p.Children.Add(b);
+                return p;
+            }
+            // 並べる向きでの間隔
+            FrameworkElement Gap(FrameworkElement e, double d) { e.Margin = vertical ? new Thickness(0, d, 0, 0) : new Thickness(d, 0, 0, 0); return e; }
+            // ha は「始まり（Left）・中央・終わり（Right）」。縦のバーでは 上・中央・下
             FrameworkElement Box(FrameworkElement content, HorizontalAlignment ha)
             {
-                content.VerticalAlignment = VerticalAlignment.Center;
-                var b = new Border
+                var b = new Border { Child = content };
+                if (vertical)
                 {
-                    Child = content, HorizontalAlignment = ha, Padding = new Thickness(6, 0, 6, 0), Height = h,
-                    Margin = new Thickness(floating ? 0 : 6, 0, floating ? 0 : 6, 0),
-                };
+                    content.HorizontalAlignment = HorizontalAlignment.Center;
+                    b.VerticalAlignment = ha switch { HorizontalAlignment.Left => VerticalAlignment.Top, HorizontalAlignment.Right => VerticalAlignment.Bottom, _ => VerticalAlignment.Center };
+                    b.Width = h; b.Padding = new Thickness(0, 6, 0, 6);
+                    b.Margin = new Thickness(0, floating ? 0 : 6, 0, floating ? 0 : 6);
+                }
+                else
+                {
+                    content.VerticalAlignment = VerticalAlignment.Center;
+                    b.HorizontalAlignment = ha; b.Padding = new Thickness(6, 0, 6, 0); b.Height = h;
+                    b.Margin = new Thickness(floating ? 0 : 6, 0, floating ? 0 : 6, 0);
+                }
                 if (floating)
                 {
                     b.Background = T.SolidBackground;
@@ -966,23 +1006,31 @@ public sealed class SettingsWindow : Window
             }
             FrameworkElement StartIcons()
             {
-                var r = UiKit.Row(UiKit.StartLogo(12, T.AccentBrush));
-                if (_s.ShowSearchButton) r.Children.Add(Spaced(UiKit.Glyph("", 11), 8));
-                if (_s.ShowTaskViewButton) r.Children.Add(Spaced(UiKit.Glyph("", 11), 8));
+                var r = new StackPanel { Orientation = flow };
+                r.Children.Add(UiKit.StartLogo(12, T.AccentBrush));
+                if (_s.ShowSearchButton) r.Children.Add(Gap(UiKit.Glyph("", 11), 8));
+                if (_s.ShowTaskViewButton) r.Children.Add(Gap(UiKit.Glyph("", 11), 8));
                 return r;
             }
             FrameworkElement Apps()
             {
-                var r = new StackPanel { Orientation = Orientation.Horizontal };
+                var r = new StackPanel { Orientation = flow };
                 foreach (var c in new[] { 0xF2C94C, 0x2F80ED, 0x27AE60, 0xEB5757, 0x9B51E0 })
                     r.Children.Add(new Border
                     {
-                        Width = 14, Height = 14, CornerRadius = new CornerRadius(3), Margin = new Thickness(4, 0, 4, 0),
+                        Width = 14, Height = 14, CornerRadius = new CornerRadius(3), Margin = vertical ? new Thickness(0, 4, 0, 4) : new Thickness(4, 0, 4, 0),
                         Background = new SolidColorBrush(Color.FromRgb((byte)(c >> 16), (byte)(c >> 8), (byte)c)),
                     });
                 return r;
             }
-            FrameworkElement Tray() => UiKit.Row(UiKit.Glyph("", 10), Spaced(UiKit.Glyph("", 10), 6), Spaced(UiKit.Label("12:34", 10), 8));
+            FrameworkElement Tray()
+            {
+                var r = new StackPanel { Orientation = flow };
+                r.Children.Add(UiKit.Glyph("", 10));
+                r.Children.Add(Gap(UiKit.Glyph("", 10), 6));
+                if (!vertical) r.Children.Add(Gap(UiKit.Label("12:34", 10), 8)); // 縦のバーでは時刻まで並べると窮屈なので省く
+                return r;
+            }
 
             if (left && center)
             {
@@ -991,9 +1039,9 @@ public sealed class SettingsWindow : Window
             }
             else if (left || !center)
             {
-                bar.Children.Add(Box(UiKit.Row(StartIcons(), Spaced(Apps(), 4)), HorizontalAlignment.Left));
+                bar.Children.Add(Box(Stack2(StartIcons(), Gap(Apps(), 4)), HorizontalAlignment.Left));
             }
-            else bar.Children.Add(Box(UiKit.Row(StartIcons(), Spaced(Apps(), 4)), HorizontalAlignment.Center));
+            else bar.Children.Add(Box(Stack2(StartIcons(), Gap(Apps(), 4)), HorizontalAlignment.Center));
             bar.Children.Add(Box(Tray(), HorizontalAlignment.Right));
             area.Children.Add(bar);
         }

@@ -9,7 +9,8 @@ namespace ModernShell.Core;
 
 public enum ThemeMode { System, Light, Dark }
 public enum TaskbarAlignment { Center, Left }
-public enum TaskbarEdge { Bottom, Top }
+/// <summary>タスクバーを置く画面の端。Left / Right は縦向きのタスクバー。</summary>
+public enum TaskbarEdge { Bottom, Top, Left, Right }
 /// <summary>スタート・検索・タスクビューの位置。WithApps: アプリと一緒（中央 or 左） / LeftEdge: 常に左端（3 分割）</summary>
 public enum StartButtonPosition { WithApps, LeftEdge }
 /// <summary>
@@ -49,10 +50,15 @@ public sealed class Settings
     /// <summary>タスクバーに常に表示するトレイアイコン（ManagedShell の NotifyIcon.Identifier）。それ以外は「^」の中。</summary>
     public List<string> PinnedTrayIcons { get; set; } = new();
     public TaskbarStyle TaskbarStyle { get; set; } = TaskbarStyle.Band;
-    /// <summary>アイランド型のとき画面端からの余白 (DIP)。</summary>
-    public int IslandMargin { get; set; } = 8;
-    /// <summary>帯型のとき画面の端（左右と下/上）から離す距離 (DIP)。0 より大きいと角丸になる。</summary>
-    public int BandMargin { get; set; } = 0;
+    /// <summary>
+    /// アイランド型の余白 (DIP)。X = 左右、Y = 上下（画面を基準にした向き。下に置くなら Y は画面の下端との距離、
+    /// X は島の左右の端と画面の端との距離。左右に置くときは X が画面の端との距離になる）。
+    /// </summary>
+    public int IslandMarginX { get; set; } = 8;
+    public int IslandMarginY { get; set; } = 8;
+    /// <summary>帯型の余白 (DIP)。X = 左右、Y = 上下。0 より大きいと帯は画面の端から離れて角丸になる。</summary>
+    public int BandMarginX { get; set; } = 0;
+    public int BandMarginY { get; set; } = 0;
     /// <summary>アイランド型のときホバーでアイコンを拡大する。</summary>
     public bool MagnifyOnHover { get; set; } = true;
     /// <summary>タスクバーに IME の状態（あ / A）を表示する。</summary>
@@ -248,6 +254,11 @@ public sealed class Settings
             string? Old(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
             if (!root.TryGetProperty(nameof(TaskbarBackground), out _) && Old("TaskbarMaterial") is { } material)
                 s.TaskbarBackground = material switch { "Solid" => SurfaceStyle.Solid, "Clear" => SurfaceStyle.Transparent, _ => SurfaceStyle.Blur };
+            // 余白は以前は 1 つ（上下左右とも同じ値）だった
+            if (!root.TryGetProperty(nameof(BandMarginX), out _) && root.TryGetProperty("BandMargin", out var bm) && bm.TryGetInt32(out var bmv))
+                s.BandMarginX = s.BandMarginY = bmv;
+            if (!root.TryGetProperty(nameof(IslandMarginX), out _) && root.TryGetProperty("IslandMargin", out var im) && im.TryGetInt32(out var imv))
+                s.IslandMarginX = s.IslandMarginY = imv;
             if (!root.TryGetProperty(nameof(StartMenuBackground), out _))
             {
                 if (Old("Backdrop") == "Solid") s.StartMenuBackground = SurfaceStyle.Solid;

@@ -56,6 +56,9 @@ public static class FluentSurface
         const double pad = SurfacePaint.ShadowPad;
         if (placement == PlacementMode.Top) { popup.VerticalOffset = -8 + pad; popup.HorizontalOffset = -pad; }
         else if (placement == PlacementMode.Bottom) { popup.VerticalOffset = 8 - pad; popup.HorizontalOffset = -pad; }
+        // 縦のバーから横へ開くとき: 上端をボタンに合わせ、ボタンとのあいだを 8 だけ空ける
+        else if (placement == PlacementMode.Left) { popup.HorizontalOffset = -8 + pad; popup.VerticalOffset = -pad; }
+        else if (placement == PlacementMode.Right) { popup.HorizontalOffset = 8 - pad; popup.VerticalOffset = -pad; }
         else if (placement == PlacementMode.MousePoint) { popup.VerticalOffset = -pad; popup.HorizontalOffset = -pad; }
         popup.Opened += (_, _) =>
         {
@@ -145,24 +148,53 @@ public static class FluentSurface
 
     /// <summary>開くときの動き（WinUI 風: 少し伸びながらフェードイン）。originY は伸び始める位置 (0–1)。</summary>
     /// <summary>
-    /// ボタンの真上（タスクバーが上にあるときは真下）の左右中央に出す。画面端では Windows が内側へずらす。
-    /// 「^」の一覧・ウィンドウのプレビュー・デスクトップ一覧で共通。
+    /// ボタンの画面の内側（下のバーなら真上、上のバーなら真下、左のバーなら右隣、右のバーなら左隣）の中央に出す。
+    /// 画面端では Windows が内側へずらす。「^」の一覧・ウィンドウのプレビュー・デスクトップ一覧で共通。
     /// </summary>
-    public static void PlaceCentered(Popup popup, FrameworkElement anchor, bool barAtTop, double gapDip = 8)
+    /// <param name="edge">タスクバーのある画面の端。</param>
+    public static void PlaceCentered(Popup popup, FrameworkElement anchor, TaskbarEdge edge, double gapDip = 8)
     {
         UseTaskbarLook(popup);
         popup.PlacementTarget = anchor;
         popup.Placement = PlacementMode.Custom;
         popup.VerticalOffset = 0;
-        popup.HorizontalOffset = 0; // 左右は中央合わせなので、影の余白のずらしは要らない
+        popup.HorizontalOffset = 0; // 中央合わせなので、影の余白のずらしは要らない
         // 影の余白の分だけ近づけて、見た目の間隔を gapDip にする
-        double gap = (gapDip - SurfacePaint.ShadowPad) * VisualTreeHelper.GetDpi(anchor).DpiScaleY;
+        var dpi = VisualTreeHelper.GetDpi(anchor);
+        double gapY = (gapDip - SurfacePaint.ShadowPad) * dpi.DpiScaleY, gapX = (gapDip - SurfacePaint.ShadowPad) * dpi.DpiScaleX;
         popup.CustomPopupPlacementCallback = (popupSize, targetSize, _) =>
         {
-            double x = (targetSize.Width - popupSize.Width) / 2;
-            var above = new CustomPopupPlacement(new Point(x, -popupSize.Height - gap), PopupPrimaryAxis.Horizontal);
-            var below = new CustomPopupPlacement(new Point(x, targetSize.Height + gap), PopupPrimaryAxis.Horizontal);
-            return barAtTop ? new[] { below, above } : new[] { above, below };
+            double x = (targetSize.Width - popupSize.Width) / 2, y = (targetSize.Height - popupSize.Height) / 2;
+            var above = new CustomPopupPlacement(new Point(x, -popupSize.Height - gapY), PopupPrimaryAxis.Horizontal);
+            var below = new CustomPopupPlacement(new Point(x, targetSize.Height + gapY), PopupPrimaryAxis.Horizontal);
+            var left = new CustomPopupPlacement(new Point(-popupSize.Width - gapX, y), PopupPrimaryAxis.Vertical);
+            var right = new CustomPopupPlacement(new Point(targetSize.Width + gapX, y), PopupPrimaryAxis.Vertical);
+            return edge switch
+            {
+                TaskbarEdge.Top => new[] { below, above },
+                TaskbarEdge.Left => new[] { right, left },
+                TaskbarEdge.Right => new[] { left, right },
+                _ => new[] { above, below },
+            };
+        };
+    }
+
+    /// <summary>タスクバーのある端から、画面の内側へ向かってスライドして現れる。</summary>
+    public static void SlideIn(Popup popup, TaskbarEdge edge, double distance = 24)
+    {
+        popup.Opened += (_, _) =>
+        {
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            // 横のバーなら縦に、縦のバーなら横にずらしてから、本来の位置へ
+            bool vertical = edge is TaskbarEdge.Left or TaskbarEdge.Right;
+            var prop = vertical ? Popup.HorizontalOffsetProperty : Popup.VerticalOffsetProperty;
+            double baseOffset = vertical ? popup.HorizontalOffset : popup.VerticalOffset;
+            // 画面の端の側から出てくる: 下のバーなら下から（+）、上なら上から（-）、左なら左から（-）、右なら右から（+）
+            double from = edge is TaskbarEdge.Bottom or TaskbarEdge.Right ? distance : -distance;
+            popup.BeginAnimation(prop, new DoubleAnimation(baseOffset + from, baseOffset, TimeSpan.FromMilliseconds(220))
+                { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
+            if (popup.Child is UIElement child)
+                child.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
         };
     }
 

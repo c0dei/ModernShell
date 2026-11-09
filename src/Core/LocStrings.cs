@@ -351,5 +351,17 @@ public static partial class L
         ["（現在: 管理者として動作中）"] = " (now running as administrator)",
         ["（現在: 普通の権限で動作中。次のサインインから管理者で起動します）"] = " (now running with normal rights; runs as administrator from the next sign-in)",
         ["今すぐ管理者として再起動しますか？"] = "Restart as administrator now?",
+        ["左・右に置くと、縦向きのタスクバーになります（ボタンが縦に並びます）"] = "Placing it on the left or right makes a vertical taskbar (buttons are stacked vertically)",
+        ["右"] = "Right",
+        ["幅"] = "Width",
+        ["縦向きのタスクバーの太さです"] = "The thickness of the vertical taskbar",
+        ["アイランドの余白（左右）"] = "Island margin (left/right)",
+        ["島と画面の左右の端とのあいだの距離"] = "Distance between the islands and the left/right screen edges",
+        ["帯の余白（左右）"] = "Band margin (left/right)",
+        ["帯と画面の左右の端とのあいだの距離。0 より大きいと帯は端から離れて角丸になります"] = "Distance between the band and the left/right screen edges. A value above 0 detaches the band from the edge and rounds its corners",
+        ["アイランドの余白（上下）"] = "Island margin (top/bottom)",
+        ["島と画面の上下の端とのあいだの距離"] = "Distance between the islands and the top/bottom screen edges",
+        ["帯の余白（上下）"] = "Band margin (top/bottom)",
+        ["帯と画面の上下の端とのあいだの距離。Windows は画面端に接したウィンドウの角を丸めないので、角丸にしたいときは余白を付けてください"] = "Distance between the band and the top/bottom screen edges. Windows doesn't round windows that touch the screen edge, so add a margin if you want rounded corners",
     };
 }

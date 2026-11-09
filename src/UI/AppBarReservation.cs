@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
+using ModernShell.Core;
 using ModernShell.Native;
 
 namespace ModernShell.UI;
@@ -14,7 +15,7 @@ public sealed class AppBarReservation : IDisposable
     private readonly HwndSource _src;
     private readonly uint _callbackMsg = Win32.RegisterWindowMessage("ModernShell.AppBar");
     private bool _registered;
-    private bool _top;
+    private TaskbarEdge _edge = TaskbarEdge.Bottom;
     private int _thicknessPx;
 
     public IntPtr Handle => _src.Handle;
@@ -102,9 +103,9 @@ public sealed class AppBarReservation : IDisposable
     /// <summary>プライマリモニターの DPI 倍率。</summary>
     public double Scale => Win32.GetDpiForWindow(Handle) is var d and > 0 ? d / 96.0 : 1.0;
 
-    public void Reserve(bool top, double thicknessDip)
+    public void Reserve(TaskbarEdge edge, double thicknessDip)
     {
-        _top = top;
+        _edge = edge;
         _thicknessPx = (int)Math.Round(thicknessDip * Scale);
         Apply();
     }
@@ -120,12 +121,23 @@ public sealed class AppBarReservation : IDisposable
         }
 
         var mon = PrimaryMonitor();
-        abd.uEdge = _top ? Win32.ABE_TOP : Win32.ABE_BOTTOM;
+        abd.uEdge = _edge switch { TaskbarEdge.Top => Win32.ABE_TOP, TaskbarEdge.Left => Win32.ABE_LEFT, TaskbarEdge.Right => Win32.ABE_RIGHT, _ => Win32.ABE_BOTTOM };
         abd.rc = mon;
-        if (_top) abd.rc.Bottom = mon.Top + _thicknessPx; else abd.rc.Top = mon.Bottom - _thicknessPx;
+        // 厚み（端に垂直な方向の大きさ）の分だけ確保する。端に沿った方向は画面いっぱい
+        void Thick(ref Win32.RECT r)
+        {
+            switch (_edge)
+            {
+                case TaskbarEdge.Top: r.Bottom = r.Top + _thicknessPx; break;
+                case TaskbarEdge.Left: r.Right = r.Left + _thicknessPx; break;
+                case TaskbarEdge.Right: r.Left = r.Right - _thicknessPx; break;
+                default: r.Top = r.Bottom - _thicknessPx; break;
+            }
+        }
+        Thick(ref abd.rc);
 
         Win32.SHAppBarMessage(Win32.ABM_QUERYPOS, ref abd);
-        if (_top) abd.rc.Bottom = abd.rc.Top + _thicknessPx; else abd.rc.Top = abd.rc.Bottom - _thicknessPx;
+        Thick(ref abd.rc); // 他のバーを避けて動いた位置から、厚みを取り直す
         Win32.SHAppBarMessage(Win32.ABM_SETPOS, ref abd);
         Rect = abd.rc;
         PositionChanged?.Invoke();

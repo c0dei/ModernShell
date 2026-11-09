@@ -74,16 +74,16 @@ public sealed class ThumbnailPreview
     };
 
     /// <summary>ボタンにカーソルが入った。待ち時間のあと表示（すでに別のプレビューが出ていればすぐ切り替え）。</summary>
-    public void Hover(FrameworkElement anchor, Func<IReadOnlyList<ApplicationWindow>> windows, bool top)
+    public void Hover(FrameworkElement anchor, Func<IReadOnlyList<ApplicationWindow>> windows, TaskbarEdge edge)
     {
         if (!_settings.ShowThumbnailPreview) return;
         if (IsOpen)
         {
             _gate.KeepOpen();
-            if (!ReferenceEquals(_anchor, anchor)) Show(anchor, windows(), top);
+            if (!ReferenceEquals(_anchor, anchor)) Show(anchor, windows(), edge);
             return;
         }
-        _gate.ShowAfter(_settings.PreviewDelayMs, () => Show(anchor, windows(), top));
+        _gate.ShowAfter(_settings.PreviewDelayMs, () => Show(anchor, windows(), edge));
     }
 
     /// <summary>ボタンからカーソルが出た。プレビューの上に移らなければ少し後に閉じる。</summary>
@@ -96,7 +96,7 @@ public sealed class ThumbnailPreview
         Close();
     }
 
-    private void Show(FrameworkElement anchor, IReadOnlyList<ApplicationWindow> windows, bool top)
+    private void Show(FrameworkElement anchor, IReadOnlyList<ApplicationWindow> windows, TaskbarEdge edge)
     {
         StallDetector.Phase = "preview: show";
         Close();
@@ -138,7 +138,7 @@ public sealed class ThumbnailPreview
                 win.Close();
                 // 閉じたウィンドウのカードを消す（最後の 1 枚なら全体を閉じる）
                 var rest = windows.Where(x => !ReferenceEquals(x, win)).ToList();
-                if (rest.Count == 0) Cancel(); else Show(anchor, rest, top);
+                if (rest.Count == 0) Cancel(); else Show(anchor, rest, edge);
             };
             slot.Tag = win.Handle;
             row.Children.Add(card);
@@ -146,10 +146,10 @@ public sealed class ThumbnailPreview
 
         _popup = FluentSurface.Create(row, anchor, PlacementMode.Custom);
         _popup.StaysOpen = true; // ホバーで開閉するので、マウスを捕まえない
-        FluentSurface.PlaceCentered(_popup, anchor, top);
+        FluentSurface.PlaceCentered(_popup, anchor, edge);
         _gate.Attach(row);
         var session = new Session();
-        if (_settings.AnimatePreviews) FluentSurface.SlideIn(_popup, fromBelow: !top);
+        if (_settings.AnimatePreviews) FluentSurface.SlideIn(_popup, edge);
         _popup.Opened += (_, _) => RegisterThumbnails(row, session);
         _popup.Closed += (_, _) => Unregister(session);
         _popup.IsOpen = true;

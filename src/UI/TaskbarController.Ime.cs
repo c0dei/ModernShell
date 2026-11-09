@@ -35,9 +35,12 @@ public sealed partial class TaskbarController
         _imeText.TextAlignment = TextAlignment.Center;
         var tile = new Tile
         {
-            Padding = new Thickness(8, 0, 8, 0), Height = TileH, Margin = new Thickness(2, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            Padding = Vertical ? new Thickness(0, 6, 0, 6) : new Thickness(8, 0, 8, 0),
+            Margin = Vertical ? new Thickness(0, 2, 0, 0) : new Thickness(2, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
             Child = _imeText, ToolTip = L.T("IME（クリックで日本語入力のオン/オフ）"),
         };
+        if (Vertical) tile.Width = TileH; else tile.Height = TileH;
         // タスクバーはクリックしてもアクティブにならないので、前面のアプリの IME をそのまま切り替えられる
         tile.Click += _ => { ToggleIme(); UpdateIme(); };
         // 右クリックで入力モードのメニュー（純正タスクバーの IME メニューの主な項目）

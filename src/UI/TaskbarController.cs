@@ -55,7 +55,25 @@ public sealed partial class TaskbarController : IDisposable
     public event Action? OpenSettingsRequested;
     public event Action? ExitRequested;
 
-    public bool IsTop => _settings.TaskbarEdge == TaskbarEdge.Top;
+    public TaskbarEdge Edge => _settings.TaskbarEdge;
+    public bool IsTop => Edge == TaskbarEdge.Top;
+    /// <summary>左右の端に置く縦向きのタスクバーか。</summary>
+    public bool Vertical => Edge is TaskbarEdge.Left or TaskbarEdge.Right;
+    /// <summary>ボタンなどを並べる向き（横のバーなら横、縦のバーなら縦）。</summary>
+    private Orientation Flow => Vertical ? Orientation.Vertical : Orientation.Horizontal;
+    /// <summary>ボタンどうしのすき間（並べる向きに合わせる）。</summary>
+    private Thickness Gap => Vertical ? new Thickness(0, 2, 0, 2) : new Thickness(2, 0, 2, 0);
+    /// <summary>ボタンの大きさ。縦のバーでは、バーの太さ（幅）に合わせて縦横を入れ替える。</summary>
+    private Size TileSize => Vertical ? new Size(TileH, TileW) : new Size(TileW, TileH);
+
+    /// <summary>
+    /// 余白（画面を基準にした左右 X・上下 Y）を、バーの向きに合わせて分ける。
+    /// across = 画面の端からバーまでの距離、along = バーの両端（端に沿った方向の始まりと終わり）の余白。
+    /// </summary>
+    private (double across, double along) Margins =>
+        Floating
+            ? (Vertical ? (_settings.IslandMarginX, _settings.IslandMarginY) : (_settings.IslandMarginY, _settings.IslandMarginX))
+            : (Vertical ? (_settings.BandMarginX, _settings.BandMarginY) : (_settings.BandMarginY, _settings.BandMarginX));
     private bool Floating => _settings.TaskbarStyle == TaskbarStyle.Floating;
     private bool StartAtLeftEdge => _settings.StartButtonPosition == StartButtonPosition.LeftEdge;
     public Win32.RECT BarRect => _reservation.Rect;
@@ -134,10 +152,11 @@ public sealed partial class TaskbarController : IDisposable
         EventManager.RegisterClassHandler(typeof(Tile), FrameworkElement.ToolTipOpeningEvent, new ToolTipEventHandler((s, _) =>
         {
             if (s is not Tile tile || Window.GetWindow(tile) is not BarSurface) return;
-            bool top = Settings.Current?.TaskbarEdge == TaskbarEdge.Top;
-            ToolTipService.SetPlacement(tile, top ? PlacementMode.Bottom : PlacementMode.Top);
-            ToolTipService.SetVerticalOffset(tile, top ? 6 : -6);
-            ToolTipService.SetHorizontalOffset(tile, 0);
+            // ボタンの画面の内側に、少し離して出す（カーソルに重ならないように）
+            var edge = Settings.Current?.TaskbarEdge ?? TaskbarEdge.Bottom;
+            ToolTipService.SetPlacement(tile, edge switch { TaskbarEdge.Top => PlacementMode.Bottom, TaskbarEdge.Left => PlacementMode.Right, TaskbarEdge.Right => PlacementMode.Left, _ => PlacementMode.Top });
+            ToolTipService.SetVerticalOffset(tile, edge switch { TaskbarEdge.Top => 6, TaskbarEdge.Bottom => -6, _ => 0 });
+            ToolTipService.SetHorizontalOffset(tile, edge switch { TaskbarEdge.Left => 6, TaskbarEdge.Right => -6, _ => 0 });
         }));
     }
 
@@ -243,10 +262,10 @@ public sealed partial class TaskbarController : IDisposable
 
     private string _layoutKey = "";
     private string LayoutKey() => string.Join("|", _settings.UseCustomTaskbar, _settings.TaskbarStyle, _settings.StartButtonPosition,
-        _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarHeight, _settings.TaskbarIconSize, _settings.IslandMargin,
+        _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarHeight, _settings.TaskbarIconSize, _settings.IslandMarginX, _settings.IslandMarginY,
         _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds,
         _settings.MagnifyOnHover, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
-        _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMargin, _settings.Language, _settings.ShowImeIndicator);
+        _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language, _settings.ShowImeIndicator);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e)
     {
         _online = e.IsAvailable;
@@ -266,19 +285,26 @@ public sealed partial class TaskbarController : IDisposable
         var t = Theme.Current;
         double h = _settings.TaskbarHeight;
         var startGroup = StartGroup(t);
-        _apps = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        _apps = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         var tray = TrayGroup(t);
         _trayHost = tray;
 
+        // 並べる向きの「始まり」「中央」「終わり」。横のバーなら 左・中央・右、縦のバーなら 上・中央・下
+        var (across, along) = Margins;
         if (!Floating)
         {
-            // ---- 帯型: 1 枚のウィンドウを 3 列に分ける ----
+            // ---- 帯型: 1 枚のウィンドウを 3 つの領域（始まり・中央・終わり）に分ける ----
             var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var line = new Border { Height = 1, Background = t.Stroke, VerticalAlignment = IsTop ? VerticalAlignment.Bottom : VerticalAlignment.Top };
-            Grid.SetColumnSpan(line, 3);
+            foreach (var len in new[] { new GridLength(1, GridUnitType.Star), GridLength.Auto, new GridLength(1, GridUnitType.Star) })
+            {
+                if (Vertical) grid.RowDefinitions.Add(new RowDefinition { Height = len });
+                else grid.ColumnDefinitions.Add(new ColumnDefinition { Width = len });
+            }
+            // バーと作業領域のあいだの区切りの線（画面の中央側の辺）
+            var line = Vertical
+                ? new Border { Width = 1, Background = t.Stroke, HorizontalAlignment = Edge == TaskbarEdge.Left ? HorizontalAlignment.Right : HorizontalAlignment.Left }
+                : new Border { Height = 1, Background = t.Stroke, VerticalAlignment = IsTop ? VerticalAlignment.Bottom : VerticalAlignment.Top };
+            if (Vertical) Grid.SetRowSpan(line, 3); else Grid.SetColumnSpan(line, 3);
             grid.Children.Add(line);
 
             bool center = _settings.TaskbarAlignment == TaskbarAlignment.Center;
@@ -286,17 +312,17 @@ public sealed partial class TaskbarController : IDisposable
             {
                 if (center)
                 {
-                    Place(grid, startGroup, 0, HorizontalAlignment.Left);
-                    Place(grid, _apps, 1, HorizontalAlignment.Center);
+                    Place(grid, startGroup, 0, Alignment.Start);
+                    Place(grid, _apps, 1, Alignment.Center);
                 }
-                else Place(grid, Horizontal(startGroup, _apps), 0, HorizontalAlignment.Left);
+                else Place(grid, Stack(startGroup, _apps), 0, Alignment.Start);
             }
-            else Place(grid, Horizontal(startGroup, _apps), center ? 1 : 0, center ? HorizontalAlignment.Center : HorizontalAlignment.Left);
+            else Place(grid, Stack(startGroup, _apps), center ? 1 : 0, center ? Alignment.Center : Alignment.Start);
 
             tray.Children.Add(ShowDesktopSliver());
-            Place(grid, tray, 2, HorizontalAlignment.Right);
+            Place(grid, tray, 2, Alignment.End);
             AddSurface(BarSurface.Anchor.Fill, h, grid);
-            _reservation.Reserve(IsTop, h + _settings.BandMargin * 2);
+            _reservation.Reserve(Edge, h + across * 2);
         }
         else
         {
@@ -307,9 +333,9 @@ public sealed partial class TaskbarController : IDisposable
                 AddSurface(BarSurface.Anchor.Left, h, Island(startGroup));
                 AddSurface(BarSurface.Anchor.Center, h, Island(_apps));
             }
-            else AddSurface(appsAnchor, h, Island(Horizontal(startGroup, _apps)));
+            else AddSurface(appsAnchor, h, Island(Stack(startGroup, _apps)));
             AddSurface(BarSurface.Anchor.Right, h, Island(tray));
-            _reservation.Reserve(IsTop, h + _settings.IslandMargin * 2);
+            _reservation.Reserve(Edge, h + across * 2);
         }
 
         RebuildApps();
@@ -324,27 +350,48 @@ public sealed partial class TaskbarController : IDisposable
         StallDetector.Phase = "taskbar: waiting for WPF to draw";
     }
 
-    private static void Place(Grid g, FrameworkElement e, int col, HorizontalAlignment ha)
+    /// <summary>並べる向きでの位置（横のバーなら 左・中央・右、縦のバーなら 上・中央・下）。</summary>
+    private enum Alignment { Start, Center, End }
+
+    private void Place(Grid g, FrameworkElement e, int slot, Alignment a)
     {
-        e.HorizontalAlignment = ha;
-        e.VerticalAlignment = VerticalAlignment.Center;
-        e.Margin = new Thickness(8, 0, 8, 0);
-        Grid.SetColumn(e, col);
+        if (Vertical)
+        {
+            e.VerticalAlignment = a switch { Alignment.Start => VerticalAlignment.Top, Alignment.End => VerticalAlignment.Bottom, _ => VerticalAlignment.Center };
+            e.HorizontalAlignment = HorizontalAlignment.Center;
+            e.Margin = new Thickness(0, 8, 0, 8);
+            Grid.SetRow(e, slot);
+        }
+        else
+        {
+            e.HorizontalAlignment = a switch { Alignment.Start => HorizontalAlignment.Left, Alignment.End => HorizontalAlignment.Right, _ => HorizontalAlignment.Center };
+            e.VerticalAlignment = VerticalAlignment.Center;
+            e.Margin = new Thickness(8, 0, 8, 0);
+            Grid.SetColumn(e, slot);
+        }
         g.Children.Add(e);
     }
 
-    private static StackPanel Horizontal(params UIElement[] children)
+    private StackPanel Stack(params UIElement[] children)
     {
-        var p = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        var p = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         foreach (var c in children) p.Children.Add(c);
         return p;
     }
 
-    private static FrameworkElement Island(FrameworkElement content)
+    private FrameworkElement Island(FrameworkElement content)
     {
-        content.VerticalAlignment = VerticalAlignment.Center;
         // 島の両端に少し余白を取り、右クリック（タスク マネージャー等）できる場所を確保する
-        content.Margin = new Thickness(8, 0, 8, 0);
+        if (Vertical)
+        {
+            content.HorizontalAlignment = HorizontalAlignment.Center;
+            content.Margin = new Thickness(0, 8, 0, 8);
+        }
+        else
+        {
+            content.VerticalAlignment = VerticalAlignment.Center;
+            content.Margin = new Thickness(8, 0, 8, 0);
+        }
         return content;
     }
 
@@ -352,7 +399,7 @@ public sealed partial class TaskbarController : IDisposable
     {
         // 空いている場所でも右クリックを受け取れるよう、透明の背景を付ける
         if (content is Panel panel && panel.Background == null) panel.Background = Brushes.Transparent;
-        var s = new BarSurface(anchor, h, _settings) { Foreground = Theme.Current.Text };
+        var s = new BarSurface(anchor, h, _settings, Vertical) { Foreground = Theme.Current.Text };
         s.SetBody(content);
         // ボタン以外の場所を右クリック → Windows のタスクバーと同じく「タスク マネージャー」「タスクバーの設定」
         s.MouseRightButtonUp += (_, e) =>
@@ -386,31 +433,48 @@ public sealed partial class TaskbarController : IDisposable
         if (_disposed) return;
         var r = _reservation.Rect;
         bool bottomMost = _reservation.IsFullscreenAppActive; // 全画面アプリ中は最前面をやめる
+        var (acrossDip, alongDip) = Margins;
         foreach (var s in _surfaces)
         {
             if (!s.IsLoaded) continue;
+            int across = (int)Math.Round(acrossDip * s.Scale), along = (int)Math.Round(alongDip * s.Scale);
+            int thick = (int)Math.Round(_settings.TaskbarHeight * s.Scale); // バーの太さ（横のバーなら高さ、縦のバーなら幅）
             if (s.Placement == BarSurface.Anchor.Fill)
             {
                 // 帯型: 余白 0 なら画面端に密着（Windows はこの場合角を丸めない）、余白があれば離して角丸にする
-                int bm = (int)Math.Round(_settings.BandMargin * s.Scale);
-                if (bm <= 0) s.MoveTo(r.Left, r.Top, r.Width, r.Height, bottomMost);
-                else
+                if (Vertical)
                 {
-                    int bh = (int)Math.Round(_settings.TaskbarHeight * s.Scale);
-                    s.MoveTo(r.Left + bm, IsTop ? r.Top + bm : r.Bottom - bm - bh, r.Width - bm * 2, bh, bottomMost);
+                    int x = Edge == TaskbarEdge.Left ? r.Left + across : r.Right - across - thick;
+                    if (across <= 0 && along <= 0) s.MoveTo(r.Left, r.Top, r.Width, r.Height, bottomMost);
+                    else s.MoveTo(x, r.Top + along, thick, r.Height - along * 2, bottomMost);
                 }
+                else if (across <= 0 && along <= 0) s.MoveTo(r.Left, r.Top, r.Width, r.Height, bottomMost);
+                else s.MoveTo(r.Left + along, IsTop ? r.Top + across : r.Bottom - across - thick, r.Width - along * 2, thick, bottomMost);
                 continue;
             }
             var (w, h) = s.PixelSize;
-            int m = (int)Math.Round(_settings.IslandMargin * s.Scale);
-            int y = IsTop ? r.Top + m : r.Bottom - m - h;
-            int x = s.Placement switch
+            if (Vertical)
             {
-                BarSurface.Anchor.Left => r.Left + m,
-                BarSurface.Anchor.Right => r.Right - m - w,
-                _ => r.Left + (r.Width - w) / 2,
-            };
-            s.MoveTo(x, y, bottomMost: bottomMost);
+                int x = Edge == TaskbarEdge.Left ? r.Left + across : r.Right - across - w;
+                int y = s.Placement switch
+                {
+                    BarSurface.Anchor.Left => r.Top + along,
+                    BarSurface.Anchor.Right => r.Bottom - along - h,
+                    _ => r.Top + (r.Height - h) / 2,
+                };
+                s.MoveTo(x, y, bottomMost: bottomMost);
+            }
+            else
+            {
+                int y = IsTop ? r.Top + across : r.Bottom - across - h;
+                int x = s.Placement switch
+                {
+                    BarSurface.Anchor.Left => r.Left + along,
+                    BarSurface.Anchor.Right => r.Right - along - w,
+                    _ => r.Left + (r.Width - w) / 2,
+                };
+                s.MoveTo(x, y, bottomMost: bottomMost);
+            }
         }
         UpdateTrayHostData();
     }
@@ -420,8 +484,8 @@ public sealed partial class TaskbarController : IDisposable
 
     private StackPanel StartGroup(Theme t)
     {
-        var p = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        var start = new Tile { Width = TileW, Height = TileH, Margin = new Thickness(2, 0, 2, 0), Child = UiKit.StartLogo(Math.Round(IconSz * 0.75), t.AccentBrush), ToolTip = L.T("スタート") };
+        var p = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        var start = new Tile { Width = TileSize.Width, Height = TileSize.Height, Margin = Gap, Child = UiKit.StartLogo(Math.Round(IconSz * 0.75), t.AccentBrush), ToolTip = L.T("スタート") };
         start.Click += x => { TakeForeground(x); StartClicked?.Invoke(); };
         start.RightClick += x => Flyout.Show(x, new[]
         {
@@ -439,11 +503,18 @@ public sealed partial class TaskbarController : IDisposable
         return p;
     }
 
-    private PlacementMode FlyoutPlacement => IsTop ? PlacementMode.Bottom : PlacementMode.Top;
+    /// <summary>メニューやポップアップをボタンのどちら側に出すか（バーのある端の反対側。画面の内側）。</summary>
+    private PlacementMode FlyoutPlacement => Edge switch
+    {
+        TaskbarEdge.Top => PlacementMode.Bottom,
+        TaskbarEdge.Left => PlacementMode.Right,
+        TaskbarEdge.Right => PlacementMode.Left,
+        _ => PlacementMode.Top,
+    };
 
     private Tile SmallButton(string glyph, string tip, Action onClick, Action<Tile>? configure = null)
     {
-        var tile = new Tile { Width = TileW, Height = TileH, Margin = new Thickness(2, 0, 2, 0), Child = UiKit.Glyph(glyph, GlyphSz), ToolTip = tip };
+        var tile = new Tile { Width = TileSize.Width, Height = TileSize.Height, Margin = Gap, Child = UiKit.Glyph(glyph, GlyphSz), ToolTip = tip };
         // 検索・タスク ビューはキー操作を送って開くので、管理者として動くアプリが前面でも届くよう先に前面になる
         tile.Click += x => { TakeForeground(x); onClick(); };
         configure?.Invoke(tile);
@@ -454,7 +525,7 @@ public sealed partial class TaskbarController : IDisposable
     private void HookDesktops(Tile tv)
     {
         tv.ToolTip = null; // 一覧と重なるのでツールチップは出さない
-        tv.MouseEnter += (_, _) => _desktops.Hover(tv, IsTop);
+        tv.MouseEnter += (_, _) => _desktops.Hover(tv, Edge);
         tv.MouseLeave += (_, _) => _desktops.Leave();
         tv.PreviewMouseDown += (_, _) => _desktops.Cancel();
     }
@@ -462,7 +533,7 @@ public sealed partial class TaskbarController : IDisposable
     // ------------------------------------------------------------------
 
     /// <summary>explorer 再起動時など、作業領域の予約をやり直す。</summary>
-    public void Reapply() => _reservation.Reserve(IsTop, Floating ? _settings.TaskbarHeight + _settings.IslandMargin * 2 : _settings.TaskbarHeight + _settings.BandMargin * 2);
+    public void Reapply() => _reservation.Reserve(Edge, _settings.TaskbarHeight + Margins.across * 2);
 
     public void Dispose()
     {

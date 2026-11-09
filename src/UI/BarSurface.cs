@@ -12,6 +12,7 @@ namespace ModernShell.UI;
 /// </summary>
 public sealed class BarSurface : Window
 {
+    /// <summary>Left / Center / Right = 端に沿った方向の「始まり・中央・終わり」。縦のバーでは 上・中央・下。</summary>
     public enum Anchor { Fill, Left, Center, Right }
 
     public Anchor Placement { get; }
@@ -25,7 +26,8 @@ public sealed class BarSurface : Window
     /// <summary>
     /// 背景・角丸・枠線はすべて自分で描く（透過ウィンドウ）。Windows の背景効果は GPU が無いと描かれないため使わない。
     /// </summary>
-    public BarSurface(Anchor placement, double heightDip, Settings settings)
+    /// <param name="thicknessDip">バーの太さ（横のバーなら高さ、縦のバーなら幅）。</param>
+    public BarSurface(Anchor placement, double thicknessDip, Settings settings, bool vertical = false)
     {
         Placement = placement;
         _settings = settings;
@@ -46,9 +48,9 @@ public sealed class BarSurface : Window
 
         if (placement != Anchor.Fill)
         {
-            // 島は中身の幅に合わせて伸縮（Mac のドックのようにアプリ数で幅が変わる）
-            SizeToContent = SizeToContent.Width;
-            Height = heightDip;
+            // 島は中身の長さに合わせて伸縮（Mac のドックのようにアプリ数で長さが変わる）。横なら幅、縦なら高さ
+            if (vertical) { SizeToContent = SizeToContent.Height; Width = thicknessDip; }
+            else { SizeToContent = SizeToContent.Width; Height = thicknessDip; }
         }
 
         var hwnd = new WindowInteropHelper(this).EnsureHandle();
@@ -97,7 +99,7 @@ public sealed class BarSurface : Window
     /// <summary>中身を設定する。設定の背景（透過なし / 透過 / ぼかし）・角丸・枠線を付けて包む。</summary>
     public void SetBody(FrameworkElement content)
     {
-        bool flush = Placement == Anchor.Fill && _settings.BandMargin <= 0; // 画面端に密着した帯は角を丸めない
+        bool flush = Placement == Anchor.Fill && _settings.BandMarginX <= 0 && _settings.BandMarginY <= 0; // 画面端に密着した帯は角を丸めない
         var corner = flush ? new CornerRadius(0) : new CornerRadius(Math.Max(0, _settings.CornerRadius));
         _painted = SurfacePaint.Wrap(content, _settings.TaskbarBackground, _settings.TaskbarOpacity, corner);
         Content = _painted.Root;
