@@ -461,7 +461,7 @@ public sealed class WidgetPanel : ScrollViewer
     {
         try
         {
-            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            Launcher.Open(path);
             LaunchedSomething?.Invoke();
         }
         catch (Exception ex) { Log.Error("widget open", ex); }

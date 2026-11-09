@@ -44,6 +44,8 @@ public sealed class SettingsWindow : Window
     public event Action? ExitRequested;
     /// <summary>設定ファイルを置き換えたあと、読み込み直すために再起動してほしいとき。</summary>
     public event Action? RestartRequested;
+    /// <summary>管理者として再起動してほしいとき（UAC の確認が出る）。</summary>
+    public event Action? RestartElevatedRequested;
     /// <summary>Windows のタスクバーのピン留め（並び順どおりの ID 一覧）を返す。App が設定する。</summary>
     public Func<List<string>>? ImportWindowsPins { get; set; }
 
@@ -499,7 +501,24 @@ public sealed class SettingsWindow : Window
             new[] { ("", L.T("自動（Windows に合わせる）")), ("ja", "日本語"), ("en", "English") },
             _s.Language, v => _s.Language = v));
         p.Children.Add(ToggleRow(L.T("サインイン時に起動"), L.T("Windows にサインインすると自動で常駐します"),
-            _s.RunAtStartup, v => { _s.RunAtStartup = v; SystemActions.SetRunAtStartup(v); }));
+            _s.RunAtStartup, v =>
+            {
+                if (!SystemActions.SetStartup(v, v && _s.RunElevatedAtStartup)) return;
+                _s.RunAtStartup = v;
+            }));
+        p.Children.Add(ToggleRow(L.T("管理者として起動する"),
+            L.T("管理者として動いているアプリ（管理者の Terminal など）でも、IME の表示や Win キーなどが効くようになります。ModernShell から開いたアプリは普通の権限で起動します。タスク スケジューラに登録するため、切り替えるときに確認が出ることがあります") +
+            (Launcher.IsElevated ? L.T("（現在: 管理者として動作中）") : L.T("（現在: 普通の権限で動作中。次のサインインから管理者で起動します）")),
+            _s.RunElevatedAtStartup, v =>
+            {
+                if (!SystemActions.SetStartup(true, v)) return; // UAC で断られたら変えない
+                _s.RunElevatedAtStartup = v;
+                if (v && !Launcher.IsElevated && Confirm(L.T("今すぐ管理者として再起動しますか？")))
+                {
+                    _s.SaveQuiet();
+                    RestartElevatedRequested?.Invoke();
+                }
+            }, _s.RunAtStartup));
         p.Children.Add(ToggleRow(L.T("描画に GPU を使う"),
             L.T("オフにすると GPU ドライバーを読み込まないので、使用メモリが減ります（アニメーションは CPU で描画）。見た目は変わりません。変更すると ModernShell を再起動します"),
             _s.UseGpuRendering, v =>
@@ -517,7 +536,7 @@ public sealed class SettingsWindow : Window
 
         p.Children.Add(Section(L.T("トラブルシューティング")));
         p.Children.Add(ButtonRow(L.T("設定とログ"), L.T("%AppData%\\ModernShell に settings.json と modernshell.log があります"),
-            L.T("フォルダーを開く"), () => Process.Start("explorer.exe", "\"" + Settings.Directory + "\"")));
+            L.T("フォルダーを開く"), () => Launcher.Open("explorer.exe", "\"" + Settings.Directory + "\"")));
         p.Children.Add(ButtonRow(L.T("ModernShell を終了"), L.T("スタートメニューとタスクバーが純正に戻ります（Ctrl + Alt + Shift + F12 でも可）"),
             L.T("終了"), () => ExitRequested?.Invoke(), accent: true));
         p.Children.Add(Note(L.T("終了できなくなった場合は、ModernShell.exe --restore を実行するか PC を再起動してください。")));
@@ -574,7 +593,7 @@ public sealed class SettingsWindow : Window
 
     private static void Open(string url)
     {
-        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
+        try { Launcher.Open(url); } catch { }
     }
 
     // ------------------------------------------------------------------

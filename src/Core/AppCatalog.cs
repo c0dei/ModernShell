@@ -52,12 +52,13 @@ public sealed class AppEntry
     {
         try
         {
+            // ModernShell が管理者で動いていても、開いたアプリは普通の権限で動かす（「管理者として実行」のときだけ管理者）
             if (asAdmin && ExePath != null)
-                Process.Start(new ProcessStartInfo(ExePath) { UseShellExecute = true, Verb = "runas" });
+                Launcher.OpenAsAdmin(ExePath);
             else if (IsFile)
-                Process.Start(new ProcessStartInfo(Id) { UseShellExecute = true });
+                Launcher.Open(Id);
             else
-                Process.Start(new ProcessStartInfo("explorer.exe", "\"" + ShellPath + "\"") { UseShellExecute = true });
+                Launcher.Open("explorer.exe", "\"" + ShellPath + "\"");
         }
         catch (Exception ex) { Log.Error($"launch {Id}", ex); }
     }
@@ -65,7 +66,7 @@ public sealed class AppEntry
     public void OpenFileLocation()
     {
         if (ExePath == null) return;
-        try { Process.Start("explorer.exe", $"/select,\"{ExePath}\""); }
+        try { Launcher.Open("explorer.exe", $"/select,\"{ExePath}\""); }
         catch (Exception ex) { Log.Error("open location", ex); }
     }
 

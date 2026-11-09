@@ -113,7 +113,10 @@ public static class Program
         StallDetector.Start(app.Dispatcher);
         _settings = Settings.Load();
         // 「サインイン時に起動」の登録を今の exe の場所に合わせる（単一 exe 版から zip 版へ移したときなど、古い場所を指したままにしない）
-        if (_settings.RunAtStartup) SystemActions.SetRunAtStartup(true);
+        // 普通の権限での自動起動なら、登録を今の exe の場所に合わせる。管理者での自動起動は、管理者で動いているときに登録し直す（場所が変わった場合に備えて）
+        if (_settings.RunAtStartup && !_settings.RunElevatedAtStartup) SystemActions.SetRunAtStartup(true);
+        else if (_settings.RunAtStartup && _settings.RunElevatedAtStartup && Launcher.IsElevated)
+            System.Threading.Tasks.Task.Run(() => SystemActions.SetStartup(true, elevated: true));
         MemoryHousekeeping.StartMonitoring();
         // GPU を使わない描画（ウィンドウを作る前に決める必要がある）
         if (!_settings.UseGpuRendering) System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
@@ -172,6 +175,17 @@ public static class Program
         CreateTrayIcon();
         StallDetector.Phase = "start: done";
         if (_openSettingsOnStart) app.Dispatcher.BeginInvoke(ShowSettings, DispatcherPriority.ApplicationIdle);
+    }
+
+    /// <summary>管理者として再起動する（UAC の確認で断られたら何もしない）。</summary>
+    private static void RestartElevated()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(Environment.ProcessPath!, $"--after {Environment.ProcessId} --settings") { UseShellExecute = true, Verb = "runas" });
+            Exit();
+        }
+        catch (Exception ex) { Log.Info($"restart elevated cancelled: {ex.Message}"); }
     }
 
     private static void Restart(bool openSettings)
@@ -365,6 +379,7 @@ public static class Program
             };
             _settingsWindow.ExitRequested += Exit;
             _settingsWindow.RestartRequested += () => Restart(openSettings: true);
+            _settingsWindow.RestartElevatedRequested += RestartElevated;
             _settingsWindow.Closed += (_, _) => _settingsWindow = null;
             _settingsWindow.Show();
         }

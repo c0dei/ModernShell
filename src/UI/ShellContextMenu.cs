@@ -211,7 +211,11 @@ public static class ShellContextMenu
                     if (order < 0 || found.Any(f => f.order == order)) continue;
                     var text = CleanText(Marshal.PtrToStringUni(textBuf) ?? "");
                     if (text.Length == 0) continue;
-                    found.Add((order, new MenuItemSpec(TaskbarVerbs[order].glyph, text, () => Invoke(cm, offset, owner))
+                    // ModernShell が管理者で動いているときの「開く」は、Windows に任せると管理者で起動してしまうので、普通の権限で開く
+                    Action run = verb.Equals("open", StringComparison.OrdinalIgnoreCase) && Launcher.IsElevated
+                        ? () => { try { Launcher.Open(parsingName); } catch (Exception ex) { Log.Error("open", ex); } }
+                        : () => Invoke(cm, offset, owner);
+                    found.Add((order, new MenuItemSpec(TaskbarVerbs[order].glyph, text, run)
                     {
                         Enabled = (mii.fState & MFS_DISABLED) == 0,
                     }));

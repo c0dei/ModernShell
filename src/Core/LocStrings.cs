@@ -346,5 +346,10 @@ public static partial class L
         ["半角カタカナ"] = "Half-width Katakana",
         ["半角英数"] = "Half-width Alphanumeric",
         ["IME の設定"] = "IME settings",
+        ["管理者として起動する"] = "Run as administrator",
+        ["管理者として動いているアプリ（管理者の Terminal など）でも、IME の表示や Win キーなどが効くようになります。ModernShell から開いたアプリは普通の権限で起動します。タスク スケジューラに登録するため、切り替えるときに確認が出ることがあります"] = "Makes the IME indicator, the Windows key and more work in apps running as administrator (such as an elevated Terminal). Apps opened from ModernShell still start with normal rights. Registers a Task Scheduler task, so you may be asked to confirm when switching",
+        ["（現在: 管理者として動作中）"] = " (now running as administrator)",
+        ["（現在: 普通の権限で動作中。次のサインインから管理者で起動します）"] = " (now running with normal rights; runs as administrator from the next sign-in)",
+        ["今すぐ管理者として再起動しますか？"] = "Restart as administrator now?",
     };
 }

@@ -215,7 +215,7 @@ public sealed partial class TaskbarController
             MenuItemSpec.Separator,
             new("\uE713", L.T("IME の設定"), () =>
             {
-                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ms-settings:regionlanguage-jpnime") { UseShellExecute = true }); }
+                try { Launcher.Open("ms-settings:regionlanguage-jpnime"); }
                 catch (Exception ex) { Log.Error("ime settings", ex); }
             }),
         };

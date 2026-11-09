@@ -512,13 +512,13 @@ public sealed partial class TaskbarController
 
     private static void OpenPath(string file, string args)
     {
-        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(file, args) { UseShellExecute = true }); }
+        try { Launcher.Open(file, args); }
         catch (Exception ex) { Log.Error("open", ex); }
     }
 
     private static void OpenPath(string path)
     {
-        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
+        try { Launcher.Open(path); }
         catch (Exception ex) { Log.Error("open jump item", ex); }
     }
 }
