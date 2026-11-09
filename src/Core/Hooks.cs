@@ -67,6 +67,12 @@ public sealed class InputHooks : IDisposable
     public event Action? ImeKeyReleased;
 
     /// <summary>
+    /// 日本語入力のオン/オフを切り替えるキーが押された（vk を渡す。UI スレッドで実行）。
+    /// IME の状態を問い合わせても答えないアプリ（Windows Terminal など）で、状態を推測するのに使う。
+    /// </summary>
+    public event Action<uint>? ImeToggleKeyPressed;
+
+    /// <summary>
     /// IME の状態を変えうるキー。文字キーは含めない（打つたびに問い合わせないように）。
     /// 修飾キーは Alt+Shift・Win+Space・Ctrl+Space などの組み合わせで入力言語や IME を切り替えるため含める。
     /// </summary>
@@ -90,6 +96,8 @@ public sealed class InputHooks : IDisposable
     }
     private volatile Box? _startRect;
     private sealed record Box(Win32.RECT Value);
+
+    private uint _lastImeKeyDown;
 
     public InputHooks(Dispatcher dispatcher)
     {
@@ -124,6 +132,13 @@ public sealed class InputHooks : IDisposable
         bool down = msg is Win32.WM_KEYDOWN or Win32.WM_SYSKEYDOWN;
         bool up = msg is Win32.WM_KEYUP or Win32.WM_SYSKEYUP;
         if (up && ImeKeyReleased != null && IsImeKey(k.vkCode)) _dispatcher.BeginInvoke(() => ImeKeyReleased?.Invoke());
+        // 半角/全角（0xF3/0xF4）・漢字（Alt+` など 0x19）・IME オン（0x16）・IME オフ（0x1A）。押し下げのたびに 1 回（押しっぱなしの繰り返しは除く）
+        if (down && ImeToggleKeyPressed != null && k.vkCode is 0x19 or 0xF3 or 0xF4 or 0x16 or 0x1A && _lastImeKeyDown != k.vkCode)
+        {
+            var vk = k.vkCode;
+            _dispatcher.BeginInvoke(() => ImeToggleKeyPressed?.Invoke(vk));
+        }
+        if (k.vkCode is 0x19 or 0xF3 or 0xF4 or 0x16 or 0x1A) _lastImeKeyDown = down ? k.vkCode : 0;
 
         // メニュー表示中の Esc はメニューを閉じるのに使い、前面のアプリには渡さない（Windows のメニューと同じ）
         if (k.vkCode == Win32.VK_ESCAPE && IsMenuOpen())

@@ -141,6 +141,7 @@ public static class Program
         _hooks.MenuMouseDown += FluentSurface.CloseIfOutside;
         _hooks.MenuEscape += FluentSurface.CloseTopmost;
         _hooks.ImeKeyReleased += () => _taskbar?.ImeMayHaveChanged();
+        _hooks.ImeToggleKeyPressed += vk => _taskbar?.ImeToggleKey(vk);
         _hooks.Install();
 
         _ = _catalog.LoadAsync().ContinueWith(_ => app.Dispatcher.BeginInvoke(() => { _catalog.Watch(); _catalog.NotifyChanged(); }));

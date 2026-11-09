@@ -52,6 +52,26 @@ public sealed partial class TaskbarController
 
     private DispatcherTimer? _imeSoon, _imeLater;
 
+    /// <summary>問い合わせに答えないアプリの、キー操作から推測した日本語入力のオン/オフ（アプリのウィンドウごと）。</summary>
+    private readonly Dictionary<IntPtr, bool> _inferredOpen = new();
+
+    /// <summary>
+    /// 日本語入力を切り替えるキーが押された。前面のアプリが IME の問い合わせに答えるなら何もしない（実際の状態を読む）。
+    /// 答えないアプリなら、キーに合わせてオン/オフを推測して覚える。マウスでの切り替えなどはわからないので、ずれることがある。
+    /// </summary>
+    public void ImeToggleKey(uint vk)
+    {
+        if (_imeText == null || _disposed) return;
+        var (ime, lang) = ForegroundIme();
+        if (lang != 0 && lang != 0x0411) return;
+        if (ime != IntPtr.Zero && ImeQuery(ime, IMC_GETOPENSTATUS) >= 0) return; // 読めるアプリは推測しない
+        var fg = Win32.GetForegroundWindow();
+        _inferredOpen.TryGetValue(fg, out var open);
+        _inferredOpen[fg] = vk switch { 0x16 => true, 0x1A => false, _ => !open };
+        if (_inferredOpen.Count > 200) _inferredOpen.Clear(); // 閉じたウィンドウの分が溜まらないように
+        UpdateIme();
+    }
+
     /// <summary>
     /// IME の状態が変わったかもしれないとき（キー操作・アプリの切り替え）に呼ぶ。IME はキーを受け取ってから少し遅れて
     /// 状態を変えるので、少し待って読み、念のためもう一度読む。
@@ -130,7 +150,12 @@ public sealed partial class TaskbarController
             int open = ime != IntPtr.Zero ? ImeQuery(ime, IMC_GETOPENSTATUS) : -1;
             int mode = open > 0 ? ImeQuery(ime, IMC_GETCONVERSIONMODE) : 0;
             LogImeTarget(ime, lang, open, mode);
-            if (open < 0) return; // 読み取れない（管理者として動くアプリなど）ときは前の表示のまま
+            if (open < 0)
+            {
+                // 問い合わせに答えないアプリ（Windows Terminal・管理者として動くアプリなど）は、キー操作から推測した状態を出す
+                open = _inferredOpen.TryGetValue(Win32.GetForegroundWindow(), out var o) && o ? 1 : 0;
+                mode = open > 0 ? IME_CMODE_NATIVE | IME_CMODE_FULLSHAPE : 0;
+            }
             if (mode < 0) mode = 0;
             bool full = (mode & IME_CMODE_FULLSHAPE) != 0;
             text = open == 0 ? "A"
@@ -189,12 +214,21 @@ public sealed partial class TaskbarController
         ImeMayHaveChanged();
     }
 
-    private static void ToggleIme()
+    private void ToggleIme()
     {
         var (ime, lang) = ForegroundIme();
-        if (ime == IntPtr.Zero || (lang != 0 && lang != 0x0411)) return;
-        int open = ImeQuery(ime, IMC_GETOPENSTATUS);
-        if (open < 0) return;
-        SendMessageTimeout(ime, WM_IME_CONTROL, (IntPtr)IMC_SETOPENSTATUS, (IntPtr)(open > 0 ? 0 : 1), 0x2, 100, out _);
+        if (lang != 0 && lang != 0x0411) return;
+        int open = ime != IntPtr.Zero ? ImeQuery(ime, IMC_GETOPENSTATUS) : -1;
+        if (open >= 0)
+        {
+            SendMessageTimeout(ime, WM_IME_CONTROL, (IntPtr)IMC_SETOPENSTATUS, (IntPtr)(open > 0 ? 0 : 1), 0x2, 100, out _);
+            return;
+        }
+        // 問い合わせに答えないアプリ（Windows Terminal など）には、日本語入力の切り替えキー（漢字キー）を送って切り替え、
+        // 推測している状態も合わせて切り替える（自分で送ったキーはキーボード監視で数えないため）
+        Input.Send((0x19, false), (0x19, true));
+        var fg = Win32.GetForegroundWindow();
+        _inferredOpen.TryGetValue(fg, out var o);
+        _inferredOpen[fg] = !o;
     }
 }
