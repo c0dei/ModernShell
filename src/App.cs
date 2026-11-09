@@ -211,6 +211,10 @@ public static class Program
         _start.OpenSettingsRequested += ShowSettings;
         _start.ExitRequested += Exit;
         HwndSource.FromHwnd(_start.Handle)!.AddHook(BroadcastHook);
+        // 管理者で動いているときは、普通の権限のエクスプローラーからの「タスクバーができた」通知（エクスプローラーの再起動）も
+        // Windows に止められるので、受け取りを許可する
+        if (Launcher.IsElevated)
+            ChangeWindowMessageFilterEx(_start.Handle, Win32.RegisterWindowMessage("TaskbarCreated"), 1 /*MSGFLT_ALLOW*/, IntPtr.Zero);
         if (_hotkeyRegistered)
             RegisterHotKey(_start.Handle, HotkeyEmergencyId, 0x0001 | 0x0002 | 0x0004 | 0x4000, 0x7B);
     }
@@ -391,6 +395,7 @@ public static class Program
 
     [DllImport("user32.dll")] private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint modifiers, uint vk);
     [DllImport("user32.dll")] private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+    [DllImport("user32.dll")] private static extern bool ChangeWindowMessageFilterEx(IntPtr hwnd, uint msg, uint action, IntPtr changeInfo);
 
     /// <summary>
     /// 自分自身を「--watchdog 親PID」で起動しておく。本体が強制終了・クラッシュしても、

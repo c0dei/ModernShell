@@ -5,6 +5,7 @@ using ManagedShell;
 using ManagedShell.Common.Enums;
 using ManagedShell.WindowsTasks;
 using ManagedShell.WindowsTray;
+using ModernShell.Native;
 
 namespace ModernShell.Core;
 
@@ -42,6 +43,39 @@ public sealed class ShellHost : IDisposable
         config.PinnedNotifyIcons = settings.PinnedTrayIcons.ToArray();
         Manager = new ShellManager(config);
         Log.Info($"shell host started (tray failed={Manager.NotificationArea?.IsFailed})");
+        if (Launcher.IsElevated) AllowTrayFromNormalApps();
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ChangeWindowMessageFilterEx(IntPtr hwnd, uint msg, uint action, IntPtr changeInfo);
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string? cls, string? title);
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SendNotifyMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    /// <summary>
+    /// ModernShell が管理者として動いているとき、普通の権限のアプリからのトレイアイコンの登録を受け取れるようにする。
+    /// アプリはトレイ用のウィンドウ（Shell_TrayWnd）に WM_COPYDATA を送ってアイコンを登録するが、管理者のウィンドウへの
+    /// このメッセージは Windows が止めてしまう（UIPI）。ModernShell のトレイ用ウィンドウだけ受け取りを許可し、
+    /// 「タスクバーができた」通知を送り直して、各アプリにアイコンを登録し直してもらう。
+    /// </summary>
+    private static void AllowTrayFromNormalApps()
+    {
+        try
+        {
+            const uint WM_COPYDATA = 0x004A, MSGFLT_ALLOW = 1;
+            int allowed = 0;
+            for (var h = FindWindowEx(IntPtr.Zero, IntPtr.Zero, "Shell_TrayWnd", null); h != IntPtr.Zero; h = FindWindowEx(IntPtr.Zero, h, "Shell_TrayWnd", null))
+            {
+                Win32.GetWindowThreadProcessId(h, out var pid);
+                if (pid != (uint)Environment.ProcessId) continue;
+                if (ChangeWindowMessageFilterEx(h, WM_COPYDATA, MSGFLT_ALLOW, IntPtr.Zero)) allowed++;
+            }
+            // 許可する前に送られた登録は止められているので、各アプリに登録し直してもらう
+            SendNotifyMessage((IntPtr)0xFFFF, Win32.RegisterWindowMessage("TaskbarCreated"), IntPtr.Zero, IntPtr.Zero);
+            Log.Info($"elevated: allowed tray messages on {allowed} window(s)");
+        }
+        catch (Exception ex) { Log.Error("allow tray messages", ex); }
     }
 
     private bool _nativeHidden;
