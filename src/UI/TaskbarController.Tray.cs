@@ -558,7 +558,7 @@ public sealed partial class TaskbarController
         if (_time == null || _date == null) return;
         var now = DateTime.Now;
         // 縦のバーは幅が狭いので、秒は出さず、日付も短くする。さらに細いバーでは時刻を「時」「分」の 2 段にする
-        _time.Text = ClockStacked ? now.ToString("H") + "\n" + now.ToString("mm")
+        _time.Text = ClockStacked ? now.Hour + "\n" + now.ToString("mm") // 1 文字だけの書式（"H"）は標準の書式と見なされて例外になるので使わない
             : now.ToString(_settings.ShowSeconds && !Vertical ? "H:mm:ss" : "H:mm");
         _date.Text = now.ToString(Vertical ? "M/d" : L.IsEnglish ? "M/d/yyyy" : "yyyy/MM/dd", L.Culture);
     }
