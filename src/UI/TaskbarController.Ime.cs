@@ -66,13 +66,46 @@ public sealed partial class TaskbarController
     }
 
     /// <summary>前面のアプリの IME のウィンドウ（IME への問い合わせ先）とキーボードの言語。</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GUITHREADINFO
+    {
+        public int cbSize, flags;
+        public IntPtr hwndActive, hwndFocus, hwndCapture, hwndMenuOwner, hwndMoveSize, hwndCaret;
+        public Win32.RECT rcCaret;
+    }
+
+    [DllImport("user32.dll")] private static extern bool GetGUIThreadInfo(uint threadId, ref GUITHREADINFO info);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, System.Text.StringBuilder name, int max);
+
+    /// <summary>
+    /// 今キーボードの入力を受け取っているウィンドウ（前面のアプリの入力欄）の IME と、そのスレッドのキーボードの言語。
+    /// IME の状態は入力を受け取っているウィンドウごとなので、アプリの枠（一番外側のウィンドウ）ではなく、ここに問い合わせる。
+    /// Windows Terminal や秀丸のように、入力欄が枠とは別の子ウィンドウ・別のスレッドになっているアプリでも正しく読める。
+    /// </summary>
     private static (IntPtr ime, int lang) ForegroundIme()
     {
         var fg = Win32.GetForegroundWindow();
         if (fg == IntPtr.Zero) return (IntPtr.Zero, 0);
-        uint thread = Win32.GetWindowThreadProcessId(fg, out _);
+        // スレッド 0 = 前面のスレッド。入力を受け取っているウィンドウ（なければ前面のウィンドウ）
+        var info = new GUITHREADINFO { cbSize = Marshal.SizeOf<GUITHREADINFO>() };
+        var target = GetGUIThreadInfo(0, ref info) && info.hwndFocus != IntPtr.Zero ? info.hwndFocus : fg;
+        uint thread = Win32.GetWindowThreadProcessId(target, out _);
         int lang = (int)((long)GetKeyboardLayout(thread) & 0xFFFF);
-        return (ImmGetDefaultIMEWnd(fg), lang);
+        return (ImmGetDefaultIMEWnd(target), lang);
+    }
+
+    private static IntPtr _imeLoggedFor;
+
+    /// <summary>前面のアプリが変わったとき、どのウィンドウの IME を読んで何が返ったかを 1 度だけ記録する（表示が変わらないアプリの調査用）。</summary>
+    private static void LogImeTarget(IntPtr ime, int lang, int open, int mode)
+    {
+        var fg = Win32.GetForegroundWindow();
+        if (fg == _imeLoggedFor) return;
+        _imeLoggedFor = fg;
+        var info = new GUITHREADINFO { cbSize = Marshal.SizeOf<GUITHREADINFO>() };
+        GetGUIThreadInfo(0, ref info);
+        string Cls(IntPtr h) { var sb = new System.Text.StringBuilder(128); if (h != IntPtr.Zero) GetClassName(h, sb, sb.Capacity); return sb.ToString(); }
+        Log.Info($"ime: app={Cls(fg)} focus={Cls(info.hwndFocus)} imeWnd={(ime != IntPtr.Zero)} lang=0x{lang:X4} open={open} mode=0x{mode:X}");
     }
 
     private static int ImeQuery(IntPtr ime, int command)
@@ -95,8 +128,9 @@ public sealed partial class TaskbarController
         else
         {
             int open = ime != IntPtr.Zero ? ImeQuery(ime, IMC_GETOPENSTATUS) : -1;
-            if (open < 0) return; // 読み取れない（管理者として動くアプリなど）ときは前の表示のまま
             int mode = open > 0 ? ImeQuery(ime, IMC_GETCONVERSIONMODE) : 0;
+            LogImeTarget(ime, lang, open, mode);
+            if (open < 0) return; // 読み取れない（管理者として動くアプリなど）ときは前の表示のまま
             if (mode < 0) mode = 0;
             bool full = (mode & IME_CMODE_FULLSHAPE) != 0;
             text = open == 0 ? "A"
