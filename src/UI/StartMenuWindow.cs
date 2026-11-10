@@ -73,7 +73,11 @@ public sealed class StartMenuWindow : Window
         Action onTheme = () => Dispatcher.BeginInvoke(Rebuild);
         // ウィジェットの表示切替などを反映（開いている最中は閉じたときに反映される）
         Action onSettings = () => Dispatcher.BeginInvoke(() => { if (!IsVisible) Rebuild(); });
-        Action onCatalog = () => Dispatcher.BeginInvoke(() => { if (IsVisible && _page != Page.Search) ShowPage(_page); });
+        Action onCatalog = () => Dispatcher.BeginInvoke(() =>
+        {
+            _pageDirty = true; // アプリの一覧が変わった: 使い回している一覧を、次に開くときに作り直す
+            if (IsVisible && _page != Page.Search) ShowPage(_page);
+        });
         Theme.Changed += onTheme;
         _settings.Changed += onSettings;
         _catalog.Changed += onCatalog;
@@ -112,8 +116,23 @@ public sealed class StartMenuWindow : Window
         bool first = !_shownOnce;
         _shownOnce = true;
         _search.Text = initialSearch ?? "";
-        if (_search.Text.Length == 0) ShowPage(_settings.ShowAllAppsFirst ? Page.AllApps : Page.Pinned);
-        _widgets?.Open();
+        if (_search.Text.Length == 0)
+        {
+            // 前回と同じ一覧で、アプリの一覧やピン留めが変わっていなければ、作り直さずに使い回す（開くたびの 60 ms 前後を省く）。
+            // 変わったとき（アプリの追加・ピン留めの変更・設定の変更）は、それぞれの通知で印が付く（設定・テーマの変更は丸ごと作り直す）
+            var target = _settings.ShowAllAppsFirst ? Page.AllApps : Page.Pinned;
+            if (!_pageDirty && _page == target && _content.Content != null) ScrollToTop(_content.Content as DependencyObject);
+            else ShowPage(target);
+        }
+        long pageMs = clock.ElapsedMilliseconds;
+        // ウィジェット: 初めてのときだけ、表示する前に作る。2 回目以降は前回の内容のまま出して、表示（とスライド）が終わってから
+        // 最新の内容に作り直す（表示前に作り直すと、その分だけ開くのが遅れる）
+        if (_widgets != null)
+        {
+            if (_widgets.IsBuilt) { _widgets.Resume(); _widgetsRefreshPending = true; }
+            else _widgets.Open();
+        }
+        long widgetsMs = clock.ElapsedMilliseconds - pageMs;
         bool animate = _settings.AnimateStartMenu;
         var anchor = AnchorProvider?.Invoke();
         var edge = anchor?.edge ?? TaskbarEdge.Bottom;
@@ -121,7 +140,8 @@ public sealed class StartMenuWindow : Window
         // 一瞬ずれた位置に出てから跳ねて見える
         var (x, y, scale) = PositionMenu(anchor);
         // タスクバーのある端の側から、画面の内側へ向かってスライドして現れる（下のバーなら下から、左のバーなら左から）
-        int dist = animate ? (int)Math.Round(40 * scale) : 0;
+        // Windows のスタートメニューに近い、はっきり見える長さ（64 DIP）で滑らせる
+        int dist = animate ? (int)Math.Round(SlideDistance * scale) : 0;
         int sx = edge switch { TaskbarEdge.Left => -dist, TaskbarEdge.Right => dist, _ => 0 };
         int sy = edge switch { TaskbarEdge.Top => -dist, TaskbarEdge.Bottom => dist, _ => 0 };
         if (dist != 0)
@@ -151,12 +171,15 @@ public sealed class StartMenuWindow : Window
         Activate();
         _search.Focus();
         _search.CaretIndex = _search.Text.Length;
+        // スライドしている間、タスクバーをメニューより手前に出す（メニューがタスクバーの下から出てくるように見える）
+        if (animate) RaiseTaskbar?.Invoke();
         AfterFrames(2, () =>
         {
             if (!IsVisible) return;
             Cloak(false);
-            Log.Info($"timing: start menu {(first ? "first " : "")}open: built+layout {layoutMs} ms, shown after {clock.ElapsedMilliseconds} ms");
+            Log.Info($"timing: start menu {(first ? "first " : "")}open: page {pageMs} ms, widgets {widgetsMs} ms, layout {layoutMs - pageMs - widgetsMs} ms, shown after {clock.ElapsedMilliseconds} ms");
             if (animate) SlideIn(x, y, sx, sy);
+            else RefreshWidgets();
         });
     }
 
@@ -186,6 +209,27 @@ public sealed class StartMenuWindow : Window
     }
 
     private bool _shownOnce;
+    private const double SlideDistance = 64, SlideMs = 300;
+
+    /// <summary>タスクバーのウィンドウを手前に出す（App が設定する）。スライド中にメニューがタスクバーの下に入るように。</summary>
+    public Action? RaiseTaskbar { get; set; }
+
+    private bool _widgetsRefreshPending;
+
+    /// <summary>表示とスライドが終わってから、ウィジェットを最新の内容に作り直す（天気・最近使ったファイルなど）。</summary>
+    private void RefreshWidgets()
+    {
+        if (!_widgetsRefreshPending) return;
+        _widgetsRefreshPending = false;
+        if (IsVisible) _widgets?.Open();
+    }
+
+    private static void ScrollToTop(DependencyObject? root)
+    {
+        if (root == null) return;
+        if (root is ScrollViewer sv) { sv.ScrollToTop(); return; }
+        for (int i = 0, n = VisualTreeHelper.GetChildrenCount(root); i < n; i++) ScrollToTop(VisualTreeHelper.GetChild(root, i));
+    }
 
     [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
     private static extern int DwmFlush();
@@ -207,7 +251,7 @@ public sealed class StartMenuWindow : Window
         _slideTarget = (x, y);
         var dispatcher = Dispatcher;
         var hwnd = Handle;
-        const double ms = 220;
+        const double ms = SlideMs;
         new System.Threading.Thread(() =>
         {
             var clock = new Stopwatch();
@@ -226,10 +270,15 @@ public sealed class StartMenuWindow : Window
                 cutShort = frames >= 4 && now / frames > 45 && p < 0.9;
                 if (p >= 1 || cutShort)
                 {
-                    dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Send, new Action(() => { if (gen == _slideGen) StopSlide(); }));
+                    dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Send, new Action(() =>
+                    {
+                        if (gen != _slideGen) return;
+                        StopSlide();
+                        RefreshWidgets(); // スライドが終わってから、ウィジェットを最新に
+                    }));
                     break;
                 }
-                double eased = 1 - Math.Pow(1 - p, 3);
+                double eased = 1 - Math.Pow(1 - p, 2.5); // 動き始めがはっきり見え、最後はゆっくり止まる
                 int dx = (int)Math.Round(fromX * (1 - eased)), dy = (int)Math.Round(fromY * (1 - eased));
                 dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Send, new Action(() =>
                 {
@@ -256,6 +305,7 @@ public sealed class StartMenuWindow : Window
         if (!IsVisible) return;
         if (_openFlyout?.IsOpen == true) return; // 右クリックメニュー表示中は閉じない
         _hiddenAt = DateTime.Now;
+        _widgetsRefreshPending = false;
         StopSlide();
         _root.BeginAnimation(OpacityProperty, null);
         Cloak(false);
@@ -487,10 +537,14 @@ public sealed class StartMenuWindow : Window
     // ------------------------------------------------------------------
     // ページ
 
+    /// <summary>表示中の一覧（ピン留め / すべてのアプリ）が古くなった（アプリの一覧が変わった）。</summary>
+    private bool _pageDirty = true;
+
     private void ShowPage(Page page)
     {
         CloseFolder();
         _page = page;
+        _pageDirty = false;
         _content.Content = page switch
         {
             Page.AllApps => BuildAllApps(),

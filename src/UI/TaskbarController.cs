@@ -562,6 +562,17 @@ public sealed partial class TaskbarController : IDisposable
 
     // ------------------------------------------------------------------
 
+    /// <summary>
+    /// バーのウィンドウを最前面の帯の一番上に出す（アクティブにはしない）。スタートメニューがバーの下から滑り出るように見せるため。
+    /// 全画面アプリが前面にあるときは、バーは奥に回してあるので何もしない。
+    /// </summary>
+    public void RaiseBars()
+    {
+        if (_disposed || _reservation.IsFullscreenAppActive) return;
+        foreach (var s in _surfaces)
+            Win32.SetWindowPos(s.Handle, Win32.HWND_TOPMOST, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+    }
+
     /// <summary>explorer 再起動時など、作業領域の予約をやり直す。</summary>
     public void Reapply() => _reservation.Reserve(Edge, _settings.TaskbarHeight + Margins.across * 2);
 

@@ -207,7 +207,7 @@ public static class Program
             try { UnregisterHotKey(_start.Handle, HotkeyEmergencyId); } catch { }
             _start.Close();
         }
-        _start = new StartMenuWindow(_settings, _catalog) { AnchorProvider = StartAnchor };
+        _start = new StartMenuWindow(_settings, _catalog) { AnchorProvider = StartAnchor, RaiseTaskbar = () => _taskbar?.RaiseBars() };
         _start.OpenSettingsRequested += ShowSettings;
         _start.ExitRequested += Exit;
         HwndSource.FromHwnd(_start.Handle)!.AddHook(BroadcastHook);

@@ -60,6 +60,18 @@ public sealed class WidgetPanel : ScrollViewer
 
     public void Close() => _tick.Stop();
 
+    /// <summary>一度でも作ってあるか（作ってあれば、作り直さずに前回の内容を出せる）。</summary>
+    public bool IsBuilt => Content != null;
+
+    /// <summary>作り直さずに、時計・システムの表示だけ最新にして更新を再開する。</summary>
+    public void Resume()
+    {
+        _stats.CpuPercent(); // 初回の基準値
+        _ticks = 0;
+        Tick();
+        _tick.Start();
+    }
+
     private void Build()
     {
         var t = Theme.Current;
