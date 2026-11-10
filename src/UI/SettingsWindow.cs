@@ -484,6 +484,10 @@ public sealed class SettingsWindow : Window
                 _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.UseCustomTaskbar && _s.TaskbarBackground != SurfaceStyle.Solid));
 
         Group(p, "\uE916", L.T("アニメーション"), L.T("開くときに滑り込ませるか、パッと表示するか"),
+            DropDownRow(L.T("アニメーションの速さ"), L.T("開くときの動きの長さ（スタート メニュー・プレビュー・メニューなど）"),
+                new[] { ("Fast", L.T("速い")), ("Normal", L.T("標準")), ("Slow", L.T("ゆっくり")) },
+                _s.AnimationSpeed.ToString(), v => _s.AnimationSpeed = Enum.Parse<AnimationSpeed>(v),
+                _s.AnimateStartMenu || _s.AnimatePreviews || _s.AnimateTrayOverflow || _s.AnimateMenus),
             ToggleRow(L.T("スタート メニュー"), L.T("下から滑り込みながら表示します（フォルダーを開くときの拡大も）"), _s.AnimateStartMenu, v => _s.AnimateStartMenu = v),
             ToggleRow(L.T("ウィンドウのプレビューと仮想デスクトップの一覧"), "", _s.AnimatePreviews, v => _s.AnimatePreviews = v),
             ToggleRow(L.T("通知領域（「^」）の展開"), "", _s.AnimateTrayOverflow, v => _s.AnimateTrayOverflow = v),

@@ -191,10 +191,10 @@ public static class FluentSurface
             double baseOffset = vertical ? popup.HorizontalOffset : popup.VerticalOffset;
             // 画面の端の側から出てくる: 下のバーなら下から（+）、上なら上から（-）、左なら左から（-）、右なら右から（+）
             double from = edge is TaskbarEdge.Bottom or TaskbarEdge.Right ? distance : -distance;
-            popup.BeginAnimation(prop, new DoubleAnimation(baseOffset + from, baseOffset, TimeSpan.FromMilliseconds(220))
+            popup.BeginAnimation(prop, new DoubleAnimation(baseOffset + from, baseOffset, Anim.Ms(220))
                 { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
             if (popup.Child is UIElement child)
-                child.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
+                child.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Anim.Ms(140)));
         };
     }
 
@@ -209,10 +209,10 @@ public static class FluentSurface
             double baseOffset = popup.VerticalOffset;
             var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
             popup.BeginAnimation(Popup.VerticalOffsetProperty,
-                new DoubleAnimation(baseOffset + (fromBelow ? distance : -distance), baseOffset, TimeSpan.FromMilliseconds(220))
+                new DoubleAnimation(baseOffset + (fromBelow ? distance : -distance), baseOffset, Anim.Ms(220))
                 { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
             if (popup.Child is UIElement child)
-                child.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
+                child.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Anim.Ms(140)));
         };
     }
 
@@ -222,8 +222,8 @@ public static class FluentSurface
         var scale = new ScaleTransform(1, 0.85);
         content.RenderTransformOrigin = new Point(0.5, Math.Clamp(originY, 0, 1));
         content.RenderTransform = scale;
-        scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.85, 1, TimeSpan.FromMilliseconds(180)) { EasingFunction = ease });
-        content.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120)));
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.85, 1, Anim.Ms(180)) { EasingFunction = ease });
+        content.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Anim.Ms(120)));
     }
 }
 

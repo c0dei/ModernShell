@@ -18,6 +18,8 @@ public enum StartButtonPosition { WithApps, LeftEdge }
 /// Solid: テーマ色（ライト/ダーク）の単色 / Transparent: テーマ色を半透明で（ぼかし無し） / Blur: 壁紙を強くぼかした下地にテーマ色を重ねる（Mica と同じ考え方）
 /// </summary>
 public enum SurfaceStyle { Solid, Transparent, Blur }
+/// <summary>開くときのアニメーションの速さ（Fast = 短く / Slow = ゆっくり）。</summary>
+public enum AnimationSpeed { Fast, Normal, Slow }
 /// <summary>スタートメニューを開く位置。Auto: スタートボタンの位置に合わせる</summary>
 public enum StartMenuPosition { Auto, Left, Center }
 /// <summary>タスクバーのピン留めの出どころ。Windows: Windows のタスクバーと同じ内容・並び順（読み取り） / ModernShell: 独自に管理</summary>
@@ -68,6 +70,8 @@ public sealed class Settings
     public bool AnimatePreviews { get; set; } = true;
     public bool AnimateTrayOverflow { get; set; } = true;
     public bool AnimateMenus { get; set; } = true;
+    /// <summary>開くときのアニメーション全体の速さ。</summary>
+    public AnimationSpeed AnimationSpeed { get; set; } = AnimationSpeed.Normal;
     public bool GroupTaskbarButtons { get; set; } = true;
     public bool ShowTaskbarLabels { get; set; } = false;
     public bool ShowSeconds { get; set; } = false;

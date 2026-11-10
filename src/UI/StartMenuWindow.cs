@@ -251,7 +251,7 @@ public sealed class StartMenuWindow : Window
         _slideTarget = (x, y);
         var dispatcher = Dispatcher;
         var hwnd = Handle;
-        const double ms = SlideMs;
+        double ms = SlideMs * Anim.Factor;
         new System.Threading.Thread(() =>
         {
             var clock = new Stopwatch();
@@ -748,9 +748,9 @@ public sealed class StartMenuWindow : Window
         panel.RenderTransformOrigin = new Point(0.5, 0.5);
         panel.RenderTransform = scale;
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.94, 1, TimeSpan.FromMilliseconds(160)) { EasingFunction = ease });
-        scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.94, 1, TimeSpan.FromMilliseconds(160)) { EasingFunction = ease });
-        overlay.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120)));
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.94, 1, Anim.Ms(160)) { EasingFunction = ease });
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.94, 1, Anim.Ms(160)) { EasingFunction = ease });
+        overlay.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Anim.Ms(120)));
     }
 
     private void CloseFolder()

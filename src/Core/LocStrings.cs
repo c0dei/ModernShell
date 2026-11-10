@@ -363,5 +363,9 @@ public static partial class L
         ["島と画面の上下の端とのあいだの距離"] = "Distance between the islands and the top/bottom screen edges",
         ["帯の余白（上下）"] = "Band margin (top/bottom)",
         ["帯と画面の上下の端とのあいだの距離。Windows は画面端に接したウィンドウの角を丸めないので、角丸にしたいときは余白を付けてください"] = "Distance between the band and the top/bottom screen edges. Windows doesn't round windows that touch the screen edge, so add a margin if you want rounded corners",
+        ["アニメーションの速さ"] = "Animation speed",
+        ["開くときの動きの長さ（スタート メニュー・プレビュー・メニューなど）"] = "How long the opening animations last (Start menu, previews, menus and more)",
+        ["速い"] = "Fast",
+        ["ゆっくり"] = "Slow",
     };
 }
