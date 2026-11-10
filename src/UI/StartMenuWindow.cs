@@ -185,46 +185,67 @@ public sealed class StartMenuWindow : Window
             (s, _) => { ((System.Windows.Threading.DispatcherTimer)s!).Stop(); Run(); }, Dispatcher).Start();
     }
 
-    private EventHandler? _slide;
     private bool _shownOnce;
-    private int _slideFrames;
+
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    private static extern int DwmFlush();
+
+    /// <summary>スライドの世代。新しいスライドや中断のたびに増やし、古いスライドの未処理の更新を無効にする。</summary>
+    private int _slideGen;
 
     /// <summary>
-    /// ウィンドウごと（背景も一緒に）下から滑り込ませる。プレビューやトレイの展開と同じ動き。
-    /// 描画のフレームに合わせて位置を動かし、最初のフレームが描かれてから時間を数え始める（表示直後の重い 1 フレームで飛ばないように）。
+    /// ウィンドウごと（背景も一緒に）端から滑り込ませる。プレビューやトレイの展開と同じ動き。
+    /// 位置を動かすタイミングを、画面の更新（DWM の合成）に合わせる: 専用のスレッドが DwmFlush で次の合成を待ち、
+    /// そのたびに経過時間から位置を計算して動かす。WPF の描画のタイミング（CompositionTarget.Rendering）で動かすと、
+    /// GPU が無くソフトウェアで描画している PC では、描画のタイミングと画面の更新がずれて、動きがガタつく。
+    /// 最初の 1 フレームは時間を数えない（表示直後の重い 1 フレームで飛ばないように）。
+    /// 合成が遅い PC（最初の数フレームの平均が 45 ms 超 = 約 22 fps 未満）では、ぎこちない動きを見せるより、途中で終えて最終位置へ移す。
     /// </summary>
     private void SlideIn(int x, int y, int fromX, int fromY)
     {
-        if (_slide != null) CompositionTarget.Rendering -= _slide; // 位置（_slideTarget）はそのまま
-        _slide = null;
-        _slideFrames = 0;
-        const double ms = 220;
-        Stopwatch? clock = null;
-        _slide = (_, _) =>
-        {
-            if (clock == null)
-            {
-                clock = Stopwatch.StartNew();
-                return;
-            }
-            _slideFrames++;
-            double p = Math.Min(1, clock.Elapsed.TotalMilliseconds / ms);
-            if (p >= 1) Log.Info($"timing: start menu slide {_slideFrames} frames in {clock.ElapsedMilliseconds} ms");
-            double eased = 1 - Math.Pow(1 - p, 3);
-            int dx = (int)Math.Round(fromX * (1 - eased)), dy = (int)Math.Round(fromY * (1 - eased));
-            Win32.SetWindowPos(Handle, IntPtr.Zero, x + dx, y + dy, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
-            if (p >= 1) StopSlide();
-        };
-        CompositionTarget.Rendering += _slide;
+        int gen = ++_slideGen;
         _slideTarget = (x, y);
+        var dispatcher = Dispatcher;
+        var hwnd = Handle;
+        const double ms = 220;
+        new System.Threading.Thread(() =>
+        {
+            var clock = new Stopwatch();
+            double last = 0, maxInterval = 0;
+            int frames = 0;
+            bool synced = true, cutShort = false;
+            while (System.Threading.Volatile.Read(ref _slideGen) == gen)
+            {
+                if (DwmFlush() != 0) { synced = false; System.Threading.Thread.Sleep(8); } // DWM が使えない環境では、一定の間隔で動かす
+                if (!clock.IsRunning) { clock.Start(); continue; }
+                double now = clock.Elapsed.TotalMilliseconds;
+                frames++;
+                maxInterval = Math.Max(maxInterval, now - last);
+                last = now;
+                double p = Math.Min(1, now / ms);
+                cutShort = frames >= 4 && now / frames > 45 && p < 0.9;
+                if (p >= 1 || cutShort)
+                {
+                    dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Send, new Action(() => { if (gen == _slideGen) StopSlide(); }));
+                    break;
+                }
+                double eased = 1 - Math.Pow(1 - p, 3);
+                int dx = (int)Math.Round(fromX * (1 - eased)), dy = (int)Math.Round(fromY * (1 - eased));
+                dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Send, new Action(() =>
+                {
+                    if (gen != _slideGen || _closed) return;
+                    Win32.SetWindowPos(Handle, IntPtr.Zero, x + dx, y + dy, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+                }));
+            }
+            Log.Info($"timing: start menu slide {frames} frames in {last:0} ms (avg {(frames > 0 ? last / frames : 0):0.0} ms, max {maxInterval:0} ms, {(synced ? "dwm-synced" : "timer")}{(cutShort ? ", cut short: slow compositing" : "")})");
+        }) { IsBackground = true, Priority = System.Threading.ThreadPriority.AboveNormal, Name = "StartMenuSlide" }.Start();
     }
 
     private (int x, int y)? _slideTarget;
 
     private void StopSlide()
     {
-        if (_slide != null) CompositionTarget.Rendering -= _slide;
-        _slide = null;
+        _slideGen++; // 動いているスライドを止め、まだ処理されていない更新も無効にする
         if (_slideTarget is { } t)
             Win32.SetWindowPos(Handle, IntPtr.Zero, t.x, t.y, 0, 0, Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
         _slideTarget = null;
