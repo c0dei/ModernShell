@@ -147,6 +147,9 @@ public static class Program
         _hooks.ImeToggleKeyPressed += vk => _taskbar?.ImeToggleKey(vk);
         _hooks.Install();
 
+        // 天気は、起動したらすぐ裏で取っておく（初めてスタートメニューを開いたときに「読み込み中」にならないように）
+        if (_settings.ShowWidgets && _settings.WidgetWeather)
+            _ = System.Threading.Tasks.Task.Run(() => Weather.GetAsync(_settings.WeatherCity));
         _ = _catalog.LoadAsync().ContinueWith(_ => app.Dispatcher.BeginInvoke(() => { _catalog.Watch(); _catalog.NotifyChanged(); }));
 
         ApplyTaskbarMode();

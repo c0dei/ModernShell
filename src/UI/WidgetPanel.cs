@@ -311,18 +311,26 @@ public sealed class WidgetPanel : ScrollViewer
         var row = UiKit.Row(glyph, text);
         var card = Card(t, L.T("天気 · ") + _settings.WeatherCity, row);
 
-        Task.Run(() => Weather.GetAsync(_settings.WeatherCity)).ContinueWith(r =>
+        void Apply(Weather.Report w)
         {
-            var w = r.Result;
-            Dispatcher.BeginInvoke(() =>
-            {
-                if (w == null) { desc.Text = L.T("取得できませんでした（設定で地点を確認）"); return; }
-                temp.Text = $"{w.Temperature:0}°";
-                desc.Text = $"{w.Place}  {w.Description}";
-                range.Text = L.F("最高 {0:0}° / 最低 {1:0}°", w.Max, w.Min);
-                glyph.Text = w.IsClear ? "" : "";
-            });
-        }, TaskScheduler.Default);
+            temp.Text = $"{w.Temperature:0}°";
+            desc.Text = $"{w.Place}  {w.Description}";
+            range.Text = L.F("最高 {0:0}° / 最低 {1:0}°", w.Max, w.Min);
+            glyph.Text = w.IsClear ? "" : "";
+        }
+
+        // 前回の取得結果があれば、古くても最初からそれを出す（開くたびに「読み込み中」に戻さない）。
+        // 古い（20 分以上）ときだけ、裏で取りに行き、取れたら値を入れ替える
+        string city = _settings.WeatherCity;
+        var cached = Weather.Cached(city);
+        if (cached != null) Apply(cached);
+        if (cached == null || !Weather.IsFresh(city))
+            Task.Run(() => Weather.GetAsync(city)).ContinueWith(r =>
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (r.Result is { } w) Apply(w);
+                    else if (cached == null) desc.Text = L.T("取得できませんでした（設定で地点を確認）");
+                }), TaskScheduler.Default);
         return card;
     }
 

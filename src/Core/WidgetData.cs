@@ -27,15 +27,43 @@ public static class Weather
         Http.DefaultRequestHeaders.UserAgent.ParseAdd("ModernShell/0.2");
     }
 
-    public static async Task<Report?> GetAsync(string city)
+    private static readonly TimeSpan Fresh = TimeSpan.FromMinutes(20);
+    private static Task<Report?>? _inflight;
+    private static string? _inflightCity;
+    private static DateTime _failedAt = DateTime.MinValue;
+
+    /// <summary>前回の取得結果（古くても返す）。表示を「読み込み中」にしないため、まずこれを出す。</summary>
+    public static Report? Cached(string city) => _cache != null && _cacheCity == city ? _cache : null;
+
+    /// <summary>取得結果が新しい（20 分以内）か。</summary>
+    public static bool IsFresh(string city) => Cached(city) is { } c && DateTime.Now - c.FetchedAt < Fresh;
+
+    /// <summary>
+    /// 天気を返す。新しければキャッシュ、古ければ取りに行く。取得中に同じ地点がもう一度頼まれたら、同じ取得を待つ
+    /// （スタートメニューを続けて開いても、通信は 1 回）。失敗した直後は 2 分のあいだ取りに行かない（オフラインで毎回待たされないように）。
+    /// 取りに行って失敗したときは、古い結果があればそれを返す。
+    /// </summary>
+    public static Task<Report?> GetAsync(string city)
     {
-        if (string.IsNullOrWhiteSpace(city)) return null;
-        if (_cache != null && _cacheCity == city && DateTime.Now - _cache.FetchedAt < TimeSpan.FromMinutes(20)) return _cache;
+        if (string.IsNullOrWhiteSpace(city)) return Task.FromResult<Report?>(null);
+        if (IsFresh(city)) return Task.FromResult(Cached(city));
+        if (DateTime.Now - _failedAt < TimeSpan.FromMinutes(2)) return Task.FromResult(Cached(city));
+        if (_inflight is { IsCompleted: false } && _inflightCity == city) return _inflight;
+        _inflightCity = city;
+        return _inflight = FetchAsync(city);
+    }
+
+    private static async Task<Report?> FetchAsync(string city)
+    {
         try
         {
             var geoUrl = "https://geocoding-api.open-meteo.com/v1/search?count=1&language=ja&format=json&name=" + Uri.EscapeDataString(city.Trim());
             using var geo = JsonDocument.Parse(await Http.GetStringAsync(geoUrl));
-            if (!geo.RootElement.TryGetProperty("results", out var results) || results.GetArrayLength() == 0) return null;
+            if (!geo.RootElement.TryGetProperty("results", out var results) || results.GetArrayLength() == 0)
+            {
+                _failedAt = DateTime.Now; // 地点が見つからない: 設定を直すまで毎回取りに行かない
+                return null;
+            }
             var place = results[0];
             double lat = place.GetProperty("latitude").GetDouble(), lon = place.GetProperty("longitude").GetDouble();
             string name = place.TryGetProperty("name", out var n) ? n.GetString() ?? city : city;
@@ -57,7 +85,8 @@ public static class Weather
         catch (Exception ex)
         {
             Log.Error("weather", ex);
-            return null;
+            _failedAt = DateTime.Now;
+            return Cached(city); // 古い結果があればそれを返す
         }
     }
 
