@@ -163,6 +163,8 @@ public sealed class Settings
     }
     /// <summary>天気の地点（都市名。Open-Meteo のジオコーディングで検索）。</summary>
     public string WeatherCity { get; set; } = "Tokyo";
+    /// <summary>天気の更新間隔（分）。</summary>
+    public int WeatherRefreshMinutes { get; set; } = 20;
 
     // --- 一般 ---
     public bool RunAtStartup { get; set; } = false;

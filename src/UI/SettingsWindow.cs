@@ -430,6 +430,10 @@ public sealed class SettingsWindow : Window
             p.Children.Add(WidgetRow(id, title, desc, i, order.Count, on));
             if (id == "weather")
                 p.Children.Add(TextRow(L.T("天気の地点"), L.T("都市名（例: Tokyo, Osaka, 札幌）"), _s.WeatherCity, v => _s.WeatherCity = v, on && _s.WidgetWeather));
+            if (id == "weather")
+                p.Children.Add(DropDownRow(L.T("天気の更新間隔"), L.T("スタート メニューを開いている間も、この間隔で自動更新します（カードの更新ボタンで今すぐ更新もできます）"),
+                    new[] { ("10", L.T("10 分")), ("20", L.T("20 分")), ("30", L.T("30 分")), ("60", L.T("1 時間")), ("180", L.T("3 時間")) },
+                    _s.WeatherRefreshMinutes.ToString(), v => _s.WeatherRefreshMinutes = int.Parse(v), on && _s.WidgetWeather));
         }
     }
 

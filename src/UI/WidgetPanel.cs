@@ -32,6 +32,7 @@ public sealed class WidgetPanel : ScrollViewer
     /// <summary>ドライブごとの行（C:, D: …）。</summary>
     private readonly List<(string root, ProgressBar bar, TextBlock text)> _disks = new();
     private int _ticks;
+    private Action? _weatherAutoRefresh;
 
     public event Action? LaunchedSomething;
 
@@ -98,6 +99,7 @@ public sealed class WidgetPanel : ScrollViewer
     private void Tick()
     {
         var now = DateTime.Now;
+        if (now.Second == 0) _weatherAutoRefresh?.Invoke();
         if (_clockTime != null) _clockTime.Text = now.ToString("H:mm");
         if (_clockDate != null) _clockDate.Text = (L.IsEnglish ? now.ToString("ddd, MMM d", L.Culture) : now.ToString("M月d日 (ddd)", L.Culture));
 
@@ -241,13 +243,14 @@ public sealed class WidgetPanel : ScrollViewer
         ScrollToVerticalOffset(scroll);
     }
 
-    private static Border Card(Theme t, string title, UIElement body)
+    private static Border Card(Theme t, string title, UIElement body, UIElement? action = null)
     {
         var stack = new StackPanel();
         var h = new DockPanel { Margin = new Thickness(0, 0, 0, 8), Background = Brushes.Transparent };
         var grip = UiKit.Glyph("\uE76F", 12, t.TextSecondary);
         DockPanel.SetDock(grip, Dock.Right);
         h.Children.Add(grip);
+        if (action != null) { DockPanel.SetDock(action, Dock.Right); h.Children.Add(action); }
         h.Children.Add(UiKit.Label(title, Fs(12), t.TextSecondary, FontWeights.SemiBold));
         stack.Children.Add(h);
         stack.Children.Add(body);
@@ -309,28 +312,50 @@ public sealed class WidgetPanel : ScrollViewer
         text.Children.Add(desc);
         text.Children.Add(range);
         var row = UiKit.Row(glyph, text);
-        var card = Card(t, L.T("天気 · ") + _settings.WeatherCity, row);
+        var refresh = UiKit.Glyph("\uE72C", 12, t.TextSecondary);
+        var refreshBtn = new Border
+        {
+            Child = refresh, Padding = new Thickness(6, 2, 6, 2), Margin = new Thickness(0, 0, 4, 0), Cursor = Cursors.Hand,
+            Background = Brushes.Transparent, CornerRadius = new CornerRadius(4), ToolTip = L.T("今すぐ更新"),
+        };
+        var card = Card(t, L.T("天気 · ") + _settings.WeatherCity, row, refreshBtn);
 
         void Apply(Weather.Report w)
         {
             temp.Text = $"{w.Temperature:0}°";
             desc.Text = $"{w.Place}  {w.Description}";
             range.Text = L.F("最高 {0:0}° / 最低 {1:0}°", w.Max, w.Min);
-            glyph.Text = w.IsClear ? "" : "";
+            glyph.Text = w.IsClear ? "\uE706" : "\uE753";
+            refreshBtn.ToolTip = L.F("{0} に更新（クリックで今すぐ更新）", w.FetchedAt.ToString("H:mm"));
         }
 
-        // 前回の取得結果があれば、古くても最初からそれを出す（開くたびに「読み込み中」に戻さない）。
-        // 古い（20 分以上）ときだけ、裏で取りに行き、取れたら値を入れ替える
         string city = _settings.WeatherCity;
-        var cached = Weather.Cached(city);
-        if (cached != null) Apply(cached);
-        if (cached == null || !Weather.IsFresh(city))
-            Task.Run(() => Weather.GetAsync(city)).ContinueWith(r =>
+        bool busy = false;
+        // 取りに行く。表示は消さず、取れたら値を入れ替える（取得中はボタンを薄くする）。force: 手動更新
+        void Fetch(bool force)
+        {
+            if (busy) return;
+            busy = true;
+            refreshBtn.Opacity = 0.4;
+            var had = Weather.Cached(city) != null;
+            Task.Run(() => force ? Weather.RefreshAsync(city) : Weather.GetAsync(city)).ContinueWith(r =>
                 Dispatcher.BeginInvoke(() =>
                 {
-                    if (r.Result is { } w) Apply(w);
-                    else if (cached == null) desc.Text = L.T("取得できませんでした（設定で地点を確認）");
+                    busy = false;
+                    refreshBtn.Opacity = 1;
+                    if (r.Exception == null && r.Result is { } w) Apply(w);
+                    else if (!had && Weather.Cached(city) == null) desc.Text = L.T("取得できませんでした（設定で地点を確認）");
                 }), TaskScheduler.Default);
+        }
+        refreshBtn.MouseLeftButtonDown += (_, e) => { e.Handled = true; Fetch(true); };
+        refreshBtn.MouseEnter += (_, _) => refreshBtn.Background = t.Hover;
+        refreshBtn.MouseLeave += (_, _) => refreshBtn.Background = Brushes.Transparent;
+
+        // 前回の取得結果があれば、古くても最初からそれを出す（開くたびに「読み込み中」に戻さない）。
+        // 古いときだけ裏で取りに行く。開いている間も、更新間隔を過ぎたら（Tick から）自動で更新する
+        if (Weather.Cached(city) is { } cached) Apply(cached);
+        if (!Weather.IsFresh(city)) Fetch(false);
+        _weatherAutoRefresh = () => { if (!Weather.IsFresh(city)) Fetch(false); };
         return card;
     }
 

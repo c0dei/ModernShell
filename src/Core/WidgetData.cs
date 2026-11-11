@@ -27,7 +27,7 @@ public static class Weather
         Http.DefaultRequestHeaders.UserAgent.ParseAdd("ModernShell/0.2");
     }
 
-    private static readonly TimeSpan Fresh = TimeSpan.FromMinutes(20);
+    private static TimeSpan Fresh => TimeSpan.FromMinutes(Math.Clamp(Settings.Current?.WeatherRefreshMinutes ?? 20, 5, 360));
     private static Task<Report?>? _inflight;
     private static string? _inflightCity;
     private static DateTime _failedAt = DateTime.MinValue;
@@ -48,6 +48,15 @@ public static class Weather
         if (string.IsNullOrWhiteSpace(city)) return Task.FromResult<Report?>(null);
         if (IsFresh(city)) return Task.FromResult(Cached(city));
         if (DateTime.Now - _failedAt < TimeSpan.FromMinutes(2)) return Task.FromResult(Cached(city));
+        if (_inflight is { IsCompleted: false } && _inflightCity == city) return _inflight;
+        _inflightCity = city;
+        return _inflight = FetchAsync(city);
+    }
+
+    /// <summary>手動の更新: 新しさやバックオフに関係なく取りに行く（取得中ならそれを待つ）。失敗したら古い結果を返す。</summary>
+    public static Task<Report?> RefreshAsync(string city)
+    {
+        if (string.IsNullOrWhiteSpace(city)) return Task.FromResult<Report?>(null);
         if (_inflight is { IsCompleted: false } && _inflightCity == city) return _inflight;
         _inflightCity = city;
         return _inflight = FetchAsync(city);
