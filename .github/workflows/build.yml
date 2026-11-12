@@ -27,7 +27,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        rid: [win-x64, win-arm64]
+        rid: [win-x64]  # win-arm64 は一時的に無効（戻すときは [win-x64, win-arm64]）
     steps:
       - uses: actions/checkout@v7
 
@@ -76,26 +76,26 @@ jobs:
           path: dist/ModernShell-${{ steps.ver.outputs.version }}-${{ matrix.rid }}/
 
       # 持ち運び用: 1 ファイルで動く単一 exe（メモリは多め）。圧縮すると起動時に展開する分さらに増えるので圧縮しない
-      - name: Publish (single exe)
-        shell: bash
-        run: >
-          dotnet publish ModernShell.csproj -c Release -r ${{ matrix.rid }}
-          --self-contained true
-          -p:PublishSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:EnableCompressionInSingleFile=false
-          -p:DebugType=none
-          -p:Version=${{ steps.ver.outputs.version }}
-          -o publish
+      # - name: Publish (single exe)
+      #   shell: bash
+      #   run: >
+      #     dotnet publish ModernShell.csproj -c Release -r ${{ matrix.rid }}
+      #     --self-contained true
+      #     -p:PublishSingleFile=true
+      #     -p:IncludeNativeLibrariesForSelfExtract=true
+      #     -p:EnableCompressionInSingleFile=false
+      #     -p:DebugType=none
+      #     -p:Version=${{ steps.ver.outputs.version }}
+      #     -o publish
 
-      - name: Rename
-        shell: bash
-        run: mv publish/ModernShell.exe "publish/ModernShell-${{ steps.ver.outputs.version }}-${{ matrix.rid }}-single.exe"
+      # - name: Rename
+      #   shell: bash
+      #   run: mv publish/ModernShell.exe "publish/ModernShell-${{ steps.ver.outputs.version }}-${{ matrix.rid }}-single.exe"
 
-      - uses: actions/upload-artifact@v7
-        with:
-          name: ModernShell-${{ matrix.rid }}-single
-          path: publish/*.exe
+      # - uses: actions/upload-artifact@v7
+      #   with:
+      #     name: ModernShell-${{ matrix.rid }}-single
+      #     path: publish/*.exe
 
       # リリースノート: release-notes/<タグ>.md があれば、それを本文にしてリリースを作る（Claude などがタグを push するだけでリリースできる）。
       # 無ければ、画面で書いた本文をそのまま残す
@@ -122,4 +122,4 @@ jobs:
           body_path: ${{ steps.notes.outputs.path }}
           files: |
             dist/*.zip
-            publish/*.exe
+            # publish/*.exe  (単一 exe は一時的に無効)
