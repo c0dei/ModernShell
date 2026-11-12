@@ -414,13 +414,13 @@ public sealed partial class TaskbarController : IDisposable
         {
             if (e.Handled) return;
             e.Handled = true;
-            var popup = Flyout.Show(content, new[]
+            var popup = Flyout.Show(s, new[]
             {
                 new MenuItemSpec("\uE9D9", L.T("タスク マネージャー"), SystemActions.OpenTaskManager),
                 MenuItemSpec.Separator,
                 new MenuItemSpec("\uE713", L.T("タスクバーの設定"), () => OpenSettingsRequested?.Invoke()),
             }, FlyoutPlacement);
-            FluentSurface.PlaceAligned(popup, content, Edge, _settings.BarMenuAlign, at: e.GetPosition(content));
+            FluentSurface.PlaceAligned(popup, s, Edge, _settings.BarMenuAlign, at: e.GetPosition(s));
         };
         s.ContentSizeChanged += Arrange;
         s.ContentRendered += (_, _) => FirstDrawn?.Invoke();

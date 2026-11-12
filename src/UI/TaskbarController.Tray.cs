@@ -32,11 +32,15 @@ public sealed partial class TaskbarController
         var p = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
 
         // 「^」ボタン: 開く向き（画面の内側）を指す山形
-        string chevron = Edge switch { TaskbarEdge.Top => "\uE70D", TaskbarEdge.Left => "\uE76C", TaskbarEdge.Right => "\uE76B", _ => "\uE70E" };
+        // 下のバーと同じ「上向きの山形」を回して使う（左右専用のグリフに頼らない）
+        double chevronAngle = Edge switch { TaskbarEdge.Top => 180, TaskbarEdge.Left => 90, TaskbarEdge.Right => 270, _ => 0 };
+        var chevronGlyph = UiKit.Glyph("\uE70E", 12);
+        chevronGlyph.RenderTransformOrigin = new Point(0.5, 0.5);
+        chevronGlyph.RenderTransform = new RotateTransform(chevronAngle);
         _overflowButton = new Tile
         {
             Width = Vertical ? TileH : 28, Height = Vertical ? 28 : TileH, Margin = Vertical ? new Thickness(0, 2, 0, 0) : new Thickness(2, 0, 0, 0),
-            Child = UiKit.Glyph(chevron, 12), ToolTip = L.T("隠れているインジケーターを表示"),
+            Child = chevronGlyph, ToolTip = L.T("隠れているインジケーターを表示"),
         };
         _overflowButton.Click += ShowOverflow;
         MakeOverflowDropTarget(_overflowButton); // 「^」の上に落としてもしまえる
@@ -135,6 +139,7 @@ public sealed partial class TaskbarController
         }
         StallDetector.Phase = "taskbar: tray overflow";
         _overflowButton.Visibility = Icons(_shell.Tray?.UnpinnedIcons).Any() || _trayEditMode ? Visibility.Visible : Visibility.Collapsed;
+        if (Vertical) Log.Info($"tray: pinned={pinned.Count} unpinned={Icons(_shell.Tray?.UnpinnedIcons).Count()} overflowButton={_overflowButton.Visibility}");
         if (_overflowPopup?.IsOpen == true) FillOverflow();
         PruneWatched();
     }

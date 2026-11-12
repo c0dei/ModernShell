@@ -163,7 +163,11 @@ public static class FluentSurface
     {
         UseTaskbarLook(popup);
         popup.PlacementTarget = anchor;
-        popup.PlacementRectangle = at is { } pt ? new Rect(pt, new Size(0, 0)) : Rect.Empty;
+        // カーソル位置が基準のとき: バーに沿った方向はカーソルの位置、直角の方向はバー全体（メニューがバーに重ならないように）
+        bool horizontalBar = edge is TaskbarEdge.Top or TaskbarEdge.Bottom;
+        popup.PlacementRectangle = at is { } pt
+            ? (horizontalBar ? new Rect(pt.X, 0, 0, anchor.ActualHeight) : new Rect(0, pt.Y, anchor.ActualWidth, 0))
+            : Rect.Empty;
         popup.Placement = PlacementMode.Custom;
         popup.VerticalOffset = 0;
         popup.HorizontalOffset = 0; // 中央合わせなので、影の余白のずらしは要らない
