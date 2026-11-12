@@ -94,6 +94,47 @@ public sealed partial class TaskbarController
         }
         _apps.Visibility = _apps.Children.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         PruneWatched();
+        LogGroups(ordered);
+    }
+
+    private string _lastGroupDump = "";
+
+    /// <summary>複数ウィンドウのボタンの調査用: グループごとのウィンドウと、同じアプリなのにタスクバーに載っていないウィンドウを、変化があったときだけログに残す。</summary>
+    private void LogGroups(IEnumerable<Group> groups)
+    {
+        try
+        {
+            var sb = new System.Text.StringBuilder();
+            var tracked = new HashSet<IntPtr>();
+            var pids = new HashSet<uint>();
+            bool splitApp = false;
+            foreach (var g in groups.Where(x => x.Windows.Count > 0))
+            {
+                sb.Append($"\n  group {g.Key}: {g.Windows.Count}");
+                foreach (var w in g.Windows)
+                {
+                    tracked.Add(w.Handle);
+                    Win32.GetWindowThreadProcessId(w.Handle, out var pid);
+                    if (!pids.Add(pid) && g.Windows.Count == 1) splitApp = true;
+                    sb.Append($"\n    {w.Handle:X} pid={pid} \"{Truncate(w.Title ?? "", 30)}\"");
+                }
+            }
+            Win32.EnumWindows((h, _) =>
+            {
+                if (tracked.Contains(h) || !Win32.IsWindowVisible(h)) return true;
+                Win32.GetWindowThreadProcessId(h, out var pid);
+                if (!pids.Contains(pid)) return true;
+                var title = new System.Text.StringBuilder(80); Win32.GetWindowText(h, title, 80);
+                var cls = new System.Text.StringBuilder(80); Win32.GetClassName(h, cls, 80);
+                long ex = (long)Win32.GetWindowLongPtr(h, Win32.GWL_EXSTYLE);
+                sb.Append($"\n  untracked {h:X} pid={pid} class={cls} ex={ex:X} cloaked={Win32.IsCloaked(h)} owner={Win32.GetWindow(h, 4):X} \"{Truncate(title.ToString(), 30)}\"");
+                return true;
+            }, IntPtr.Zero);
+            var dump = sb.ToString();
+            if (dump != _lastGroupDump && (splitApp || dump.Contains("untracked"))) Log.Info("taskbar groups:" + dump);
+            _lastGroupDump = dump;
+        }
+        catch (Exception ex) { Log.Error("log groups", ex); }
     }
 
     private Tile AppButton(Group g)
