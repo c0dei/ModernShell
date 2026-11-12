@@ -76,6 +76,14 @@ public sealed class Settings
     public AnimationSpeed AnimationSpeed { get; set; } = AnimationSpeed.Normal;
     /// <summary>アプリのアイコン（右クリックのメニュー・ウィンドウ名のリスト）の基準。</summary>
     public MenuAlign IconMenuAlign { get; set; } = MenuAlign.Center;
+    /// <summary>プレビューをオフにしたときの、ウィンドウ名のリストの基準。</summary>
+    public MenuAlign WindowListAlign { get; set; } = MenuAlign.Center;
+    /// <summary>ウィンドウのプレビュー（サムネイル）の基準。</summary>
+    public MenuAlign PreviewAlign { get; set; } = MenuAlign.Center;
+    /// <summary>仮想デスクトップの一覧（タスク ビュー ボタン）の基準。</summary>
+    public MenuAlign DesktopsAlign { get; set; } = MenuAlign.Center;
+    /// <summary>「^」（隠れているトレイアイコンの一覧）の基準。</summary>
+    public MenuAlign TrayOverflowAlign { get; set; } = MenuAlign.Center;
     /// <summary>タスクバーの空いている場所の右クリックメニューの基準（カーソル位置が基準）。</summary>
     public MenuAlign BarMenuAlign { get; set; } = MenuAlign.Center;
     public bool GroupTaskbarButtons { get; set; } = true;

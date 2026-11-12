@@ -466,7 +466,7 @@ public sealed partial class TaskbarController
         // （全体のマウス監視）、タスクバーの他の場所のクリック、Esc、「^」
         _overflowPopup.StaysOpen = true;
         // Windows と同じく「^」ボタンを基準に左右中央へ出す（画面端では自動で内側にずれる）
-        FluentSurface.PlaceCentered(_overflowPopup, anchor, Edge);
+        FluentSurface.PlaceAligned(_overflowPopup, anchor, Edge, _settings.TrayOverflowAlign);
         _overflowPopup.Closed += (_, _) => { if (_trayEditMode) { _trayEditMode = false; RebuildTray(); } };
         FillOverflow();
         if (_settings.AnimateTrayOverflow) FluentSurface.SlideIn(_overflowPopup, Edge);

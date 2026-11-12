@@ -357,11 +357,13 @@ public sealed class SettingsWindow : Window
                 new[] { ("Small", L.T("小")), ("Medium", L.T("中（標準）")), ("Large", L.T("大")) },
                 _s.PreviewSize, v => _s.PreviewSize = v, on && _s.ShowThumbnailPreview));
 
-        Group(p, "", L.T("メニュー"), L.T("右クリックなどで出るメニューの位置"),
-            DropDownRow(L.T("アイコンのメニューの基準"), L.T("アイコンの右クリック・ウィンドウ名のリスト（縦のバーでは 左 = 上、右 = 下）"),
-                AlignOptions(), _s.IconMenuAlign.ToString(), v => _s.IconMenuAlign = Enum.Parse<MenuAlign>(v), on),
-            DropDownRow(L.T("タスクバーの右クリックの基準"), L.T("空いている場所を右クリックしたとき。カーソルの位置が基準です"),
-                AlignOptions(), _s.BarMenuAlign.ToString(), v => _s.BarMenuAlign = Enum.Parse<MenuAlign>(v), on));
+        Group(p, "", L.T("メニューとポップアップの位置"), L.T("ボタンやカーソルのどこを基準に出すか（縦のバーでは 左 = 上、右 = 下）"),
+            DropDownRow(L.T("アイコンの右クリック"), "", AlignOptions(), _s.IconMenuAlign.ToString(), v => _s.IconMenuAlign = Enum.Parse<MenuAlign>(v), on),
+            DropDownRow(L.T("タスクバーの右クリック"), L.T("空いている場所を右クリックしたとき。カーソルの位置が基準です"), AlignOptions(), _s.BarMenuAlign.ToString(), v => _s.BarMenuAlign = Enum.Parse<MenuAlign>(v), on),
+            DropDownRow(L.T("ウィンドウのプレビュー"), "", AlignOptions(), _s.PreviewAlign.ToString(), v => _s.PreviewAlign = Enum.Parse<MenuAlign>(v), on),
+            DropDownRow(L.T("ウィンドウ名のリスト"), L.T("プレビューをオフにしたときに出るリスト"), AlignOptions(), _s.WindowListAlign.ToString(), v => _s.WindowListAlign = Enum.Parse<MenuAlign>(v), on),
+            DropDownRow(L.T("仮想デスクトップの一覧"), "", AlignOptions(), _s.DesktopsAlign.ToString(), v => _s.DesktopsAlign = Enum.Parse<MenuAlign>(v), on),
+            DropDownRow(L.T("隠れているトレイアイコンの一覧"), L.T("「^」ボタンで開く一覧"), AlignOptions(), _s.TrayOverflowAlign.ToString(), v => _s.TrayOverflowAlign = Enum.Parse<MenuAlign>(v), on));
 
         p.Children.Add(Note(L.T("背景の素材と不透明度は「外観」で変えられます。")));
         if (!_flat)

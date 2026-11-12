@@ -122,7 +122,7 @@ public sealed class DesktopsFlyout
 
         _popup = FluentSurface.Create(row, anchor, PlacementMode.Custom);
         _popup.StaysOpen = true;
-        FluentSurface.PlaceCentered(_popup, anchor, edge);
+        FluentSurface.PlaceAligned(_popup, anchor, edge, _settings.DesktopsAlign);
         _gate.Attach(row);
         if (_settings.AnimatePreviews) FluentSurface.SlideIn(_popup, edge);
         _popup.IsOpen = true;

@@ -153,7 +153,7 @@ public sealed class ThumbnailPreview
 
         _popup = FluentSurface.Create(row, anchor, PlacementMode.Custom);
         _popup.StaysOpen = true; // ホバーで開閉するので、マウスを捕まえない
-        FluentSurface.PlaceCentered(_popup, anchor, edge);
+        FluentSurface.PlaceAligned(_popup, anchor, edge, _settings.PreviewAlign);
         _gate.Attach(row);
         var session = new Session();
         if (_settings.AnimatePreviews) FluentSurface.SlideIn(_popup, edge);
