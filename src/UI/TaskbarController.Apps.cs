@@ -336,9 +336,13 @@ public sealed partial class TaskbarController
         tile.MouseLeave += (_, _) => To(1.0);
     }
 
-    private void WindowList(UIElement target, Group g) =>
-        Flyout.Show(target, g.Windows.Select(w =>
-            new MenuItemSpec("", Truncate(w.Title ?? "", 48), () => { TakeForeground(target); w.BringToFront(); })), FlyoutPlacement);
+    /// <summary>プレビューを使わないときの、ウィンドウ名のリスト。プレビューと同じく、アイコンの中央に出す。</summary>
+    private void WindowList(UIElement target, Group g)
+    {
+        var popup = Flyout.Show(target, g.Windows.Select(w =>
+            new MenuItemSpec("", Truncate(w.Title ?? "", 48), () => { TakeForeground(target); w.BringToFront(); })), FlyoutPlacement);
+        if (target is FrameworkElement anchor) FluentSurface.PlaceCentered(popup, anchor, Edge);
+    }
 
     private IEnumerable<MenuItemSpec> GroupMenu(Group g)
     {
