@@ -86,6 +86,13 @@ public sealed class ThumbnailPreview
         _gate.ShowAfter(_settings.PreviewDelayMs, () => Show(anchor, windows(), edge));
     }
 
+    /// <summary>クリックで、待たずにすぐ表示する（Windows 11 と同じく、複数ウィンドウのボタンをクリックしたとき）。</summary>
+    public void ShowNow(FrameworkElement anchor, IReadOnlyList<ApplicationWindow> windows, TaskbarEdge edge)
+    {
+        _gate.Stop();
+        Show(anchor, windows, edge);
+    }
+
     /// <summary>ボタンからカーソルが出た。プレビューの上に移らなければ少し後に閉じる。</summary>
     public void Leave() => _gate.Leave(IsOpen);
 

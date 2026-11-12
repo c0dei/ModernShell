@@ -207,6 +207,7 @@ public sealed partial class TaskbarController
         {
             if (g.Windows.Count == 0) { TakeForeground(x); g.Pinned?.Launch(); }
             else if (g.Windows.Count == 1) ToggleWindow(g.Windows[0], x);
+            else if (_settings.ShowThumbnailPreview) _preview.ShowNow(tile, g.Windows, Edge);
             else WindowList(x, g);
         };
         tile.MiddleClick += x => { TakeForeground(x); (g.Pinned ?? FindApp(g.Windows.FirstOrDefault()))?.Launch(); };
