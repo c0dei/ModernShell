@@ -179,6 +179,8 @@ public static partial class L
         ["仮想デスクトップの一覧"] = "Virtual desktop list",
         ["隠れているトレイアイコンの一覧"] = "Hidden tray icon list",
         ["「^」ボタンで開く一覧"] = "Opened with the ^ button",
+        ["地点が見つかりません（設定で地点を確認）"] = "Location not found (check it in settings)",
+        ["通信できませんでした（↻ で再試行）"] = "Couldn't connect (press ↻ to retry)",
         ["天気の更新間隔"] = "Weather update interval",
         ["スタート メニューを開いている間も、この間隔で自動更新します（カードの更新ボタンで今すぐ更新もできます）"] = "Also refreshes automatically at this interval while the Start menu is open (or use the card's refresh button)",
         ["10 分"] = "10 min", ["20 分"] = "20 min", ["30 分"] = "30 min", ["1 時間"] = "1 hour", ["3 時間"] = "3 hours",

@@ -344,7 +344,7 @@ public sealed class WidgetPanel : ScrollViewer
                     busy = false;
                     refreshBtn.Opacity = 1;
                     if (r.Exception == null && r.Result is { } w) Apply(w);
-                    else if (!had && Weather.Cached(city) == null) desc.Text = L.T("取得できませんでした（設定で地点を確認）");
+                    else if (!had && Weather.Cached(city) == null) desc.Text = Weather.LastFailure == Weather.FailureKind.NotFound ? L.T("地点が見つかりません（設定で地点を確認）") : L.T("通信できませんでした（↻ で再試行）");
                 }), TaskScheduler.Default);
         }
         refreshBtn.MouseLeftButtonDown += (_, e) => { e.Handled = true; Fetch(true); };

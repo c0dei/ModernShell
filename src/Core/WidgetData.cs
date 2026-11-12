@@ -62,14 +62,34 @@ public static class Weather
         return _inflight = FetchAsync(city);
     }
 
+    public enum FailureKind { None, NotFound, Network }
+    /// <summary>直近の取得に失敗した理由（画面のメッセージの出し分け用）。</summary>
+    public static FailureKind LastFailure { get; private set; }
+
+    /// <summary>一時的な不調に備えて、失敗したら少し待って 2 回まで取り直す（1 秒後、2 秒後）。</summary>
+    private static async Task<string> GetWithRetryAsync(string url)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            try { return await Http.GetStringAsync(url); }
+            catch (Exception ex) when (attempt < 2)
+            {
+                Log.Info($"weather: retry {attempt + 1} ({ex.GetType().Name})");
+                await Task.Delay(1000 * (attempt + 1));
+            }
+        }
+    }
+
     private static async Task<Report?> FetchAsync(string city)
     {
         try
         {
             var geoUrl = "https://geocoding-api.open-meteo.com/v1/search?count=1&language=ja&format=json&name=" + Uri.EscapeDataString(city.Trim());
-            using var geo = JsonDocument.Parse(await Http.GetStringAsync(geoUrl));
+            LastFailure = FailureKind.None;
+            using var geo = JsonDocument.Parse(await GetWithRetryAsync(geoUrl));
             if (!geo.RootElement.TryGetProperty("results", out var results) || results.GetArrayLength() == 0)
             {
+                LastFailure = FailureKind.NotFound;
                 _failedAt = DateTime.Now; // 地点が見つからない: 設定を直すまで毎回取りに行かない
                 return null;
             }
@@ -79,7 +99,7 @@ public static class Weather
 
             var url = FormattableString.Invariant(
                 $"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1");
-            using var doc = JsonDocument.Parse(await Http.GetStringAsync(url));
+            using var doc = JsonDocument.Parse(await GetWithRetryAsync(url));
             var cur = doc.RootElement.GetProperty("current");
             var daily = doc.RootElement.GetProperty("daily");
             _cache = new Report(name,
@@ -94,6 +114,7 @@ public static class Weather
         catch (Exception ex)
         {
             Log.Error("weather", ex);
+            LastFailure = FailureKind.Network;
             _failedAt = DateTime.Now;
             return Cached(city); // 古い結果があればそれを返す
         }
