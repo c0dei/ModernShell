@@ -20,6 +20,8 @@ public enum StartButtonPosition { WithApps, LeftEdge }
 public enum SurfaceStyle { Solid, Transparent, Blur }
 /// <summary>開くときのアニメーションの速さ（Fast = 短く / Slow = ゆっくり）。</summary>
 public enum AnimationSpeed { Fast, Normal, Slow }
+/// <summary>ボタンやカーソルの位置に対して、メニューをどこ基準で出すか（左・中央・右。縦のバーでは上・中央・下）。</summary>
+public enum MenuAlign { Left, Center, Right }
 /// <summary>スタートメニューを開く位置。Auto: スタートボタンの位置に合わせる</summary>
 public enum StartMenuPosition { Auto, Left, Center }
 /// <summary>タスクバーのピン留めの出どころ。Windows: Windows のタスクバーと同じ内容・並び順（読み取り） / ModernShell: 独自に管理</summary>
@@ -72,6 +74,10 @@ public sealed class Settings
     public bool AnimateMenus { get; set; } = true;
     /// <summary>開くときのアニメーション全体の速さ。</summary>
     public AnimationSpeed AnimationSpeed { get; set; } = AnimationSpeed.Normal;
+    /// <summary>アプリのアイコン（右クリックのメニュー・ウィンドウ名のリスト）の基準。</summary>
+    public MenuAlign IconMenuAlign { get; set; } = MenuAlign.Center;
+    /// <summary>タスクバーの空いている場所の右クリックメニューの基準（カーソル位置が基準）。</summary>
+    public MenuAlign BarMenuAlign { get; set; } = MenuAlign.Center;
     public bool GroupTaskbarButtons { get; set; } = true;
     public bool ShowTaskbarLabels { get; set; } = false;
     public bool ShowSeconds { get; set; } = false;

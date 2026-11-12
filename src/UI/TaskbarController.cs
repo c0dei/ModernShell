@@ -414,12 +414,13 @@ public sealed partial class TaskbarController : IDisposable
         {
             if (e.Handled) return;
             e.Handled = true;
-            Flyout.Show(content, new[]
+            var popup = Flyout.Show(content, new[]
             {
                 new MenuItemSpec("\uE9D9", L.T("タスク マネージャー"), SystemActions.OpenTaskManager),
                 MenuItemSpec.Separator,
                 new MenuItemSpec("\uE713", L.T("タスクバーの設定"), () => OpenSettingsRequested?.Invoke()),
-            }, PlacementMode.MousePoint);
+            }, FlyoutPlacement);
+            FluentSurface.PlaceAligned(popup, content, Edge, _settings.BarMenuAlign, at: e.GetPosition(content));
         };
         s.ContentSizeChanged += Arrange;
         s.ContentRendered += (_, _) => FirstDrawn?.Invoke();
@@ -517,7 +518,7 @@ public sealed partial class TaskbarController : IDisposable
         var p = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         var start = new Tile { Width = TileSize.Width, Height = TileSize.Height, Margin = Gap, Child = UiKit.StartLogo(Math.Round(IconSz * 0.75), t.AccentBrush), ToolTip = L.T("スタート") };
         start.Click += x => { TakeForeground(x); StartClicked?.Invoke(); };
-        start.RightClick += x => Flyout.Show(x, new[]
+        start.RightClick += x => ShowIconMenu(x, new[]
         {
             new MenuItemSpec("", L.T("Win+X メニュー"), SystemActions.PowerUserMenu),
             new MenuItemSpec("", L.T("タスク マネージャー"), SystemActions.OpenTaskManager),
@@ -526,7 +527,7 @@ public sealed partial class TaskbarController : IDisposable
             MenuItemSpec.Separator,
             new MenuItemSpec("", L.T("ModernShell の設定"), () => OpenSettingsRequested?.Invoke()),
             new MenuItemSpec("", L.T("ModernShell を終了（純正に戻す）"), () => ExitRequested?.Invoke()),
-        }, FlyoutPlacement);
+        });
         p.Children.Add(start);
         if (_settings.ShowSearchButton) p.Children.Add(SmallButton("", L.T("検索"), () => SearchClicked?.Invoke()));
         if (_settings.ShowTaskViewButton) p.Children.Add(SmallButton("", L.T("タスク ビュー"), SystemActions.TaskView, HookDesktops));

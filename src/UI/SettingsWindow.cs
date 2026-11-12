@@ -357,6 +357,12 @@ public sealed class SettingsWindow : Window
                 new[] { ("Small", L.T("小")), ("Medium", L.T("中（標準）")), ("Large", L.T("大")) },
                 _s.PreviewSize, v => _s.PreviewSize = v, on && _s.ShowThumbnailPreview));
 
+        Group(p, "", L.T("メニュー"), L.T("右クリックなどで出るメニューの位置"),
+            DropDownRow(L.T("アイコンのメニューの基準"), L.T("アイコンの右クリック・ウィンドウ名のリスト（縦のバーでは 左 = 上、右 = 下）"),
+                AlignOptions(), _s.IconMenuAlign.ToString(), v => _s.IconMenuAlign = Enum.Parse<MenuAlign>(v), on),
+            DropDownRow(L.T("タスクバーの右クリックの基準"), L.T("空いている場所を右クリックしたとき。カーソルの位置が基準です"),
+                AlignOptions(), _s.BarMenuAlign.ToString(), v => _s.BarMenuAlign = Enum.Parse<MenuAlign>(v), on));
+
         p.Children.Add(Note(L.T("背景の素材と不透明度は「外観」で変えられます。")));
         if (!_flat)
             p.Children.Add(InfoBar(L.T("困ったときは Ctrl + Alt + Shift + F12"),
@@ -725,6 +731,9 @@ public sealed class SettingsWindow : Window
         // 検索で全フォント名に一致しないよう、選択肢は検索用の文字に入れない
         return Card(Texts(L.T("フォント"), L.T("タスクバー・スタート メニュー・メニューの文字。設定画面には使いません")), combo);
     }
+
+    private static (string value, string label)[] AlignOptions() =>
+        new[] { ("Left", L.T("左")), ("Center", L.T("中央")), ("Right", L.T("右")) };
 
     private Border DropDownRow(string title, string desc, (string value, string label)[] options, string current, Action<string> set, bool enabled = true)
     {

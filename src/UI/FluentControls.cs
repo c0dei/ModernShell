@@ -152,10 +152,18 @@ public static class FluentSurface
     /// 画面端では Windows が内側へずらす。「^」の一覧・ウィンドウのプレビュー・デスクトップ一覧で共通。
     /// </summary>
     /// <param name="edge">タスクバーのある画面の端。</param>
-    public static void PlaceCentered(Popup popup, FrameworkElement anchor, TaskbarEdge edge, double gapDip = 8)
+    public static void PlaceCentered(Popup popup, FrameworkElement anchor, TaskbarEdge edge, double gapDip = 8) =>
+        PlaceAligned(popup, anchor, edge, MenuAlign.Center, gapDip);
+
+    /// <summary>
+    /// anchor（ボタン）または at（anchor 内の座標。カーソル位置など）を基準に、バーの反対側（画面の内側）へ出す。
+    /// align: バーに沿った方向の基準（左 / 中央 / 右。縦のバーでは上 / 中央 / 下）。
+    /// </summary>
+    public static void PlaceAligned(Popup popup, FrameworkElement anchor, TaskbarEdge edge, MenuAlign align, double gapDip = 8, Point? at = null)
     {
         UseTaskbarLook(popup);
         popup.PlacementTarget = anchor;
+        popup.PlacementRectangle = at is { } pt ? new Rect(pt, new Size(0, 0)) : Rect.Empty;
         popup.Placement = PlacementMode.Custom;
         popup.VerticalOffset = 0;
         popup.HorizontalOffset = 0; // 中央合わせなので、影の余白のずらしは要らない
@@ -164,7 +172,10 @@ public static class FluentSurface
         double gapY = (gapDip - SurfacePaint.ShadowPad) * dpi.DpiScaleY, gapX = (gapDip - SurfacePaint.ShadowPad) * dpi.DpiScaleX;
         popup.CustomPopupPlacementCallback = (popupSize, targetSize, _) =>
         {
-            double x = (targetSize.Width - popupSize.Width) / 2, y = (targetSize.Height - popupSize.Height) / 2;
+            // 影の余白の分だけ内側にずらして、見た目の端を基準に合わせる
+            double padX = SurfacePaint.ShadowPad * dpi.DpiScaleX, padY = SurfacePaint.ShadowPad * dpi.DpiScaleY;
+            double x = align switch { MenuAlign.Left => -padX, MenuAlign.Right => targetSize.Width - popupSize.Width + padX, _ => (targetSize.Width - popupSize.Width) / 2 };
+            double y = align switch { MenuAlign.Left => -padY, MenuAlign.Right => targetSize.Height - popupSize.Height + padY, _ => (targetSize.Height - popupSize.Height) / 2 };
             var above = new CustomPopupPlacement(new Point(x, -popupSize.Height - gapY), PopupPrimaryAxis.Horizontal);
             var below = new CustomPopupPlacement(new Point(x, targetSize.Height + gapY), PopupPrimaryAxis.Horizontal);
             var left = new CustomPopupPlacement(new Point(-popupSize.Width - gapX, y), PopupPrimaryAxis.Vertical);

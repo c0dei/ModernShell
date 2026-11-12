@@ -44,7 +44,7 @@ public sealed partial class TaskbarController
         // タスクバーはクリックしてもアクティブにならないので、前面のアプリの IME をそのまま切り替えられる
         tile.Click += _ => { ToggleIme(); UpdateIme(); };
         // 右クリックで入力モードのメニュー（純正タスクバーの IME メニューの主な項目）
-        tile.RightClick += x => Flyout.Show(x, ImeMenu(), FlyoutPlacement);
+        tile.RightClick += x => ShowIconMenu(x, ImeMenu());
         // 変化のきっかけ（IME に関係するキー・前面のアプリの切り替え）ですぐ読み直す。
         // マウスで IME を切り替えた場合などの取りこぼしに備えて、1 秒ごとにも読み直す
         _imeTimer ??= new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => UpdateIme(), _dispatcher);

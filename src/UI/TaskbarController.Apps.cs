@@ -211,7 +211,7 @@ public sealed partial class TaskbarController
             else WindowList(x, g);
         };
         tile.MiddleClick += x => { TakeForeground(x); (g.Pinned ?? FindApp(g.Windows.FirstOrDefault()))?.Launch(); };
-        tile.RightClick += x => Flyout.Show(x, GroupMenu(g), FlyoutPlacement);
+        tile.RightClick += x => ShowIconMenu(x, GroupMenu(g));
         return tile;
     }
 
@@ -336,12 +336,18 @@ public sealed partial class TaskbarController
         tile.MouseLeave += (_, _) => To(1.0);
     }
 
+    /// <summary>アイコンのメニュー（右クリック・ウィンドウ名のリスト）。設定の基準（左・中央・右）でアイコンに合わせて出す。</summary>
+    private void ShowIconMenu(UIElement target, IEnumerable<MenuItemSpec> items)
+    {
+        var popup = Flyout.Show(target, items, FlyoutPlacement);
+        if (target is FrameworkElement anchor) FluentSurface.PlaceAligned(popup, anchor, Edge, _settings.IconMenuAlign);
+    }
+
     /// <summary>プレビューを使わないときの、ウィンドウ名のリスト。プレビューと同じく、アイコンの中央に出す。</summary>
     private void WindowList(UIElement target, Group g)
     {
-        var popup = Flyout.Show(target, g.Windows.Select(w =>
-            new MenuItemSpec("", Truncate(w.Title ?? "", 48), () => { TakeForeground(target); w.BringToFront(); })), FlyoutPlacement);
-        if (target is FrameworkElement anchor) FluentSurface.PlaceCentered(popup, anchor, Edge);
+        ShowIconMenu(target, g.Windows.Select(w =>
+            new MenuItemSpec("", Truncate(w.Title ?? "", 48), () => { TakeForeground(target); w.BringToFront(); })));
     }
 
     private IEnumerable<MenuItemSpec> GroupMenu(Group g)
