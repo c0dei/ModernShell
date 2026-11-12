@@ -346,7 +346,7 @@ public sealed class SettingsWindow : Window
             ToggleRow(L.T("時計に秒を表示"), "", _s.ShowSeconds, v => _s.ShowSeconds = v, on));
 
         Group(p, "", L.T("プレビュー"), L.T("カーソルを置いたときに出る一覧"),
-            ToggleRow(L.T("ウィンドウのプレビューを表示"), L.T("実行中のアプリのボタンに置くと、ウィンドウの中身を縮小表示します。クリックで切り替え、× で閉じます"),
+            ToggleRow(L.T("ウィンドウのプレビューを表示"), L.T("実行中のアプリのボタンに置くと、ウィンドウの中身を縮小表示します。クリックで切り替え、× で閉じます。複数ウィンドウのボタンをクリックしたときもプレビューを出します（オフのときは、ウィンドウ名のリストを出します）"),
                 _s.ShowThumbnailPreview, v => _s.ShowThumbnailPreview = v, on),
             ToggleRow(L.T("タスク ビュー ボタンで仮想デスクトップを表示"), L.T("カーソルを置くとデスクトップの一覧を表示し、クリックで切り替え、＋ で追加します"),
                 _s.ShowDesktopsOnTaskView, v => _s.ShowDesktopsOnTaskView = v, on && _s.ShowTaskViewButton),

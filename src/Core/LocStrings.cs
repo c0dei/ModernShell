@@ -116,7 +116,7 @@ public static partial class L
         ["プレビュー"] = "Previews",
         ["カーソルを置いたときに出る一覧"] = "What appears when you hover",
         ["ウィンドウのプレビューを表示"] = "Show window previews",
-        ["実行中のアプリのボタンに置くと、ウィンドウの中身を縮小表示します。クリックで切り替え、× で閉じます"] = "Hover a running app to see its windows. Click to switch, × to close",
+        ["実行中のアプリのボタンに置くと、ウィンドウの中身を縮小表示します。クリックで切り替え、× で閉じます。複数ウィンドウのボタンをクリックしたときもプレビューを出します（オフのときは、ウィンドウ名のリストを出します）"] = "Hover a running app to see its windows. Click to switch, × to close Clicking a button with several windows also shows the preview (when off, a list of window names is shown instead).",
         ["タスク ビュー ボタンで仮想デスクトップを表示"] = "Show virtual desktops on the Task View button",
         ["カーソルを置くとデスクトップの一覧を表示し、クリックで切り替え、＋ で追加します"] = "Hover to list desktops. Click to switch, + to add",
         ["表示までの待ち時間"] = "Delay before showing",
