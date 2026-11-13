@@ -377,6 +377,7 @@ public sealed class SettingsWindow : Window
             ToggleRow(L.T("検索ボタンを表示"), "", _s.ShowSearchButton, v => _s.ShowSearchButton = v, on),
             ToggleRow(L.T("タスク ビュー ボタンを表示"), "", _s.ShowTaskViewButton, v => _s.ShowTaskViewButton = v, on),
             ToggleRow(L.T("同じアプリのボタンをまとめる"), L.T("複数のウィンドウは一覧で選べます"), _s.GroupTaskbarButtons, v => _s.GroupTaskbarButtons = v, on),
+            ToggleRow(L.T("進捗とバッジを表示"), L.T("ダウンロードなどの進捗バーと、通知の数などの小さな印（アプリが付けるもの）をボタンに表示します"), _s.ShowTaskbarBadges, v => _s.ShowTaskbarBadges = v, on),
             ToggleRow(L.T("ボタンにウィンドウ名を表示"), "", _s.ShowTaskbarLabels, v => _s.ShowTaskbarLabels = v, on),
             ToggleRow(L.T("ホバー時にアイコンを拡大"), L.T("カーソルを置いたアプリのアイコンを少し大きくします"), _s.MagnifyOnHover, v => _s.MagnifyOnHover = v, on),
             ToggleRow(L.T("IME の状態を表示"), L.T("日本語入力の状態（あ / A など）。クリックでオン/オフを切り替えます"), _s.ShowImeIndicator, v => _s.ShowImeIndicator = v, on),

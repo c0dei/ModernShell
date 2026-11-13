@@ -181,7 +181,7 @@ public sealed partial class TaskbarController : IDisposable
     private void OnTrayChanged(object? s, NotifyCollectionChangedEventArgs e) => _dispatcher.BeginInvoke(() => Kick(_trayDebounce));
     private void OnItemChanged(object? s, PropertyChangedEventArgs e)
     {
-        if (s is ApplicationWindow && e.PropertyName is "State" or "Title" or "Icon" or "ProgressState" or "ProgressValue" or "ShowInTaskbar")
+        if (s is ApplicationWindow && e.PropertyName is "State" or "Title" or "Icon" or "ProgressState" or "ProgressValue" or "OverlayIcon" or "ShowInTaskbar")
             _dispatcher.BeginInvoke(() => Kick(_appsSoftDebounce));
         else if (s is ManagedShell.WindowsTray.NotifyIcon && e.PropertyName is "Icon" or "Title" or "IsHidden")
             _dispatcher.BeginInvoke(() => Kick(_trayDebounce));

@@ -161,6 +161,7 @@ public sealed partial class TaskbarController
         main.HorizontalAlignment = HorizontalAlignment.Center;
         main.VerticalAlignment = VerticalAlignment.Center;
         content.Children.Add(main);
+        if (running && _settings.ShowTaskbarBadges) AddBadges(content, g, t);
 
         if (running)
         {
@@ -213,6 +214,43 @@ public sealed partial class TaskbarController
         tile.MiddleClick += x => { TakeForeground(x); (g.Pinned ?? FindApp(g.Windows.FirstOrDefault()))?.Launch(); };
         tile.RightClick += x => ShowIconMenu(x, GroupMenu(g));
         return tile;
+    }
+
+    /// <summary>
+    /// アプリが付ける印: 進捗（ダウンロード・コピーなどの細い進捗バー）と、オーバーレイ アイコン（通知の数・状態の小さな印）。
+    /// タスクバー（Windows 標準）と同じく、アプリが ITaskbarList3 で設定したものを表示する。
+    /// </summary>
+    private void AddBadges(Grid content, Group g, Theme t)
+    {
+        var withProgress = g.Windows.FirstOrDefault(w => w.ProgressState != NativeMethods.TBPFLAG.TBPF_NOPROGRESS);
+        if (withProgress != null)
+        {
+            var state = withProgress.ProgressState;
+            var color = state switch
+            {
+                NativeMethods.TBPFLAG.TBPF_ERROR => Color.FromRgb(0xE8, 0x11, 0x23),
+                NativeMethods.TBPFLAG.TBPF_PAUSED => Color.FromRgb(0xF7, 0xC1, 0x00),
+                _ => Color.FromRgb(0x06, 0xB0, 0x25),
+            };
+            double frac = state == NativeMethods.TBPFLAG.TBPF_INDETERMINATE ? 1 : Math.Clamp(withProgress.ProgressValue / 100.0, 0, 1);
+            var bar = new Grid { Height = 3, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(8, 0, 8, Compact ? 3 : 8) };
+            bar.Children.Add(new Border { Background = new SolidColorBrush(Color.FromArgb(0x60, 0x80, 0x80, 0x80)), CornerRadius = new CornerRadius(1.5) });
+            bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(0.001, frac), GridUnitType.Star) });
+            bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(0.001, 1 - frac), GridUnitType.Star) });
+            var fill = new Border { Background = new SolidColorBrush(color), CornerRadius = new CornerRadius(1.5), Opacity = state == NativeMethods.TBPFLAG.TBPF_INDETERMINATE ? 0.5 : 1 };
+            bar.Children.Add(fill);
+            content.Children.Add(bar);
+        }
+
+        var overlay = g.Windows.Select(w => w.OverlayIcon).FirstOrDefault(i => i != null);
+        if (overlay != null)
+        {
+            var img = UiKit.Icon(overlay, 14);
+            img.HorizontalAlignment = HorizontalAlignment.Right;
+            img.VerticalAlignment = VerticalAlignment.Bottom;
+            img.Margin = new Thickness(0, 0, 4, Compact ? 3 : 6);
+            content.Children.Add(img);
+        }
     }
 
     private readonly HashSet<string> _loggedUnmatched = new();
@@ -414,6 +452,23 @@ public sealed partial class TaskbarController
             items.Add(new MenuItemSpec("\uE7A7", L.T("アイコンを元に戻す"), () => { _settings.CustomIcons.Remove(iconKey); _settings.Save(); }));
         if (g.Windows.Count > 0)
         {
+            // ウィンドウの配置（画面の半分・最大化・次のモニターへ）。複数あるときは、前面のウィンドウ（なければ先頭）に
+            var target = g.Windows.FirstOrDefault(w => w.State == ApplicationWindow.WindowState.Active) ?? g.Windows[0];
+            items.Add(MenuItemSpec.Separator);
+            items.Add(new MenuItemSpec("\uE8A0", L.T("ウィンドウを配置"), () => { })
+            {
+                Children = () => new[]
+                {
+                    new MenuItemSpec("", L.T("左半分"), () => WindowSnap.Apply(target.Handle, SnapKind.Left)),
+                    new MenuItemSpec("", L.T("右半分"), () => WindowSnap.Apply(target.Handle, SnapKind.Right)),
+                    new MenuItemSpec("", L.T("上半分"), () => WindowSnap.Apply(target.Handle, SnapKind.Top)),
+                    new MenuItemSpec("", L.T("下半分"), () => WindowSnap.Apply(target.Handle, SnapKind.Bottom)),
+                    MenuItemSpec.Separator,
+                    new MenuItemSpec("", L.T("最大化"), () => WindowSnap.Apply(target.Handle, SnapKind.Maximize)),
+                    new MenuItemSpec("", L.T("元のサイズに戻す"), () => WindowSnap.Apply(target.Handle, SnapKind.Restore)),
+                    new MenuItemSpec("", L.T("次のモニターへ移動"), () => WindowSnap.Apply(target.Handle, SnapKind.NextMonitor)),
+                },
+            });
             items.Add(MenuItemSpec.Separator);
             items.Add(new MenuItemSpec("", g.Windows.Count > 1 ? L.T("すべてのウィンドウを閉じる") : L.T("ウィンドウを閉じる"),
                 () => { foreach (var w in g.Windows) w.Close(); }, Danger: true));

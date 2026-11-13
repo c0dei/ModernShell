@@ -105,6 +105,8 @@ public sealed class Settings
     public MenuAlign BarMenuAlign { get; set; } = MenuAlign.Center;
     public bool GroupTaskbarButtons { get; set; } = true;
     public bool ShowTaskbarLabels { get; set; } = false;
+    /// <summary>アプリが付ける進捗バーとオーバーレイ アイコン（通知の数など）をボタンに表示する。</summary>
+    public bool ShowTaskbarBadges { get; set; } = true;
     public bool ShowSeconds { get; set; } = false;
     /// <summary>タスクバーのボタンにカーソルを置くとウィンドウのプレビューを表示する。</summary>
     public bool ShowThumbnailPreview { get; set; } = true;
