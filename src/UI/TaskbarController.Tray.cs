@@ -36,7 +36,9 @@ public sealed partial class TaskbarController
         double chevronAngle = Edge switch { TaskbarEdge.Top => 180, TaskbarEdge.Left => 90, TaskbarEdge.Right => 270, _ => 0 };
         var chevronGlyph = UiKit.Glyph("\uE70E", 12);
         chevronGlyph.RenderTransformOrigin = new Point(0.5, 0.5);
-        chevronGlyph.RenderTransform = new RotateTransform(chevronAngle);
+        _chevronRotate = new RotateTransform(chevronAngle);
+        _chevronBase = chevronAngle;
+        chevronGlyph.RenderTransform = _chevronRotate;
         _overflowButton = new Tile
         {
             Width = Vertical ? TileH : 28, Height = Vertical ? 28 : TileH, Margin = Vertical ? new Thickness(0, 2, 0, 0) : new Thickness(2, 0, 0, 0),
@@ -432,6 +434,19 @@ public sealed partial class TaskbarController
     }
 
     // 「^」で開く隠れたアイコン一覧
+    private RotateTransform? _chevronRotate;
+    private double _chevronBase;
+
+    /// <summary>「^」を、一覧が開くときは下向き（反対向き）へ、閉じるときは元の向きへ回す（Windows と同じ）。</summary>
+    private void RotateChevron(bool open)
+    {
+        if (_chevronRotate == null) return;
+        double to = _chevronBase + (open ? 180 : 0);
+        if (!_settings.AnimateTrayOverflow) { _chevronRotate.BeginAnimation(RotateTransform.AngleProperty, null); _chevronRotate.Angle = to; return; }
+        var a = new DoubleAnimation(to, Anim.Ms(200)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        _chevronRotate.BeginAnimation(RotateTransform.AngleProperty, a);
+    }
+
     private StackPanel? _overflowPanel;
     private TextBlock? _overflowHint;
 
@@ -472,10 +487,11 @@ public sealed partial class TaskbarController
         _overflowPopup.StaysOpen = true;
         // Windows と同じく「^」ボタンを基準に左右中央へ出す（画面端では自動で内側にずれる）
         FluentSurface.PlaceAligned(_overflowPopup, anchor, Edge, _settings.TrayOverflowAlign);
-        _overflowPopup.Closed += (_, _) => { if (_trayEditMode) { _trayEditMode = false; RebuildTray(); } };
+        _overflowPopup.Closed += (_, _) => { RotateChevron(false); if (_trayEditMode) { _trayEditMode = false; RebuildTray(); } };
         FillOverflow();
         if (_settings.AnimateTrayOverflow) FluentSurface.SlideIn(_overflowPopup, Edge);
         _overflowPopup.IsOpen = true;
+        RotateChevron(true);
         Flyout.ToggleGuard(_overflowPopup, anchor);
     }
 

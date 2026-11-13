@@ -562,6 +562,9 @@ public sealed class SettingsWindow : Window
             ButtonRow(L.T("設定を初期状態に戻す"), L.T("すべての設定を最初の状態に戻して、ModernShell を再起動します"), L.T("初期化"), ResetSettings));
 
         p.Children.Add(Section(L.T("トラブルシューティング")));
+        Group(p, "", L.T("デバッグ"), "",
+            ToggleRow(L.T("デバッグ ログを書き出す"), L.T("不具合の調査用です。通常はオフのままで構いません。オンにすると、動作の記録を modernshell.log に書きます"),
+                _s.DebugLog, v => _s.DebugLog = v));
         p.Children.Add(ButtonRow(L.T("設定とログ"), L.T("%AppData%\\ModernShell に settings.json と modernshell.log があります"),
             L.T("フォルダーを開く"), () => Launcher.Open("explorer.exe", "\"" + Settings.Directory + "\"")));
         p.Children.Add(ButtonRow(L.T("ModernShell を終了"), L.T("スタートメニューとタスクバーが純正に戻ります（Ctrl + Alt + Shift + F12 でも可）"),

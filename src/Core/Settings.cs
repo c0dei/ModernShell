@@ -76,6 +76,8 @@ public sealed class Settings
     public AnimationSpeed AnimationSpeed { get; set; } = AnimationSpeed.Normal;
     /// <summary>アプリのアイコン（右クリックのメニュー・ウィンドウ名のリスト）の基準。</summary>
     public MenuAlign IconMenuAlign { get; set; } = MenuAlign.Center;
+    /// <summary>デバッグ用のログ（modernshell.log）を書くか。通常はオフ。</summary>
+    public bool DebugLog { get; set; } = false;
     /// <summary>プレビューをオフにしたときの、ウィンドウ名のリストの基準。</summary>
     public MenuAlign WindowListAlign { get; set; } = MenuAlign.Center;
     /// <summary>ウィンドウのプレビュー（サムネイル）の基準。</summary>
@@ -348,6 +350,7 @@ internal static class Log
 
     private static void Write(string level, string msg)
     {
+        if (Settings.Current?.DebugLog != true) return; // デバッグ機能: 設定でオンにしたときだけ書く
         try
         {
             lock (Gate)
