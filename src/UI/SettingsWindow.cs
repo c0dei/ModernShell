@@ -85,7 +85,39 @@ public sealed class SettingsWindow : Window
         Grid.SetColumn(_scroll, 1);
         root.Children.Add(_scroll);
         Content = root;
+        _root = root;
         RenderPage();
+        FitToScreen();
+    }
+
+    private Grid? _root;
+
+    /// <summary>
+    /// 最大化したウィンドウは、枠の分だけ画面の外にはみ出す。内容の端やスクロールバーが枠・画面の外に隠れるので、
+    /// はみ出した分だけ内容を内側に寄せる（最大化でないときは余白なし）。
+    /// </summary>
+    private void FitToScreen()
+    {
+        if (_root == null) return;
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (WindowState != WindowState.Maximized || hwnd == IntPtr.Zero || !ModernShell.Native.Win32.GetWindowRect(hwnd, out var r))
+        {
+            _root.Margin = new Thickness(0);
+            return;
+        }
+        var work = System.Windows.Forms.Screen.FromHandle(hwnd).WorkingArea;
+        uint dpi = ModernShell.Native.Win32.GetDpiForWindow(hwnd);
+        double k = 96.0 / (dpi > 0 ? dpi : 96);
+        double L0 = Math.Max(0, work.Left - r.Left), T0 = Math.Max(0, work.Top - r.Top),
+               R0 = Math.Max(0, r.Right - work.Right), B0 = Math.Max(0, r.Bottom - work.Bottom);
+        _root.Margin = new Thickness(L0 * k, T0 * k, R0 * k, B0 * k);
+    }
+
+    protected override void OnStateChanged(EventArgs e)
+    {
+        base.OnStateChanged(e);
+        // 最大化の直後は位置が確定していないので、少し待ってから合わせる
+        Dispatcher.BeginInvoke(new Action(FitToScreen), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     /// <summary>設定を保存して、依存する項目の有効/無効を反映するため現在のページを描き直す。</summary>

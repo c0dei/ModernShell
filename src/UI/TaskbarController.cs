@@ -295,7 +295,10 @@ public sealed partial class TaskbarController : IDisposable
         {
             // ---- 帯型: 1 枚のウィンドウを 3 つの領域（始まり・中央・終わり）に分ける ----
             var grid = new Grid();
-            foreach (var len in new[] { new GridLength(1, GridUnitType.Star), GridLength.Auto, new GridLength(1, GridUnitType.Star) })
+            // トレイは中身の大きさをそのまま確保する（均等に分けると、バーが短い／縦のバーでトレイが半分に収まらないとき、
+            // 「^」や先頭のアイコンが切れる）。中央寄せのときだけ、アプリを中央に置くために左右を同じ大きさにする
+            var endLen = _settings.TaskbarAlignment == TaskbarAlignment.Center ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+            foreach (var len in new[] { new GridLength(1, GridUnitType.Star), GridLength.Auto, endLen })
             {
                 if (Vertical) grid.RowDefinitions.Add(new RowDefinition { Height = len });
                 else grid.ColumnDefinitions.Add(new ColumnDefinition { Width = len });
