@@ -40,7 +40,7 @@ public static class Program
     private static bool _customTaskbarApplied;
     /// <summary>このプロセスで一度でも ManagedShell を起動したか（同じプロセスでは 2 回目の起動ができない）。</summary>
     private static bool _shellStartedOnce;
-    private static bool _openSettingsOnStart;
+    private static bool _openSettingsOnStart, _forceSafe, _forceNormal;
 
     private const int HotkeyEmergencyId = 0x4D53;
 
@@ -68,6 +68,8 @@ public static class Program
             try { using var prev = Process.GetProcessById(prevPid); prev.WaitForExit(15000); } catch { }
         }
         _openSettingsOnStart = args.Contains("--settings", StringComparer.OrdinalIgnoreCase);
+        _forceSafe = args.Contains("--safe", StringComparer.OrdinalIgnoreCase);
+        _forceNormal = args.Contains("--normal", StringComparer.OrdinalIgnoreCase);
 
         using var mutex = new Mutex(true, MutexName, out bool created);
         if (!created)
@@ -111,7 +113,15 @@ public static class Program
         Log.Info("start");
         Log.Timing("start");
         StallDetector.Start(app.Dispatcher);
+        // 続けて起動直後に落ちていたら、今回はセーフ モードで起動する
+        Diagnostics.BeginStartup(_forceSafe, _forceNormal);
         _settings = Settings.Load();
+        if (Diagnostics.SafeMode) Diagnostics.ApplySafeOverrides(_settings);
+        Log.Info($"start (safe mode: {Diagnostics.SafeMode} {Diagnostics.SafeReason})");
+        // 一定時間落ちずに動けたら、起動は安定したとみなす
+        var stableTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(Diagnostics.StableAfterSeconds) };
+        stableTimer.Tick += (_, _) => { stableTimer.Stop(); Diagnostics.MarkStable(); };
+        stableTimer.Start();
         // 「サインイン時に起動」の登録を今の exe の場所に合わせる（単一 exe 版から zip 版へ移したときなど、古い場所を指したままにしない）
         // 普通の権限での自動起動なら、登録を今の exe の場所に合わせる。管理者での自動起動は、管理者で動いているときに登録し直す（場所が変わった場合に備えて）
         if (_settings.RunAtStartup && !_settings.RunElevatedAtStartup) SystemActions.SetRunAtStartup(true);
@@ -191,11 +201,11 @@ public static class Program
         catch (Exception ex) { Log.Info($"restart elevated cancelled: {ex.Message}"); }
     }
 
-    private static void Restart(bool openSettings)
+    private static void Restart(bool openSettings, string extraArgs = "")
     {
         try
         {
-            var args = $"--after {Environment.ProcessId}" + (openSettings ? " --settings" : "");
+            var args = $"--after {Environment.ProcessId}" + (openSettings ? " --settings" : "") + extraArgs;
             Process.Start(new ProcessStartInfo(Environment.ProcessPath!, args) { UseShellExecute = false });
             Exit();
         }
@@ -365,6 +375,8 @@ public static class Program
             menu.Items.Add(L.T("スタートを開く"), null, (_, _) => _start.ShowMenu());
             menu.Items.Add(L.T("設定"), null, (_, _) => ShowSettings());
             menu.Items.Add(new Forms.ToolStripSeparator());
+            if (Diagnostics.SafeMode)
+                menu.Items.Add(L.T("通常モードで再起動"), null, (_, _) => Restart(openSettings: false, " --normal"));
             menu.Items.Add(L.T("純正タスクバーに戻して終了"), null, (_, _) => Exit());
 
             _tray = new Forms.NotifyIcon
@@ -375,6 +387,8 @@ public static class Program
                 Visible = true,
             };
             _tray.MouseClick += (_, e) => { if (e.Button == Forms.MouseButtons.Left) _start.Toggle(); };
+            if (Diagnostics.SafeMode)
+                _tray.ShowBalloonTip(8000, "ModernShell", L.T("セーフ モードで起動しました（起動に続けて失敗したため）。純正タスクバーのままで、設定は保存されません。右クリックの「通常モードで再起動」で戻せます"), Forms.ToolTipIcon.Warning);
         }
         catch (Exception ex) { Log.Error("tray", ex); }
     }
@@ -391,6 +405,7 @@ public static class Program
             };
             _settingsWindow.ExitRequested += Exit;
             _settingsWindow.RestartRequested += () => Restart(openSettings: true);
+            _settingsWindow.RestartSafeRequested += () => Restart(openSettings: false, " --safe");
             _settingsWindow.RestartElevatedRequested += RestartElevated;
             _settingsWindow.Closed += (_, _) => _settingsWindow = null;
             _settingsWindow.Show();
@@ -460,6 +475,7 @@ public static class Program
     private static void Cleanup()
     {
         Log.Info("exit");
+        Diagnostics.MarkStable(); // 正常に終了した
         try { UnregisterHotKey(_start.Handle, HotkeyEmergencyId); } catch { }
         try { _hooks?.Dispose(); } catch { }
         try { _startButtonWatcher?.Dispose(); } catch { }

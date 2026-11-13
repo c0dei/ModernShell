@@ -44,6 +44,7 @@ public sealed class SettingsWindow : Window
     public event Action? ExitRequested;
     /// <summary>設定ファイルを置き換えたあと、読み込み直すために再起動してほしいとき。</summary>
     public event Action? RestartRequested;
+    public event Action? RestartSafeRequested;
     /// <summary>管理者として再起動してほしいとき（UAC の確認が出る）。</summary>
     public event Action? RestartElevatedRequested;
     /// <summary>Windows のタスクバーのピン留め（並び順どおりの ID 一覧）を返す。App が設定する。</summary>
@@ -597,6 +598,12 @@ public sealed class SettingsWindow : Window
             ButtonRow(L.T("設定を初期状態に戻す"), L.T("すべての設定を最初の状態に戻して、ModernShell を再起動します"), L.T("初期化"), ResetSettings));
 
         p.Children.Add(Section(L.T("トラブルシューティング")));
+        if (Diagnostics.SafeMode)
+            p.Children.Add(InfoBar(L.T("セーフ モードで動いています"), L.T("起動に続けて失敗したため、純正タスクバーのままで動いています。設定は保存されません。原因の調査のため、デバッグ ログはオンです")));
+        p.Children.Add(ButtonRow(L.T("診断情報を書き出す"), L.T("環境・設定・ログを 1 つの zip にまとめます（不具合の報告用。設定には地点やフォルダーのパスが含まれます）"),
+            L.T("書き出す"), ExportDiagnostics));
+        p.Children.Add(ButtonRow(L.T("セーフ モードで再起動"), L.T("純正タスクバーのまま、ウィジェットとアニメーションをオフにして起動します。起動に失敗するときの切り分け用です"),
+            L.T("再起動"), () => { if (Confirm(L.T("セーフ モードで再起動しますか？"))) RestartSafeRequested?.Invoke(); }));
         Group(p, "", L.T("デバッグ"), "",
             ToggleRow(L.T("デバッグ ログを書き出す"), L.T("不具合の調査用です。通常はオフのままで構いません。オンにすると、動作の記録を modernshell.log に書きます"),
                 _s.DebugLog, v => _s.DebugLog = v));
@@ -605,6 +612,18 @@ public sealed class SettingsWindow : Window
         p.Children.Add(ButtonRow(L.T("ModernShell を終了"), L.T("スタートメニューとタスクバーが純正に戻ります（Ctrl + Alt + Shift + F12 でも可）"),
             L.T("終了"), () => ExitRequested?.Invoke(), accent: true));
         p.Children.Add(Note(L.T("終了できなくなった場合は、ModernShell.exe --restore を実行するか PC を再起動してください。")));
+    }
+
+    private void ExportDiagnostics()
+    {
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = L.T("診断情報を書き出す"), Filter = "zip (*.zip)|*.zip", DefaultExt = ".zip",
+            FileName = $"ModernShell-diagnostics-{DateTime.Now:yyyyMMdd-HHmm}.zip",
+        };
+        if (dlg.ShowDialog(this) != true) return;
+        try { Diagnostics.Export(_s, dlg.FileName); }
+        catch (Exception ex) { Log.Error("export diagnostics", ex); MessageBox.Show(this, ex.Message, "書き出せませんでした", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 
     private void ExportSettings()

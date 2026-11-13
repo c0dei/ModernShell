@@ -252,7 +252,7 @@ public sealed class Settings
     /// <summary>保存のみ（UI を作り直さない。トレイのピン留めなど細かい変更用）。</summary>
     public void SaveQuiet()
     {
-        if (_frozen) return;
+        if (_frozen || SafeMode) return;
         try
         {
             System.IO.Directory.CreateDirectory(Directory);
@@ -264,6 +264,8 @@ public sealed class Settings
     }
 
     private static bool _frozen;
+    /// <summary>セーフ モード中か（設定を上書きしているので、保存しない）。</summary>
+    [JsonIgnore] public static bool SafeMode { get; set; }
 
     /// <summary>
     /// 古い背景の設定（Windows の背景効果を使っていた頃の「素材」）を、今の 3 択に読み替える。
