@@ -23,6 +23,11 @@ public sealed class AppBarReservation : IDisposable
     public Func<Win32.RECT>? MonitorProvider { get; set; }
     /// <summary>そのモニターの DPI 倍率。指定しなければ、このウィンドウのもの（メイン モニター）。</summary>
     public Func<double>? ScaleProvider { get; set; }
+    /// <summary>
+    /// 自動的に隠すバー: 作業領域は 1 ピクセルしか確保しない（ウィンドウはバーの裏まで広がる）。
+    /// <see cref="Rect"/> は、表示したときの本来の矩形（厚み全体）のまま。
+    /// </summary>
+    public bool AutoHide { get; set; }
     /// <summary>確保した矩形（物理ピクセル）。</summary>
     public Win32.RECT Rect { get; private set; }
     public bool IsFullscreenAppActive { get; private set; }
@@ -138,6 +143,8 @@ public sealed class AppBarReservation : IDisposable
                 default: r.Top = r.Bottom - _thicknessPx; break;
             }
         }
+        int fullThickness = _thicknessPx;
+        if (AutoHide) _thicknessPx = 1;
         Thick(ref abd.rc);
 
         Win32.SHAppBarMessage(Win32.ABM_QUERYPOS, ref abd);
@@ -154,6 +161,8 @@ public sealed class AppBarReservation : IDisposable
         }
         Thick(ref abd.rc); // 他のバーを避けて動いた位置から、厚みを取り直す
         Win32.SHAppBarMessage(Win32.ABM_SETPOS, ref abd);
+        _thicknessPx = fullThickness;
+        if (AutoHide) Thick(ref abd.rc); // 表示したときの本来の厚みに戻す（確保したのは 1 ピクセルだけ）
         Rect = abd.rc;
         PositionChanged?.Invoke();
     }

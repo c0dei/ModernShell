@@ -105,6 +105,8 @@ public sealed class Settings
     public MenuAlign BarMenuAlign { get; set; } = MenuAlign.Center;
     /// <summary>メイン以外のモニターにもタスクバーを出す（そのモニターのウィンドウだけ並べる）。</summary>
     public bool MultiMonitorTaskbar { get; set; } = false;
+    /// <summary>タスクバーを自動的に隠す（画面の端にカーソルを当てると出る）。</summary>
+    public bool AutoHideTaskbar { get; set; } = false;
     public bool GroupTaskbarButtons { get; set; } = true;
     public bool ShowTaskbarLabels { get; set; } = false;
     /// <summary>アプリが付ける進捗バーとオーバーレイ アイコン（通知の数など）をボタンに表示する。</summary>

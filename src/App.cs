@@ -287,6 +287,7 @@ public static class Program
             _taskbar.SearchClicked += () => _start.ShowMenu("");
             _taskbar.OpenSettingsRequested += ShowSettings;
             _taskbar.ExitRequested += Exit;
+            _taskbar.KeepBarVisible = () => _start.IsVisible; // スタートメニューを開いている間は、自動非表示のバーを隠さない
             // 純正タスクバーは、ModernShell のタスクバーが実際に描かれてから隠す（それまでは純正のまま使える）
             var shell = _shell;
             _taskbar.FirstDrawn += () => shell?.HideNativeTaskbar();

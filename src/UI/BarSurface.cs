@@ -109,12 +109,42 @@ public sealed class BarSurface : Window
     /// <summary>ぼかしの画像を、このウィンドウの今の画面上の位置に合わせて切り出し直す。</summary>
     private void PlaceBlur() => _painted?.Place(Handle);
 
+    // 自動的に隠すとき用: 配置した位置からのずれ（物理ピクセル）と、隠している間は表示しない印
+    private int _lastX, _lastY;
+    private int? _lastW, _lastH;
+    private bool _lastBottomMost;
+    public int OffsetX { get; set; }
+    public int OffsetY { get; set; }
+    public bool Hidden { get; private set; }
+
     public void MoveTo(int x, int y, int? w = null, int? h = null, bool bottomMost = false)
+    {
+        _lastX = x; _lastY = y; _lastW = w; _lastH = h; _lastBottomMost = bottomMost;
+        if (Hidden) return;
+        Reposition();
+    }
+
+    /// <summary>最後に指定された位置（＋ずれ）へ動かす。</summary>
+    public void Reposition()
     {
         uint flags = Win32.SWP_NOACTIVATE | Win32.SWP_SHOWWINDOW;
         // 島は SizeToContent を壊さないよう位置だけ動かす
-        if (w == null || h == null) flags |= Win32.SWP_NOSIZE;
-        Win32.SetWindowPos(Handle, bottomMost ? new IntPtr(1) /*HWND_BOTTOM*/ : Win32.HWND_TOPMOST, x, y, w ?? 0, h ?? 0, flags);
+        if (_lastW == null || _lastH == null) flags |= Win32.SWP_NOSIZE;
+        Win32.SetWindowPos(Handle, _lastBottomMost ? new IntPtr(1) /*HWND_BOTTOM*/ : Win32.HWND_TOPMOST, _lastX + OffsetX, _lastY + OffsetY, _lastW ?? 0, _lastH ?? 0, flags);
         PlaceBlur();
+    }
+
+    /// <summary>隠す（ウィンドウごと非表示）。隠している間は MoveTo しても表示しない。</summary>
+    public void HideBar()
+    {
+        Hidden = true;
+        Win32.ShowWindow(Handle, Win32.SW_HIDE);
+    }
+
+    /// <summary>隠すのをやめる（ずれは呼び出し側で決めてから Reposition する）。</summary>
+    public void ShowBar()
+    {
+        Hidden = false;
+        Reposition();
     }
 }

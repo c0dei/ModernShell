@@ -268,7 +268,7 @@ public sealed partial class TaskbarController : IDisposable
         _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarHeight, _settings.TaskbarIconSize, _settings.IslandMarginX, _settings.IslandMarginY,
         _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds,
         _settings.MagnifyOnHover, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
-        _settings.MultiMonitorTaskbar, _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language, _settings.ShowImeIndicator);
+        _settings.MultiMonitorTaskbar, _settings.AutoHideTaskbar, _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language, _settings.ShowImeIndicator);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e)
     {
         _online = e.IsAvailable;
@@ -282,6 +282,7 @@ public sealed partial class TaskbarController : IDisposable
     {
         StallDetector.Phase = "taskbar: rebuild";
         _layoutKey = LayoutKey();
+        StopAutoHide();
         foreach (var s in _surfaces) s.Close();
         _surfaces.Clear();
         DisposeSecondaries();
@@ -329,6 +330,7 @@ public sealed partial class TaskbarController : IDisposable
             tray.Children.Add(ShowDesktopSliver());
             Place(grid, tray, 2, Alignment.End);
             AddSurface(BarSurface.Anchor.Fill, h, grid);
+            _reservation.AutoHide = _settings.AutoHideTaskbar;
             _reservation.Reserve(Edge, h + across * 2);
         }
         else
@@ -342,6 +344,7 @@ public sealed partial class TaskbarController : IDisposable
             }
             else AddSurface(appsAnchor, h, Island(Stack(startGroup, _apps)));
             AddSurface(BarSurface.Anchor.Right, h, Island(tray));
+            _reservation.AutoHide = _settings.AutoHideTaskbar;
             _reservation.Reserve(Edge, h + across * 2);
         }
 
@@ -352,6 +355,7 @@ public sealed partial class TaskbarController : IDisposable
         Safe("clock", UpdateClock);
         Safe("status", UpdateStatus);
         Safe("secondary bars", BuildSecondaries);
+        Safe("auto hide", StartAutoHide);
         StallDetector.Phase = "taskbar: show windows";
         foreach (var s in _surfaces) s.Show();
         Arrange();
@@ -495,6 +499,7 @@ public sealed partial class TaskbarController : IDisposable
         }
         UpdateTrayHostData();
         LogArrange();
+        AutoHideArranged();
     }
 
     private string _lastArrangeLog = "";
@@ -583,7 +588,7 @@ public sealed partial class TaskbarController : IDisposable
     }
 
     /// <summary>explorer 再起動時など、作業領域の予約をやり直す。</summary>
-    public void Reapply() => _reservation.Reserve(Edge, _settings.TaskbarHeight + Margins.across * 2);
+    public void Reapply() { _reservation.AutoHide = _settings.AutoHideTaskbar; _reservation.Reserve(Edge, _settings.TaskbarHeight + Margins.across * 2); }
 
     public void Dispose()
     {
@@ -609,6 +614,7 @@ public sealed partial class TaskbarController : IDisposable
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         _displayDebounce.Stop();
         DisposeSecondaries();
+        StopAutoHide();
         NetworkChange.NetworkAvailabilityChanged -= OnNetworkChanged;
         if (_overflowPopup != null) _overflowPopup.IsOpen = false;
         _preview.Cancel();
