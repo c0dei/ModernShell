@@ -356,6 +356,7 @@ public sealed partial class TaskbarController : IDisposable
         Safe("status", UpdateStatus);
         Safe("secondary bars", BuildSecondaries);
         Safe("auto hide", StartAutoHide);
+        Safe("sweep", StartSweep);
         StallDetector.Phase = "taskbar: show windows";
         foreach (var s in _surfaces) s.Show();
         Arrange();
@@ -615,6 +616,7 @@ public sealed partial class TaskbarController : IDisposable
         _displayDebounce.Stop();
         DisposeSecondaries();
         StopAutoHide();
+        _sweep?.Stop();
         NetworkChange.NetworkAvailabilityChanged -= OnNetworkChanged;
         if (_overflowPopup != null) _overflowPopup.IsOpen = false;
         _preview.Cancel();

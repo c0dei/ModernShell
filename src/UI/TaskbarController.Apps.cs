@@ -35,7 +35,52 @@ public sealed partial class TaskbarController
     }
 
     private IEnumerable<ApplicationWindow> TaskWindows() =>
-        _shell.Tasks?.GroupedWindows?.Cast<ApplicationWindow>().Where(w => w.ShowInTaskbar) ?? Enumerable.Empty<ApplicationWindow>();
+        _shell.Tasks?.GroupedWindows?.Cast<ApplicationWindow>().Where(IsLive) ?? Enumerable.Empty<ApplicationWindow>();
+
+    /// <summary>
+    /// 今もタスクバーに出すべきウィンドウか。ManagedShell の「タスクバーに表示するか」は一度求めた値を覚えているので、
+    /// 閉じずに隠れるだけのアプリ（トレイに入るもの）や、閉じたことの通知を取りこぼしたウィンドウが残ってしまう。
+    /// そこで、ウィンドウがまだあるか・見えているかを毎回確かめる（最小化は「見えている」扱い）。
+    /// </summary>
+    private static bool IsLive(ApplicationWindow w) =>
+        w.ShowInTaskbar && IsWindow(w.Handle) && Win32.IsWindowVisible(w.Handle) && !Win32.IsCloaked(w.Handle);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
+
+    private DispatcherTimer? _sweep;
+    private string _sweepSignature = "";
+
+    /// <summary>
+    /// 2 秒ごとに、ウィンドウの状態（見えているか・タスクバーに出すか）を確かめ直す。ウィンドウが消えたり隠れたりしても
+    /// 通知が来ないことがあるので、それで残ったボタンを片付ける。変化があったときだけボタンを作り直す。
+    /// </summary>
+    private void StartSweep()
+    {
+        _sweep?.Stop();
+        _sweep = new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background, (_, _) => Sweep(), _dispatcher);
+        _sweep.Start();
+    }
+
+    private void Sweep()
+    {
+        if (_disposed || _shell.Tasks?.GroupedWindows == null) return;
+        try
+        {
+            var all = _shell.Tasks.GroupedWindows.Cast<ApplicationWindow>().ToList();
+            foreach (var w in all)
+                if (IsWindow(w.Handle)) w.SetShowInTaskbar(); // 隠れた・出てきたを反映（変わったときは ShowInTaskbar の変更通知が来る）
+            var sig = string.Join(",", all.Where(IsLive).Select(w => w.Handle.ToString("X")));
+            if (sig != _sweepSignature)
+            {
+                bool first = _sweepSignature == "";
+                _sweepSignature = sig;
+                // 画面に出ているボタンと違うときだけ作り直す
+                if (!first && !_buttonFor.Keys.OrderBy(k => k.ToInt64()).SequenceEqual(all.Where(IsLive).Select(w => w.Handle).OrderBy(k => k.ToInt64())))
+                    Kick(_appsDebounce);
+            }
+        }
+        catch (Exception ex) { Log.Error("sweep", ex); }
+    }
 
     // ManagedShell は値がないとき null ではなく空文字を返すので、空文字は「なし」として扱う
     // （そうしないと AUMID を持たないアプリが全部 1 つのボタンにまとめられてしまう）
