@@ -581,6 +581,9 @@ public sealed class StartMenuWindow : Window
     };
 
     // --- ピン留め ---
+    private const string FolderPrefix = "folder:";
+    private PinnedFolder? FindFolder(string id) => _settings.PinnedFolders.FirstOrDefault(f => id == FolderPrefix + f.Id);
+
     private FrameworkElement BuildPinned()
     {
         var dock = new DockPanel();
@@ -588,11 +591,28 @@ public sealed class StartMenuWindow : Window
         DockPanel.SetDock(header, Dock.Top);
         dock.Children.Add(header);
 
-        var grid = new UniformGrid { Columns = Math.Clamp(_settings.PinnedColumns, 3, 8), VerticalAlignment = VerticalAlignment.Top };
-        var pinned = _settings.PinnedStart.Select(id => _catalog.Find(id)).Where(a => a != null).Cast<AppEntry>().ToList();
-        foreach (var app in pinned) grid.Children.Add(PinnedTile(app));
+        int columns = Math.Clamp(_settings.PinnedColumns, 3, 8);
+        // 下に「最近使った」「よく使う」（設定でオフにできる）。ピン留めとは別に一行ずつ
+        var recommended = BuildRecommended(columns);
+        if (recommended != null)
+        {
+            DockPanel.SetDock(recommended, Dock.Bottom);
+            dock.Children.Add(recommended);
+        }
 
-        if (pinned.Count == 0)
+        var grid = new UniformGrid { Columns = columns, VerticalAlignment = VerticalAlignment.Top };
+        int count = 0;
+        foreach (var id in _settings.PinnedStart)
+        {
+            if (id.StartsWith(FolderPrefix, StringComparison.Ordinal))
+            {
+                if (FindFolder(id) is { } f) { grid.Children.Add(FolderPinnedTile(f)); count++; }
+                continue;
+            }
+            if (_catalog.Find(id) is { } app) { grid.Children.Add(PinnedTile(app)); count++; }
+        }
+
+        if (count == 0)
         {
             var hint = UiKit.Label(_catalog.Apps.Count == 0 ? L.T("アプリを読み込んでいます…") : L.T("「すべてのアプリ」で右クリック →「スタートにピン留め」"), Fs(13), Theme.Current.TextSecondary);
             hint.Margin = new Thickness(20);
@@ -602,7 +622,124 @@ public sealed class StartMenuWindow : Window
         return dock;
     }
 
-    private Tile PinnedTile(AppEntry app)
+    /// <summary>「最近使った」「よく使う」の一行ずつ。両方オフ・履歴がまだ無いときは null。</summary>
+    private FrameworkElement? BuildRecommended(int columns)
+    {
+        if (!_settings.ShowRecentApps && !_settings.ShowFrequentApps) return null;
+        var t = Theme.Current;
+        var panel = new StackPanel { Margin = new Thickness(0, 4, 0, 4) };
+        var shown = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void Section(string title, List<string> ids)
+        {
+            var apps = ids.Select(i => _catalog.Find(i)).Where(a => a != null).Cast<AppEntry>().Take(columns).ToList();
+            if (apps.Count == 0) return;
+            var h = UiKit.Label(title, Fs(13), t.Text, FontWeights.SemiBold);
+            h.Margin = new Thickness(20, 6, 0, 2);
+            panel.Children.Add(h);
+            var row = new UniformGrid { Columns = columns };
+            foreach (var a in apps) { row.Children.Add(PinnedTile(a, pinned: false)); shown.Add(a.Id); }
+            panel.Children.Add(row);
+        }
+
+        if (_settings.ShowRecentApps) Section(L.T("最近使った"), UsageStats.Recent(columns * 3));
+        if (_settings.ShowFrequentApps) Section(L.T("よく使う"), UsageStats.Frequent(columns * 3, shown));
+        if (panel.Children.Count == 0) return null;
+        panel.Children.Insert(0, new Border { Height = 1, Background = t.Stroke, Margin = new Thickness(16, 0, 16, 2) });
+        return panel;
+    }
+
+    // ---- ピン留めのフォルダー ----
+
+    private void SavePins()
+    {
+        _settings.Save();
+        ShowPage(Page.Pinned);
+    }
+
+    /// <summary>アプリをフォルダーへ移す（ピン留めの並びからは外れ、フォルダーの中へ）。</summary>
+    private void MoveToFolder(string appId, PinnedFolder folder)
+    {
+        _settings.PinnedStart.RemoveAll(x => x.Equals(appId, StringComparison.OrdinalIgnoreCase));
+        foreach (var f in _settings.PinnedFolders) f.Items.RemoveAll(x => x.Equals(appId, StringComparison.OrdinalIgnoreCase));
+        if (!folder.Items.Contains(appId, StringComparer.OrdinalIgnoreCase)) folder.Items.Add(appId);
+        SavePins();
+    }
+
+    /// <summary>そのアプリがあった場所に、新しいフォルダーを作ってアプリを入れる。</summary>
+    private void NewFolder(string appId)
+    {
+        var f = new PinnedFolder { Name = L.T("フォルダー") };
+        int idx = _settings.PinnedStart.FindIndex(x => x.Equals(appId, StringComparison.OrdinalIgnoreCase));
+        _settings.PinnedFolders.Add(f);
+        _settings.PinnedStart.Insert(idx < 0 ? _settings.PinnedStart.Count : idx, FolderPrefix + f.Id);
+        MoveToFolder(appId, f);
+    }
+
+    /// <summary>フォルダーからアプリを出して、ピン留めの並びに戻す（フォルダーが空になったら消す）。</summary>
+    private void LeaveFolder(PinnedFolder f, string appId)
+    {
+        f.Items.RemoveAll(x => x.Equals(appId, StringComparison.OrdinalIgnoreCase));
+        int idx = _settings.PinnedStart.IndexOf(FolderPrefix + f.Id);
+        _settings.PinnedStart.Insert(idx < 0 ? _settings.PinnedStart.Count : idx + 1, appId);
+        if (f.Items.Count == 0) RemoveFolder(f);
+        SavePins();
+    }
+
+    private void RemoveFolder(PinnedFolder f)
+    {
+        _settings.PinnedStart.Remove(FolderPrefix + f.Id);
+        _settings.PinnedFolders.Remove(f);
+    }
+
+    /// <summary>フォルダーを解除して、中のアプリをその場所に戻す。</summary>
+    private void DissolveFolder(PinnedFolder f)
+    {
+        int idx = _settings.PinnedStart.IndexOf(FolderPrefix + f.Id);
+        if (idx < 0) idx = _settings.PinnedStart.Count; else _settings.PinnedStart.RemoveAt(idx);
+        _settings.PinnedStart.InsertRange(idx, f.Items.Where(i => !_settings.PinnedStart.Contains(i, StringComparer.OrdinalIgnoreCase)).ToList());
+        _settings.PinnedFolders.Remove(f);
+        SavePins();
+    }
+
+    private Tile FolderPinnedTile(PinnedFolder f)
+    {
+        var t = Theme.Current;
+        var apps = f.Items.Select(i => _catalog.Find(i)).Where(a => a != null).Cast<AppEntry>().ToList();
+        var mini = new UniformGrid { Columns = 2, Rows = 2, Width = 34, Height = 34 };
+        foreach (var a in apps.Take(4))
+        {
+            var img = UiKit.Icon(null, 15);
+            img.Margin = new Thickness(1);
+            LoadIconAsync(img, a, 15);
+            mini.Children.Add(img);
+        }
+        var holder = new Border
+        {
+            Width = 42, Height = 42, CornerRadius = t.Corner(8), Background = t.Surface, BorderBrush = t.Stroke, BorderThickness = new Thickness(1),
+            Child = mini, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        };
+        var label = UiKit.Label(f.Name, Fs(12));
+        label.TextAlignment = TextAlignment.Center;
+        label.TextWrapping = TextWrapping.Wrap;
+        label.MaxHeight = 32;
+        label.Margin = new Thickness(4, 4, 4, 0);
+        label.HorizontalAlignment = HorizontalAlignment.Center;
+        var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        stack.Children.Add(holder);
+        stack.Children.Add(label);
+        var tile = new Tile { Height = 90, Margin = new Thickness(2), Child = stack, ToolTip = f.Name, AllowDrop = true };
+        tile.Click += _ => ShowFolder(f.Name, apps, f);
+        tile.RightClick += x => OpenFlyout(x, new[]
+        {
+            new MenuItemSpec("", L.T("名前を変更"), () => ShowFolder(f.Name, apps, f, rename: true)),
+            new MenuItemSpec("", L.T("フォルダーを解除"), () => DissolveFolder(f)),
+        });
+        EnableReorder(tile, FolderPrefix + f.Id, f);
+        return tile;
+    }
+
+    private Tile PinnedTile(AppEntry app, bool pinned = true)
     {
         var img = UiKit.Icon(null, 32);
         LoadIconAsync(img, app, 32);
@@ -616,16 +753,16 @@ public sealed class StartMenuWindow : Window
         var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         stack.Children.Add(img);
         stack.Children.Add(label);
-        var tile = new Tile { Height = 90, Margin = new Thickness(2), Child = stack, Payload = app, ToolTip = app.Name, AllowDrop = true };
+        var tile = new Tile { Height = 90, Margin = new Thickness(2), Child = stack, Payload = app, ToolTip = app.Name, AllowDrop = pinned };
         tile.Click += _ => Launch(app);
-        tile.RightClick += t => OpenFlyout(t, AppMenu(app, pinnedPage: true));
-        EnableReorder(tile, app);
+        tile.RightClick += t => OpenFlyout(t, AppMenu(app, pinnedPage: pinned));
+        if (pinned) EnableReorder(tile, app.Id);
         return tile;
     }
 
     // ピン留めのドラッグ＆ドロップ並べ替え
     private Point _dragStart;
-    private void EnableReorder(Tile tile, AppEntry app)
+    private void EnableReorder(Tile tile, string id, PinnedFolder? folder = null)
     {
         tile.PreviewMouseLeftButtonDown += (_, e) => _dragStart = e.GetPosition(this);
         tile.PreviewMouseMove += (_, e) =>
@@ -633,14 +770,16 @@ public sealed class StartMenuWindow : Window
             if (e.LeftButton != MouseButtonState.Pressed) return;
             var d = e.GetPosition(this) - _dragStart;
             if (Math.Abs(d.X) < 8 && Math.Abs(d.Y) < 8) return;
-            DragDrop.DoDragDrop(tile, new DataObject("ModernShell.App", app.Id), DragDropEffects.Move);
+            DragDrop.DoDragDrop(tile, new DataObject("ModernShell.App", id), DragDropEffects.Move);
         };
         tile.Drop += (_, e) =>
         {
-            if (e.Data.GetData("ModernShell.App") is not string draggedId || draggedId == app.Id) return;
+            if (e.Data.GetData("ModernShell.App") is not string draggedId || draggedId == id) return;
+            // アプリをフォルダーの上に落としたら、フォルダーに入れる
+            if (folder != null && !draggedId.StartsWith(FolderPrefix, StringComparison.Ordinal)) { MoveToFolder(draggedId, folder); return; }
             var list = _settings.PinnedStart;
             list.Remove(draggedId);
-            int idx = list.IndexOf(app.Id);
+            int idx = list.IndexOf(id);
             list.Insert(idx < 0 ? list.Count : idx, draggedId);
             _settings.Save();
             ShowPage(Page.Pinned);
@@ -695,12 +834,12 @@ public sealed class StartMenuWindow : Window
     }
 
     /// <summary>OS のスタートと同じく、フォルダの中身をリストの上に重ねて表示する。外側クリック / Esc で閉じる。</summary>
-    private void ShowFolder(string name, List<AppEntry> items)
+    private void ShowFolder(string name, List<AppEntry> items, PinnedFolder? pf = null, bool rename = false)
     {
         CloseFolder();
         var t = Theme.Current;
         var wrap = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Center };
-        foreach (var app in items.OrderBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase))
+        foreach (var app in pf != null ? items : items.OrderBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase).ToList())
         {
             var img = UiKit.Icon(null, 32);
             LoadIconAsync(img, app, 32);
@@ -716,11 +855,41 @@ public sealed class StartMenuWindow : Window
             var tile = new Tile { Width = 110, Height = 90, Margin = new Thickness(2), Child = stack, ToolTip = app.Name };
             var a = app;
             tile.Click += _ => Launch(a);
-            tile.RightClick += x => OpenFlyout(x, AppMenu(a, pinnedPage: false));
+            if (pf == null) tile.RightClick += x => OpenFlyout(x, AppMenu(a, pinnedPage: false));
+            else tile.RightClick += x => OpenFlyout(x, FolderItemMenu(pf, a));
             wrap.Children.Add(tile);
         }
-        var title = UiKit.Label(name, Fs(20), t.Text, FontWeights.SemiBold);
-        title.HorizontalAlignment = HorizontalAlignment.Center;
+        FrameworkElement title;
+        if (pf == null)
+        {
+            var label = UiKit.Label(name, Fs(20), t.Text, FontWeights.SemiBold);
+            label.HorizontalAlignment = HorizontalAlignment.Center;
+            title = label;
+        }
+        else
+        {
+            // 自分で作ったフォルダーは、名前をその場で書き換えられる（Enter か、ほかを押すと確定）
+            var box = new TextBox
+            {
+                Text = name, FontSize = Fs(20), FontWeight = FontWeights.SemiBold, Foreground = t.Text, CaretBrush = t.Text,
+                Background = Brushes.Transparent, BorderThickness = new Thickness(0, 0, 0, 1), BorderBrush = t.Stroke,
+                TextAlignment = TextAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch, MaxLength = 40,
+                ToolTip = L.T("クリックして名前を変更"), Padding = new Thickness(0, 0, 0, 2),
+            };
+            void Commit()
+            {
+                var n = box.Text.Trim();
+                if (n.Length == 0) n = L.T("フォルダー");
+                if (n == pf.Name) return;
+                pf.Name = n;
+                _settings.SaveQuiet();
+                _pageDirty = true;
+            }
+            box.LostFocus += (_, _) => Commit();
+            box.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Commit(); Keyboard.ClearFocus(); e.Handled = true; } };
+            if (rename) box.Loaded += (_, _) => { box.Focus(); box.SelectAll(); };
+            title = box;
+        }
         title.Margin = new Thickness(0, 0, 0, 20);
         var body = new StackPanel();
         body.Children.Add(title);
@@ -758,6 +927,25 @@ public sealed class StartMenuWindow : Window
         if (_folderOverlay == null) return;
         _main.Children.Remove(_folderOverlay);
         _folderOverlay = null;
+        // フォルダーの名前を変えていたら、ピン留めの表示を更新する（閉じる操作の途中で作り直さないよう、少し後に）
+        if (_pageDirty && _page == Page.Pinned) Dispatcher.BeginInvoke(() => { if (_pageDirty && _folderOverlay == null) ShowPage(Page.Pinned); });
+    }
+
+    /// <summary>フォルダーの中のアプリの右クリック: フォルダーから出す / ピン留めを外す + 通常のメニュー。</summary>
+    private IEnumerable<MenuItemSpec> FolderItemMenu(PinnedFolder pf, AppEntry app)
+    {
+        var items = new List<MenuItemSpec>
+        {
+            new("", L.T("フォルダーから出す"), () => LeaveFolder(pf, app.Id)),
+            new("", L.T("スタートからピン留めを外す"), () =>
+            {
+                pf.Items.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase));
+                if (pf.Items.Count == 0) RemoveFolder(pf);
+                SavePins();
+            }),
+        };
+        items.AddRange(AppMenu(app, pinnedPage: false).Skip(1)); // 先頭は「ピン留め」の切り替えなので、フォルダー用に置き換えた
+        return items;
     }
 
     /// <param name="menu">右クリックメニューの中身。開くたびに作る（ピン留めの状態などが、行を作ったあとで変わっても正しく出すため）。</param>
@@ -917,6 +1105,16 @@ public sealed class StartMenuWindow : Window
                 ? new("", L.T("スタートからピン留めを外す"), () => { _settings.PinnedStart.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); ShowPage(_page); })
                 : new("", L.T("スタートにピン留めする"), () => { _settings.PinnedStart.Add(app.Id); _settings.Save(); ShowPage(_page); }),
         };
+        if (pinnedPage && pinned)
+            items.Add(new("\uE8B7", L.T("フォルダーにまとめる"), () => { })
+            {
+                Children = () =>
+                {
+                    var folders = _settings.PinnedFolders.Select(f => new MenuItemSpec("", f.Name, () => MoveToFolder(app.Id, f))).ToList();
+                    folders.Add(new MenuItemSpec("\uE710", L.T("新しいフォルダー"), () => NewFolder(app.Id)));
+                    return folders;
+                },
+            });
         if (pinnedPage && pinned)
             items.Add(new("", L.T("先頭に移動"), () => { _settings.PinnedStart.Remove(app.Id); _settings.PinnedStart.Insert(0, app.Id); _settings.Save(); ShowPage(_page); }));
         // Windows と共有している場合、タスクバーのピン留めは Windows 側でしか変更できない

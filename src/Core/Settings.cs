@@ -20,6 +20,13 @@ public enum StartButtonPosition { WithApps, LeftEdge }
 public enum SurfaceStyle { Solid, Transparent, Blur }
 /// <summary>開くときのアニメーションの速さ（Fast = 短く / Slow = ゆっくり）。</summary>
 public enum AnimationSpeed { Fast, Normal, Slow }
+/// <summary>スタートのピン留めのフォルダー（Items はアプリの ID）。</summary>
+public sealed class PinnedFolder
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Name { get; set; } = "";
+    public List<string> Items { get; set; } = new();
+}
 /// <summary>ボタンやカーソルの位置に対して、メニューをどこ基準で出すか（左・中央・右。縦のバーでは上・中央・下）。</summary>
 public enum MenuAlign { Left, Center, Right }
 /// <summary>スタートメニューを開く位置。Auto: スタートボタンの位置に合わせる</summary>
@@ -41,6 +48,12 @@ public sealed class Settings
     public StartMenuPosition StartMenuPosition { get; set; } = StartMenuPosition.Auto;
     public bool ShowAllAppsFirst { get; set; } = false;
     public List<string> PinnedStart { get; set; } = new();
+    /// <summary>スタートのピン留めのフォルダー。PinnedStart の中には "folder:&lt;Id&gt;" の形で並ぶ。</summary>
+    public List<PinnedFolder> PinnedFolders { get; set; } = new();
+    /// <summary>ピン留めの下に「最近使った」を表示する。</summary>
+    public bool ShowRecentApps { get; set; } = true;
+    /// <summary>ピン留めの下に「よく使う」を表示する。</summary>
+    public bool ShowFrequentApps { get; set; } = true;
 
     // --- タスクバー ---
     /// <summary>純正タスクバーを隠し、独自タスクバー（AppBar）を表示する。</summary>

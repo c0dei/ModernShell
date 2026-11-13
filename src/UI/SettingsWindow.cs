@@ -308,6 +308,10 @@ public sealed class SettingsWindow : Window
             ToggleRow(L.T("開いたときに「すべてのアプリ」を表示"), L.T("ピン留めではなくアプリの一覧から始めます"), _s.ShowAllAppsFirst, v => _s.ShowAllAppsFirst = v),
             DropDownRow(L.T("ピン留めの列数"), "", new[] { ("4", L.T("4 列")), ("5", L.T("5 列")), ("6", L.T("6 列")), ("7", L.T("7 列")), ("8", L.T("8 列")) },
                 _s.PinnedColumns.ToString(), v => _s.PinnedColumns = int.Parse(v)),
+            ToggleRow(L.T("「最近使った」を表示"), L.T("ピン留めの下に、最近開いたアプリを 1 行で表示します（開いた記録はこの PC の中だけに保存されます）"), _s.ShowRecentApps, v => _s.ShowRecentApps = v),
+            ToggleRow(L.T("「よく使う」を表示"), L.T("ピン留めの下に、よく開くアプリ（2 回以上）を 1 行で表示します"), _s.ShowFrequentApps, v => _s.ShowFrequentApps = v),
+            ButtonRow(L.T("利用履歴を消去"), L.T("「最近使った」「よく使う」の元になっている、アプリを開いた記録を消します"), L.T("消去"),
+                () => { if (Confirm(L.T("アプリを開いた記録を消しますか？"))) { UsageStats.Clear(); _s.Save(); } }),
             ToggleRow(L.T("ウィジェットを表示"), L.T("スタート メニューの右側に表示します。内容は「ウィジェット」で選べます"), _s.ShowWidgets, v => _s.ShowWidgets = v));
 
         p.Children.Add(Note(L.T("ピン留めはスタート メニュー上でドラッグして並べ替え、右クリックで追加・削除できます。初期状態に戻すには「ピン留めとアイコン」へ。")));

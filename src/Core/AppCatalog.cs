@@ -50,6 +50,7 @@ public sealed class AppEntry
 
     public void Launch(bool asAdmin = false)
     {
+        UsageStats.Record(Id);
         try
         {
             // ModernShell が管理者で動いていても、開いたアプリは普通の権限で動かす（「管理者として実行」のときだけ管理者）
