@@ -137,6 +137,17 @@ public sealed class AppBarReservation : IDisposable
         Thick(ref abd.rc);
 
         Win32.SHAppBarMessage(Win32.ABM_QUERYPOS, ref abd);
+        // 隠れている純正タスクバー（自動的に隠す設定）も画面の端に細い領域（約 2px）を持っているため、避けると
+        // バーと画面の端のあいだに隙間ができてしまう（後ろのウィンドウが見える）。この程度のずれは画面の端へ戻す。
+        // それより大きいずれ（他のアプリのバーを避けた分）はそのまま使う
+        int snap = (int)Math.Ceiling(6 * Scale);
+        switch (_edge)
+        {
+            case TaskbarEdge.Top: if (abd.rc.Top > mon.Top && abd.rc.Top - mon.Top <= snap) abd.rc.Top = mon.Top; break;
+            case TaskbarEdge.Left: if (abd.rc.Left > mon.Left && abd.rc.Left - mon.Left <= snap) abd.rc.Left = mon.Left; break;
+            case TaskbarEdge.Right: if (abd.rc.Right < mon.Right && mon.Right - abd.rc.Right <= snap) abd.rc.Right = mon.Right; break;
+            default: if (abd.rc.Bottom < mon.Bottom && mon.Bottom - abd.rc.Bottom <= snap) abd.rc.Bottom = mon.Bottom; break;
+        }
         Thick(ref abd.rc); // 他のバーを避けて動いた位置から、厚みを取り直す
         Win32.SHAppBarMessage(Win32.ABM_SETPOS, ref abd);
         Rect = abd.rc;
