@@ -193,7 +193,7 @@ public sealed partial class TaskbarController
         if (Vertical) { tile.Width = TileSize.Width; tile.Height = TileSize.Height; }
         else { tile.MinWidth = TileSize.Width; tile.Height = TileSize.Height; }
         tile.MouseLeave += (_, _) => { if (active) tile.Background = t.Hover; };
-        if (_settings.MagnifyOnHover) AddMagnify(tile, icon);
+        if (_settings.MagnifyOnHover && !Anim.LightMode) AddMagnify(tile, icon);
 
         // カーソルを置くとウィンドウのプレビュー（実行中のときだけ）。クリック・右クリック・ドラッグで閉じる
         if (running)

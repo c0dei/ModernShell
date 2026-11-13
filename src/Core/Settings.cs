@@ -76,6 +76,8 @@ public sealed class Settings
     public AnimationSpeed AnimationSpeed { get; set; } = AnimationSpeed.Normal;
     /// <summary>アプリのアイコン（右クリックのメニュー・ウィンドウ名のリスト）の基準。</summary>
     public MenuAlign IconMenuAlign { get; set; } = MenuAlign.Center;
+    /// <summary>GPU が無い PC（ソフトウェア描画）を自動で判定して、アニメーションを短くするなど軽く動かす。</summary>
+    public bool AutoLightMode { get; set; } = true;
     /// <summary>デバッグ用のログ（modernshell.log）を書くか。通常はオフ。</summary>
     public bool DebugLog { get; set; } = false;
     /// <summary>プレビューをオフにしたときの、ウィンドウ名のリストの基準。</summary>

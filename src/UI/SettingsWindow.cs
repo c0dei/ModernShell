@@ -528,6 +528,9 @@ public sealed class SettingsWindow : Window
                 _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.UseCustomTaskbar && _s.TaskbarBackground != SurfaceStyle.Solid));
 
         Group(p, "\uE916", L.T("アニメーション"), L.T("開くときに滑り込ませるか、パッと表示するか"),
+            ToggleRow(L.T("GPU が無い PC では軽く動かす"),
+                L.F("グラフィックスの描画が GPU でないこと（ソフトウェア描画）を自動で見つけて、アニメーションを短くし、アイコンの拡大を省きます。今の PC: {0}", Anim.NoGpu ? L.T("GPU なし（軽量）") : L.T("GPU あり")),
+                _s.AutoLightMode, v => _s.AutoLightMode = v),
             DropDownRow(L.T("アニメーションの速さ"), L.T("開くときの動きの長さ（スタート メニュー・プレビュー・メニューなど）"),
                 new[] { ("Fast", L.T("速い")), ("Normal", L.T("標準")), ("Slow", L.T("ゆっくり")) },
                 _s.AnimationSpeed.ToString(), v => _s.AnimationSpeed = Enum.Parse<AnimationSpeed>(v),
