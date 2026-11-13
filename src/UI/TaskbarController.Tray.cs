@@ -576,6 +576,7 @@ public sealed partial class TaskbarController
 
     private void UpdateClock()
     {
+        if (_secondaries.Count > 0) UpdateSecondaryClocks(DateTime.Now);
         if (_time == null || _date == null) return;
         var now = DateTime.Now;
         // 縦のバーは幅が狭いので、秒は出さず、日付も短くする。さらに細いバーでは時刻を「時」「分」の 2 段にする

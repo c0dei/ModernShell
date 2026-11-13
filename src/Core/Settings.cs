@@ -103,6 +103,8 @@ public sealed class Settings
     public MenuAlign TrayOverflowAlign { get; set; } = MenuAlign.Center;
     /// <summary>タスクバーの空いている場所の右クリックメニューの基準（カーソル位置が基準）。</summary>
     public MenuAlign BarMenuAlign { get; set; } = MenuAlign.Center;
+    /// <summary>メイン以外のモニターにもタスクバーを出す（そのモニターのウィンドウだけ並べる）。</summary>
+    public bool MultiMonitorTaskbar { get; set; } = false;
     public bool GroupTaskbarButtons { get; set; } = true;
     public bool ShowTaskbarLabels { get; set; } = false;
     /// <summary>アプリが付ける進捗バーとオーバーレイ アイコン（通知の数など）をボタンに表示する。</summary>

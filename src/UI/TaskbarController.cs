@@ -36,7 +36,7 @@ public sealed partial class TaskbarController : IDisposable
     private readonly Dispatcher _dispatcher;
     private readonly AppBarReservation _reservation = new();
     private readonly List<BarSurface> _surfaces = new();
-    private readonly DispatcherTimer _clock, _status, _appsDebounce, _appsSoftDebounce, _trayDebounce;
+    private readonly DispatcherTimer _clock, _status, _appsDebounce, _appsSoftDebounce, _trayDebounce, _displayDebounce;
     private readonly List<string> _order = new(); // 実行中ボタンの並び順を安定させる
     private readonly HashSet<INotifyPropertyChanged> _watched = new();
     private bool _disposed;
@@ -117,6 +117,9 @@ public sealed partial class TaskbarController : IDisposable
             RebuildApps();
         });
         _trayDebounce = Debouncer(RebuildTray);
+        _displayDebounce = new DispatcherTimer(TimeSpan.FromMilliseconds(800), DispatcherPriority.Background, (_, _) => { _displayDebounce!.Stop(); if (!_disposed) Rebuild(); }, dispatcher);
+        _displayDebounce.Stop();
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
 
         if (_shell.Tasks?.GroupedWindows is INotifyCollectionChanged tasks) tasks.CollectionChanged += OnTasksChanged;
         if (_shell.Tray?.PinnedIcons is INotifyCollectionChanged pinned) pinned.CollectionChanged += OnTrayChanged;
@@ -265,7 +268,7 @@ public sealed partial class TaskbarController : IDisposable
         _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarHeight, _settings.TaskbarIconSize, _settings.IslandMarginX, _settings.IslandMarginY,
         _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds,
         _settings.MagnifyOnHover, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
-        _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language, _settings.ShowImeIndicator);
+        _settings.MultiMonitorTaskbar, _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language, _settings.ShowImeIndicator);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e)
     {
         _online = e.IsAvailable;
@@ -281,6 +284,7 @@ public sealed partial class TaskbarController : IDisposable
         _layoutKey = LayoutKey();
         foreach (var s in _surfaces) s.Close();
         _surfaces.Clear();
+        DisposeSecondaries();
 
         var t = Theme.Current;
         double h = _settings.TaskbarHeight;
@@ -347,6 +351,7 @@ public sealed partial class TaskbarController : IDisposable
         StallDetector.Phase = "taskbar: clock";
         Safe("clock", UpdateClock);
         Safe("status", UpdateStatus);
+        Safe("secondary bars", BuildSecondaries);
         StallDetector.Phase = "taskbar: show windows";
         foreach (var s in _surfaces) s.Show();
         Arrange();
@@ -601,6 +606,9 @@ public sealed partial class TaskbarController : IDisposable
         _catalog.Changed -= OnCatalogChanged;
         _settings.Changed -= OnSettingsChanged;
         Theme.Changed -= OnThemeChanged;
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        _displayDebounce.Stop();
+        DisposeSecondaries();
         NetworkChange.NetworkAvailabilityChanged -= OnNetworkChanged;
         if (_overflowPopup != null) _overflowPopup.IsOpen = false;
         _preview.Cancel();

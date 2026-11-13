@@ -44,21 +44,18 @@ public sealed partial class TaskbarController
     private static string? ExePath(ApplicationWindow w) => string.IsNullOrEmpty(w.WinFileName) ? null : w.WinFileName;
     private static string GroupKey(ApplicationWindow w) => Aumid(w) ?? ExePath(w) ?? w.Handle.ToString();
 
-    private void RebuildApps()
+    /// <summary>ウィンドウを、ピン留め・アプリごとのグループにまとめる（ピン留めは withPins のときだけ）。</summary>
+    private List<Group> BuildGroups(IEnumerable<ApplicationWindow> windows, bool withPins)
     {
-        StallDetector.Phase = "taskbar: apps";
-        if (_apps == null) return;
-        // メニューを開いている間に作り直すと、メニューの基準のボタンが消えて画面左上に飛んでしまうので後回しにする
-        if (FluentSurface.AnyOpen) { Kick(_appsDebounce); return; }
         var groups = new List<Group>();
+        if (withPins)
+            foreach (var app in PinnedApps())
+                if (groups.All(x => x.Key != "pin:" + app.Id)) groups.Add(new Group { Key = "pin:" + app.Id, Pinned = app });
 
-        foreach (var app in PinnedApps())
-            if (groups.All(x => x.Key != "pin:" + app.Id)) groups.Add(new Group { Key = "pin:" + app.Id, Pinned = app });
-
-        foreach (var w in TaskWindows())
+        foreach (var w in windows)
         {
             Watch(w);
-            var g = groups.FirstOrDefault(x => x.Pinned != null && KnownApps.Matches(x.Pinned, Aumid(w), ExePath(w)));
+            var g = withPins ? groups.FirstOrDefault(x => x.Pinned != null && KnownApps.Matches(x.Pinned, Aumid(w), ExePath(w))) : null;
             if (g == null || !_settings.GroupTaskbarButtons && g.Windows.Count > 0)
             {
                 string key = _settings.GroupTaskbarButtons ? GroupKey(w) : w.Handle.ToString();
@@ -66,8 +63,20 @@ public sealed partial class TaskbarController
                 if (g == null) { g = new Group { Key = key }; groups.Add(g); }
             }
             g.Windows.Add(w);
-            if (g.Pinned == null) LogUnmatched(w);
+            if (withPins && g.Pinned == null) LogUnmatched(w);
         }
+        return groups;
+    }
+
+    private void RebuildApps()
+    {
+        StallDetector.Phase = "taskbar: apps";
+        if (_apps == null) return;
+        // メニューを開いている間に作り直すと、メニューの基準のボタンが消えて画面左上に飛んでしまうので後回しにする
+        if (FluentSurface.AnyOpen) { Kick(_appsDebounce); return; }
+        // 複数モニター表示のときは、メインのモニターにあるウィンドウだけ（ほかはそのモニターのバーに出す）
+        var windows = MultiMonitorActive ? TaskWindows().Where(w => ScreenNameOf(w) == PrimaryScreenName) : TaskWindows();
+        var groups = BuildGroups(windows, withPins: true);
 
         foreach (var g in groups.Where(x => x.Pinned == null && !_order.Contains(x.Key))) _order.Add(g.Key);
         _order.RemoveAll(k => groups.All(g => g.Key != k));
@@ -93,6 +102,7 @@ public sealed partial class TaskbarController
             }
         }
         _apps.Visibility = _apps.Children.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        RebuildSecondaryApps();
         PruneWatched();
         LogGroups(ordered);
     }

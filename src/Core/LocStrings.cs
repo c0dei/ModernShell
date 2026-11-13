@@ -221,6 +221,8 @@ public static partial class L
         ["最大化"] = "Maximize",
         ["元のサイズに戻す"] = "Restore",
         ["次のモニターへ移動"] = "Move to next monitor",
+        ["複数のモニターにタスクバーを表示"] = "Show the taskbar on multiple monitors",
+        ["メイン以外のモニターにもタスクバーを出し、そのモニターにあるウィンドウのボタンだけを並べます（時計付き）。メインのモニターには、メインにあるウィンドウだけが出ます"] = "Shows a taskbar on the other monitors too, with buttons only for windows on that monitor (and a clock). The main taskbar then shows only windows on the main monitor",
         ["天気の更新間隔"] = "Weather update interval",
         ["スタート メニューを開いている間も、この間隔で自動更新します（カードの更新ボタンで今すぐ更新もできます）"] = "Also refreshes automatically at this interval while the Start menu is open (or use the card's refresh button)",
         ["10 分"] = "10 min", ["20 分"] = "20 min", ["30 分"] = "30 min", ["1 時間"] = "1 hour", ["3 時間"] = "3 hours",

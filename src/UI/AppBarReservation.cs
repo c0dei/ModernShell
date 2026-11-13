@@ -19,6 +19,10 @@ public sealed class AppBarReservation : IDisposable
     private int _thicknessPx;
 
     public IntPtr Handle => _src.Handle;
+    /// <summary>バーを置くモニターの範囲（物理ピクセル）。指定しなければメイン モニター。</summary>
+    public Func<Win32.RECT>? MonitorProvider { get; set; }
+    /// <summary>そのモニターの DPI 倍率。指定しなければ、このウィンドウのもの（メイン モニター）。</summary>
+    public Func<double>? ScaleProvider { get; set; }
     /// <summary>確保した矩形（物理ピクセル）。</summary>
     public Win32.RECT Rect { get; private set; }
     public bool IsFullscreenAppActive { get; private set; }
@@ -87,7 +91,7 @@ public sealed class AppBarReservation : IDisposable
                     if (Win32.GetMonitorInfo(MonitorFromWindow(fg, 2 /*NEAREST*/), ref mi))
                     {
                         var m = mi.rcMonitor;
-                        var bar = PrimaryMonitor();
+                        var bar = MonitorProvider?.Invoke() ?? PrimaryMonitor();
                         bool sameMonitor = m.Left == bar.Left && m.Top == bar.Top && m.Right == bar.Right && m.Bottom == bar.Bottom;
                         fs = sameMonitor && r.Left <= m.Left && r.Top <= m.Top && r.Right >= m.Right && r.Bottom >= m.Bottom;
                     }
@@ -101,7 +105,7 @@ public sealed class AppBarReservation : IDisposable
     }
 
     /// <summary>プライマリモニターの DPI 倍率。</summary>
-    public double Scale => Win32.GetDpiForWindow(Handle) is var d and > 0 ? d / 96.0 : 1.0;
+    public double Scale => ScaleProvider?.Invoke() ?? (Win32.GetDpiForWindow(Handle) is var d and > 0 ? d / 96.0 : 1.0);
 
     public void Reserve(TaskbarEdge edge, double thicknessDip)
     {
@@ -120,7 +124,7 @@ public sealed class AppBarReservation : IDisposable
             _registered = true;
         }
 
-        var mon = PrimaryMonitor();
+        var mon = MonitorProvider?.Invoke() ?? PrimaryMonitor();
         abd.uEdge = _edge switch { TaskbarEdge.Top => Win32.ABE_TOP, TaskbarEdge.Left => Win32.ABE_LEFT, TaskbarEdge.Right => Win32.ABE_RIGHT, _ => Win32.ABE_BOTTOM };
         abd.rc = mon;
         // 厚み（端に垂直な方向の大きさ）の分だけ確保する。端に沿った方向は画面いっぱい

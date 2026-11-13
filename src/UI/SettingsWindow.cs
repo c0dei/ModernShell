@@ -374,6 +374,7 @@ public sealed class SettingsWindow : Window
                 v => { if (floating) _s.IslandMarginY = int.Parse(v); else _s.BandMarginY = int.Parse(v); }, on));
 
         Group(p, "", L.T("ボタン"), L.T("タスクバーに並べるもの"),
+            ToggleRow(L.T("複数のモニターにタスクバーを表示"), L.T("メイン以外のモニターにもタスクバーを出し、そのモニターにあるウィンドウのボタンだけを並べます（時計付き）。メインのモニターには、メインにあるウィンドウだけが出ます"), _s.MultiMonitorTaskbar, v => _s.MultiMonitorTaskbar = v, on),
             ToggleRow(L.T("検索ボタンを表示"), "", _s.ShowSearchButton, v => _s.ShowSearchButton = v, on),
             ToggleRow(L.T("タスク ビュー ボタンを表示"), "", _s.ShowTaskViewButton, v => _s.ShowTaskViewButton = v, on),
             ToggleRow(L.T("同じアプリのボタンをまとめる"), L.T("複数のウィンドウは一覧で選べます"), _s.GroupTaskbarButtons, v => _s.GroupTaskbarButtons = v, on),
