@@ -448,6 +448,44 @@ public sealed partial class TaskbarController : IDisposable
         _surfaces.Add(s);
     }
 
+    /// <summary>
+    /// 画面の端に密着した帯の位置。画面の端の向こう側へ 3px ほどはみ出させる（見えない部分）。
+    /// 丸め・領域の確保のずれで、画面の端とのあいだに 1〜2px の線ができて後ろのウィンドウが見えるのを防ぐ。
+    /// 隣にモニターがあるときは、そちらに映ってしまうのではみ出させない。
+    /// </summary>
+    private (int x, int y, int w, int h) FlushRect(Win32.RECT r, double scale)
+    {
+        int bleed = (int)Math.Ceiling(3 * scale);
+        var mon = System.Windows.Forms.Screen.AllScreens.FirstOrDefault(m =>
+            m.Bounds.Left <= r.Left && m.Bounds.Right >= r.Right && m.Bounds.Top <= r.Top && m.Bounds.Bottom >= r.Bottom);
+        bool neighbor = false;
+        if (mon != null)
+        {
+            var b = mon.Bounds;
+            foreach (var o in System.Windows.Forms.Screen.AllScreens)
+            {
+                if (o.DeviceName == mon.DeviceName) continue;
+                var ob = o.Bounds;
+                bool overlapX = ob.Left < b.Right && ob.Right > b.Left, overlapY = ob.Top < b.Bottom && ob.Bottom > b.Top;
+                neighbor |= Edge switch
+                {
+                    TaskbarEdge.Top => overlapX && ob.Bottom <= b.Top && ob.Bottom >= b.Top - 8,
+                    TaskbarEdge.Left => overlapY && ob.Right <= b.Left && ob.Right >= b.Left - 8,
+                    TaskbarEdge.Right => overlapY && ob.Left >= b.Right && ob.Left <= b.Right + 8,
+                    _ => overlapX && ob.Top >= b.Bottom && ob.Top <= b.Bottom + 8,
+                };
+            }
+        }
+        if (neighbor) bleed = 0;
+        return Edge switch
+        {
+            TaskbarEdge.Top => (r.Left, r.Top - bleed, r.Width, r.Height + bleed),
+            TaskbarEdge.Left => (r.Left - bleed, r.Top, r.Width + bleed, r.Height),
+            TaskbarEdge.Right => (r.Left, r.Top, r.Width + bleed, r.Height),
+            _ => (r.Left, r.Top, r.Width, r.Height + bleed),
+        };
+    }
+
     /// <summary>確保領域の中に各ウィンドウを配置する（すべて物理ピクセル）。</summary>
     private void Arrange()
     {
@@ -467,10 +505,10 @@ public sealed partial class TaskbarController : IDisposable
                 if (Vertical)
                 {
                     int x = Edge == TaskbarEdge.Left ? r.Left + across : r.Right - across - thick;
-                    if (across <= 0 && along <= 0) s.MoveTo(r.Left, r.Top, r.Width, r.Height, bottomMost);
+                    if (across <= 0 && along <= 0) { var f = FlushRect(r, s.Scale); s.MoveTo(f.x, f.y, f.w, f.h, bottomMost); }
                     else s.MoveTo(x, r.Top + along, thick, r.Height - along * 2, bottomMost);
                 }
-                else if (across <= 0 && along <= 0) s.MoveTo(r.Left, r.Top, r.Width, r.Height, bottomMost);
+                else if (across <= 0 && along <= 0) { var f = FlushRect(r, s.Scale); s.MoveTo(f.x, f.y, f.w, f.h, bottomMost); }
                 else s.MoveTo(r.Left + along, IsTop ? r.Top + across : r.Bottom - across - thick, r.Width - along * 2, thick, bottomMost);
                 continue;
             }

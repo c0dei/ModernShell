@@ -148,10 +148,12 @@ public sealed class AppBarReservation : IDisposable
         Thick(ref abd.rc);
 
         Win32.SHAppBarMessage(Win32.ABM_QUERYPOS, ref abd);
-        // 隠れている純正タスクバー（自動的に隠す設定）も画面の端に細い領域（約 2px）を持っているため、避けると
+        // 純正タスクバーは領域を確保したまま（約 2px の自動非表示の帯、または隠す前の本来の厚み）なので、避けると
         // バーと画面の端のあいだに隙間ができてしまう（後ろのウィンドウが見える）。この程度のずれは画面の端へ戻す。
         // それより大きいずれ（他のアプリのバーを避けた分）はそのまま使う
-        int snap = (int)Math.Ceiling(6 * Scale);
+        // 純正タスクバー（自動で隠す設定の細い領域のほか、隠す前の本来の厚み ≒ 48px × 拡大率）を避けたずれも、画面の端へ戻す。
+        // 純正のバーは ModernShell が隠していて、見えるバーとは重ならない
+        int snap = (int)Math.Ceiling(110 * Scale);
         switch (_edge)
         {
             case TaskbarEdge.Top: if (abd.rc.Top > mon.Top && abd.rc.Top - mon.Top <= snap) abd.rc.Top = mon.Top; break;

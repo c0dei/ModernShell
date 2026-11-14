@@ -101,7 +101,9 @@ public sealed class BarSurface : Window
     {
         bool flush = Placement == Anchor.Fill && _settings.BandMarginX <= 0 && _settings.BandMarginY <= 0; // 画面端に密着した帯は角を丸めない
         var corner = flush ? new CornerRadius(0) : new CornerRadius(Math.Max(0, _settings.CornerRadius));
-        _painted = SurfacePaint.Wrap(content, _settings.TaskbarBackground, _settings.TaskbarOpacity, corner);
+        // 画面の端に密着した帯は枠線を描かない（枠線は半透明で、その下には背景が敷かれないため、画面の端に細い線として後ろのウィンドウが透けて見える）。
+        // 作業領域側の区切り線は TaskbarController が別に引く
+        _painted = SurfacePaint.Wrap(content, _settings.TaskbarBackground, _settings.TaskbarOpacity, corner, border: !flush);
         Content = _painted.Root;
         PlaceBlur();
     }
