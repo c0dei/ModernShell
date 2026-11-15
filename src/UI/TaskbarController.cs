@@ -329,6 +329,23 @@ public sealed partial class TaskbarController : IDisposable
 
             tray.Children.Add(ShowDesktopSliver());
             Place(grid, tray, 2, Alignment.End);
+            if (center)
+            {
+                // アプリが多いと、中央の領域が広がって、右のトレイ（ウィジェット含む）や左のスタートボタンの場所を食ってしまう。
+                // 左右に必要な幅（大きいほう）を両側に確保し、残りを中央のアプリの上限にする（入りきらない分は切れる）
+                void Fit()
+                {
+                    double total = Vertical ? grid.ActualHeight : grid.ActualWidth;
+                    if (total <= 0) return;
+                    double right = (Vertical ? tray.ActualHeight : tray.ActualWidth) + 16;
+                    double left = StartAtLeftEdge ? (Vertical ? startGroup.ActualHeight : startGroup.ActualWidth) + 16 : 0;
+                    double limit = Math.Max(48, total - 2 * Math.Max(left, right));
+                    if (Vertical) grid.RowDefinitions[1].MaxHeight = limit; else grid.ColumnDefinitions[1].MaxWidth = limit;
+                }
+                grid.SizeChanged += (_, _) => Fit();
+                tray.SizeChanged += (_, _) => Fit();
+                startGroup.SizeChanged += (_, _) => Fit();
+            }
             AddSurface(BarSurface.Anchor.Fill, h, grid);
             _reservation.AutoHide = _settings.AutoHideTaskbar;
             _reservation.Reserve(Edge, h + across * 2);
