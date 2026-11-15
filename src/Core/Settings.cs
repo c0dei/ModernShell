@@ -107,6 +107,8 @@ public sealed class Settings
     public bool MultiMonitorTaskbar { get; set; } = false;
     /// <summary>タスクバーを自動的に隠す（画面の端にカーソルを当てると出る）。</summary>
     public bool AutoHideTaskbar { get; set; } = false;
+    /// <summary>タスクバーに並べるウィジェット（ID の並び順がそのまま表示順）。</summary>
+    public List<string> BarWidgets { get; set; } = new();
     public bool GroupTaskbarButtons { get; set; } = true;
     public bool ShowTaskbarLabels { get; set; } = false;
     /// <summary>アプリが付ける進捗バーとオーバーレイ アイコン（通知の数など）をボタンに表示する。</summary>

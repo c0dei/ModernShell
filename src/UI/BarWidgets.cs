@@ -1,0 +1,363 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Shapes;
+using ModernShell.Core;
+using Forms = System.Windows.Forms;
+using WMC = global::Windows.Media.Control;
+
+namespace ModernShell.UI;
+
+/// <summary>バーのウィジェットの一覧（設定画面の選択と、バーへの追加に使う）。</summary>
+public sealed record BarWidgetInfo(string Id, string Category, string Title, string Description, Func<BarWidget> Create);
+
+public static class BarWidgetCatalog
+{
+    public static readonly IReadOnlyList<BarWidgetInfo> All = new[]
+    {
+        new BarWidgetInfo("system", "システム", "CPU・メモリ", "CPU とメモリの使用率を円グラフで表示します。クリックで詳細", () => new SystemBarWidget()),
+        new BarWidgetInfo("battery", "システム", "バッテリー", "バッテリー残量と充電中の表示（バッテリーの無い PC では表示されません）", () => new BatteryBarWidget()),
+        new BarWidgetInfo("nowplaying", "メディア", "再生中の曲", "再生中の曲名とアーティスト。クリックで再生/一時停止、右クリックで前後の曲へ", () => new NowPlayingBarWidget()),
+        new BarWidgetInfo("pomodoro", "生産性", "ポモドーロ", "25 分の集中と 5 分の休憩を繰り返すタイマー。クリックで開始/一時停止", () => new PomodoroBarWidget()),
+    };
+
+    public static BarWidgetInfo? Find(string id) => All.FirstOrDefault(w => w.Id == id);
+}
+
+/// <summary>タスクバーに並ぶウィジェットのカード 1 枚。</summary>
+public abstract class BarWidget
+{
+    public abstract string Id { get; }
+    protected Theme T => Theme.Current;
+    protected bool Vertical { get; private set; }
+    protected double TileH { get; private set; }
+
+    /// <summary>カードを作る。縦のバーでは幅が狭いので、小さな表示にする。</summary>
+    public FrameworkElement Build(bool vertical, double tileH)
+    {
+        Vertical = vertical;
+        TileH = tileH;
+        var inner = BuildContent();
+        var card = new Border
+        {
+            Background = T.Surface, CornerRadius = T.Corner(6), Child = inner,
+            Padding = vertical ? new Thickness(0, 4, 0, 4) : new Thickness(8, 0, 8, 0),
+        };
+        if (vertical) card.Width = tileH; else card.Height = tileH;
+        Card = card;
+        return card;
+    }
+
+    public FrameworkElement? Card { get; private set; }
+    /// <summary>バーに置いたときの外側のボタン（隠すときは、余白ごと隠す）。</summary>
+    public FrameworkElement? Outer { get; set; }
+
+    protected abstract FrameworkElement BuildContent();
+
+    /// <summary>1 秒ごとに呼ばれる。</summary>
+    public virtual void Tick(int count) { }
+
+    /// <summary>クリックしたときの詳細（メニュー形式）。</summary>
+    public virtual IEnumerable<MenuItemSpec> Details() => Enumerable.Empty<MenuItemSpec>();
+
+    /// <summary>左クリック。既定は詳細を出す。true を返したら処理済み（詳細は出さない）。</summary>
+    public virtual bool OnClick() => false;
+
+    /// <summary>右クリックのメニューに足す項目。</summary>
+    public virtual IEnumerable<MenuItemSpec> ExtraMenu() => Enumerable.Empty<MenuItemSpec>();
+
+    protected void SetVisible(bool visible)
+    {
+        var el = Outer ?? Card;
+        if (el != null) el.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ---- 部品 ----
+
+    /// <summary>円グラフ（0–100）。</summary>
+    protected sealed class Ring : Grid
+    {
+        private readonly Path _arc = new();
+        private readonly TextBlock _label;
+        private readonly double _size, _thickness;
+
+        public Ring(double size, double thickness, Brush fg, Brush track, Brush textBrush, double fontSize)
+        {
+            _size = size; _thickness = thickness;
+            Width = Height = size;
+            Children.Add(new Ellipse { Stroke = track, StrokeThickness = thickness, Width = size - thickness, Height = size - thickness });
+            _arc.Stroke = fg;
+            _arc.StrokeThickness = thickness;
+            _arc.StrokeStartLineCap = _arc.StrokeEndLineCap = PenLineCap.Round;
+            Children.Add(_arc);
+            _label = new TextBlock
+            {
+                FontSize = fontSize, Foreground = textBrush, FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            };
+            Children.Add(_label);
+        }
+
+        public void Set(double percent, string text)
+        {
+            percent = Math.Clamp(percent, 0, 100);
+            _label.Text = text;
+            double r = (_size - _thickness) / 2, c = _size / 2;
+            if (percent <= 0.1) { _arc.Data = Geometry.Empty; return; }
+            double angle = Math.Min(359.9, percent / 100.0 * 360.0) * Math.PI / 180.0;
+            var start = new Point(c, c - r);
+            var end = new Point(c + r * Math.Sin(angle), c - r * Math.Cos(angle));
+            var fig = new PathFigure { StartPoint = start, IsClosed = false };
+            fig.Segments.Add(new ArcSegment(end, new Size(r, r), 0, angle > Math.PI, SweepDirection.Clockwise, true));
+            _arc.Data = new PathGeometry(new[] { fig });
+        }
+    }
+
+    protected Brush Track => new SolidColorBrush(Color.FromArgb(0x40, 0x80, 0x80, 0x80));
+}
+
+// ---------------------------------------------------------------------------
+
+public sealed class SystemBarWidget : BarWidget
+{
+    public override string Id => "system";
+    private readonly SystemStats _stats = new();
+    private Ring? _cpu, _mem;
+    private double _cpuPct, _memPct, _memUsed, _memTotal;
+
+    protected override FrameworkElement BuildContent()
+    {
+        double size = Vertical ? 22 : 26;
+        _cpu = new Ring(size, 3, T.AccentBrush, Track, T.Text, 9);
+        _mem = new Ring(size, 3, new SolidColorBrush(Color.FromRgb(0x2E, 0xB8, 0x72)), Track, T.Text, 9);
+        _stats.CpuPercent();
+        var row = new StackPanel { Orientation = Vertical ? Orientation.Vertical : Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        _mem.Margin = Vertical ? new Thickness(0, 4, 0, 0) : new Thickness(6, 0, 0, 0);
+        row.Children.Add(_cpu);
+        row.Children.Add(_mem);
+        Tick(0);
+        return row;
+    }
+
+    public override void Tick(int count)
+    {
+        if (_cpu == null || _mem == null) return;
+        _cpuPct = _stats.CpuPercent();
+        (_memPct, _memUsed, _memTotal) = _stats.Memory();
+        _cpu.Set(_cpuPct, $"{_cpuPct:0}");
+        _mem.Set(_memPct, $"{_memPct:0}");
+    }
+
+    public override IEnumerable<MenuItemSpec> Details() => new[]
+    {
+        MenuItemSpec.Header(L.T("システム")),
+        new MenuItemSpec("", $"CPU  {_cpuPct:0}%", () => { }),
+        new MenuItemSpec("", L.F("メモリ  {0:0}%（{1:0.0} / {2:0.0} GB）", _memPct, _memUsed, _memTotal), () => { }),
+        MenuItemSpec.Separator,
+        new MenuItemSpec("", L.T("タスク マネージャー"), SystemActions.OpenTaskManager),
+    };
+}
+
+// ---------------------------------------------------------------------------
+
+public sealed class BatteryBarWidget : BarWidget
+{
+    public override string Id => "battery";
+    private Ring? _ring;
+    private TextBlock? _bolt;
+    private bool _hasBattery;
+
+    protected override FrameworkElement BuildContent()
+    {
+        _ring = new Ring(Vertical ? 24 : 28, 3, new SolidColorBrush(Color.FromRgb(0x2E, 0xB8, 0x72)), Track, T.Text, 9);
+        _bolt = UiKit.Glyph("", 10, T.Text);
+        _bolt.Margin = new Thickness(4, 0, 0, 0);
+        var row = new StackPanel { Orientation = Vertical ? Orientation.Vertical : Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        row.Children.Add(_ring);
+        row.Children.Add(_bolt);
+        Tick(0);
+        return row;
+    }
+
+    public override void Tick(int count)
+    {
+        if (_ring == null) return;
+        try
+        {
+            var ps = Forms.SystemInformation.PowerStatus;
+            _hasBattery = !ps.BatteryChargeStatus.HasFlag(Forms.BatteryChargeStatus.NoSystemBattery);
+            SetVisible(_hasBattery);
+            if (!_hasBattery) return;
+            double pct = Math.Clamp(ps.BatteryLifePercent * 100, 0, 100);
+            _ring.Set(pct, $"{pct:0}");
+            if (_bolt != null) _bolt.Visibility = ps.PowerLineStatus == Forms.PowerLineStatus.Online ? Visibility.Visible : Visibility.Collapsed;
+        }
+        catch { SetVisible(false); }
+    }
+
+    public override IEnumerable<MenuItemSpec> Details()
+    {
+        var ps = Forms.SystemInformation.PowerStatus;
+        var items = new List<MenuItemSpec>
+        {
+            MenuItemSpec.Header(L.T("バッテリー")),
+            new("", L.F("残量  {0:0}%", ps.BatteryLifePercent * 100), () => { }),
+            new("", ps.PowerLineStatus == Forms.PowerLineStatus.Online ? L.T("電源に接続中") : L.T("バッテリーで動作中"), () => { }),
+        };
+        if (ps.BatteryLifeRemaining > 0)
+        {
+            var t = TimeSpan.FromSeconds(ps.BatteryLifeRemaining);
+            items.Add(new("", L.F("残り  {0} 時間 {1} 分", (int)t.TotalHours, t.Minutes), () => { }));
+        }
+        items.Add(MenuItemSpec.Separator);
+        items.Add(new("", L.T("電源とバッテリーの設定"), () => Launcher.Open("ms-settings:powersleep")));
+        return items;
+    }
+}
+
+// ---------------------------------------------------------------------------
+
+/// <summary>再生中の曲（Windows のメディア セッション。ブラウザー・Spotify・音楽アプリなど、システムの音量パネルに出るもの）。</summary>
+public sealed class NowPlayingBarWidget : BarWidget
+{
+    public override string Id => "nowplaying";
+    private TextBlock? _title, _artist, _icon;
+    private WMC.GlobalSystemMediaTransportControlsSessionManager? _manager;
+    private WMC.GlobalSystemMediaTransportControlsSession? _session;
+    private string _titleText = "", _artistText = "";
+    private bool _playing, _busy;
+
+    protected override FrameworkElement BuildContent()
+    {
+        _icon = UiKit.Glyph("", 14, T.Text);
+        _title = UiKit.Label("", 12, T.Text, FontWeights.SemiBold);
+        _artist = UiKit.Label("", 11, T.TextSecondary);
+        _title.MaxWidth = _artist.MaxWidth = 160;
+        _title.TextTrimming = _artist.TextTrimming = TextTrimming.CharacterEllipsis;
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+        text.Children.Add(_title);
+        text.Children.Add(_artist);
+        var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        row.Children.Add(_icon);
+        if (!Vertical) row.Children.Add(text);
+        SetVisible(false);
+        _ = RefreshAsync();
+        return row;
+    }
+
+    public override void Tick(int count)
+    {
+        if (count % 2 == 0) _ = RefreshAsync();
+    }
+
+    private async System.Threading.Tasks.Task RefreshAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            _manager ??= await WMC.GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+            _session = _manager.GetCurrentSession();
+            string title = "", artist = "";
+            bool playing = false;
+            if (_session != null)
+            {
+                var props = await _session.TryGetMediaPropertiesAsync();
+                title = props?.Title ?? "";
+                artist = props?.Artist ?? "";
+                playing = _session.GetPlaybackInfo()?.PlaybackStatus == WMC.GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+            }
+            _titleText = title; _artistText = artist; _playing = playing;
+            if (_title != null) _title.Text = title;
+            if (_artist != null) { _artist.Text = artist; _artist.Visibility = artist.Length == 0 ? Visibility.Collapsed : Visibility.Visible; }
+            if (_icon != null) _icon.Text = playing ? "" : "";
+            if (Card != null) Card.ToolTip = artist.Length > 0 ? title + " - " + artist : title;
+            SetVisible(_session != null && title.Length > 0);
+        }
+        catch (Exception ex) { Log.Error("now playing", ex); SetVisible(false); }
+        finally { _busy = false; }
+    }
+
+    public override bool OnClick()
+    {
+        try { if (_session != null) _ = _session.TryTogglePlayPauseAsync(); } catch (Exception ex) { Log.Error("now playing toggle", ex); }
+        return true;
+    }
+
+    public override IEnumerable<MenuItemSpec> ExtraMenu() => new[]
+    {
+        MenuItemSpec.Header(_artistText.Length > 0 ? _titleText + " - " + _artistText : _titleText),
+        new MenuItemSpec("", L.T("前の曲"), () => { try { _ = _session?.TrySkipPreviousAsync(); } catch { } }),
+        new MenuItemSpec(_playing ? "" : "", _playing ? L.T("一時停止") : L.T("再生"), () => { try { _ = _session?.TryTogglePlayPauseAsync(); } catch { } }),
+        new MenuItemSpec("", L.T("次の曲"), () => { try { _ = _session?.TrySkipNextAsync(); } catch { } }),
+        MenuItemSpec.Separator,
+    };
+}
+
+// ---------------------------------------------------------------------------
+
+/// <summary>ポモドーロ: 25 分の集中 → 5 分の休憩（4 回ごとに 15 分）。終わると音で知らせる。</summary>
+public sealed class PomodoroBarWidget : BarWidget
+{
+    public override string Id => "pomodoro";
+    private enum Phase { Focus, Break, LongBreak }
+    private Phase _phase = Phase.Focus;
+    private int _round = 1;
+    private int _remaining = Seconds(Phase.Focus);
+    private bool _running;
+    private TextBlock? _label, _time;
+    private Border? _frame;
+
+    private static int Seconds(Phase p) => p switch { Phase.Focus => 25 * 60, Phase.Break => 5 * 60, _ => 15 * 60 };
+
+    protected override FrameworkElement BuildContent()
+    {
+        _label = UiKit.Label("", 10, T.TextSecondary);
+        _time = UiKit.Label("", Vertical ? 11 : 15, T.Text, FontWeights.SemiBold);
+        var col = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        if (!Vertical) col.Children.Add(_label);
+        col.Children.Add(_time);
+        _frame = new Border { CornerRadius = T.Corner(6), BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent, Child = col, Padding = new Thickness(0, 0, 0, 0) };
+        Refresh();
+        return _frame;
+    }
+
+    private void Refresh()
+    {
+        if (_label == null || _time == null) return;
+        _time.Text = $"{_remaining / 60:00}:{_remaining % 60:00}";
+        _label.Text = _phase switch { Phase.Focus => $"Focus {_round}/4", Phase.Break => L.T("休憩"), _ => L.T("長い休憩") };
+        if (_frame != null) _frame.BorderBrush = _running ? new SolidColorBrush(_phase == Phase.Focus ? Color.FromRgb(0xE8, 0x3A, 0x30) : Color.FromRgb(0x2E, 0xB8, 0x72)) : Brushes.Transparent;
+        if (Card != null) Card.ToolTip = _running ? L.T("クリックで一時停止") : L.T("クリックで開始");
+    }
+
+    public override void Tick(int count)
+    {
+        if (!_running) return;
+        if (--_remaining <= 0) NextPhase();
+        Refresh();
+    }
+
+    private void NextPhase()
+    {
+        try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
+        if (_phase == Phase.Focus) { _phase = _round >= 4 ? Phase.LongBreak : Phase.Break; }
+        else { if (_phase == Phase.LongBreak) _round = 1; else _round++; _phase = Phase.Focus; }
+        _remaining = Seconds(_phase);
+        _running = false; // 次は、自分で始めるまで待つ
+    }
+
+    public override bool OnClick() { _running = !_running; Refresh(); return true; }
+
+    public override IEnumerable<MenuItemSpec> ExtraMenu() => new[]
+    {
+        MenuItemSpec.Header(L.T("ポモドーロ")),
+        new MenuItemSpec(_running ? "" : "", _running ? L.T("一時停止") : L.T("開始"), () => OnClick()),
+        new MenuItemSpec("", L.T("リセット"), () => { _phase = Phase.Focus; _round = 1; _remaining = Seconds(_phase); _running = false; Refresh(); }),
+        new MenuItemSpec("", L.T("次へ進む"), () => { NextPhase(); Refresh(); }),
+        MenuItemSpec.Separator,
+    };
+}

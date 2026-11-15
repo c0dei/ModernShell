@@ -268,7 +268,7 @@ public sealed partial class TaskbarController : IDisposable
         _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarHeight, _settings.TaskbarIconSize, _settings.IslandMarginX, _settings.IslandMarginY,
         _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds,
         _settings.MagnifyOnHover, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
-        _settings.MultiMonitorTaskbar, _settings.AutoHideTaskbar, _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language, _settings.ShowImeIndicator);
+        _settings.MultiMonitorTaskbar, _settings.AutoHideTaskbar, string.Join(",", _settings.BarWidgets), _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language, _settings.ShowImeIndicator);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e)
     {
         _online = e.IsAvailable;

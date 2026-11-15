@@ -46,6 +46,8 @@ public sealed partial class TaskbarController
         };
         _overflowButton.Click += ShowOverflow;
         MakeOverflowDropTarget(_overflowButton); // 「^」の上に落としてもしまえる
+        var barWidgets = BuildBarWidgetsHost();
+        if (barWidgets != null) p.Children.Add(barWidgets);
         p.Children.Add(_overflowButton);
 
         _trayIcons = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
@@ -576,6 +578,7 @@ public sealed partial class TaskbarController
 
     private void UpdateClock()
     {
+        UpdateBarWidgets();
         if (_secondaries.Count > 0) UpdateSecondaryClocks(DateTime.Now);
         if (_time == null || _date == null) return;
         var now = DateTime.Now;

@@ -385,6 +385,10 @@ public sealed class SettingsWindow : Window
             ToggleRow(L.T("IME の状態を表示"), L.T("日本語入力の状態（あ / A など）。クリックでオン/オフを切り替えます"), _s.ShowImeIndicator, v => _s.ShowImeIndicator = v, on),
             ToggleRow(L.T("時計に秒を表示"), "", _s.ShowSeconds, v => _s.ShowSeconds = v, on));
 
+        Group(p, "", L.T("バーのウィジェット"), L.T("タスクバーの右側に並べる小さなカード。クリックで詳細、右クリックで並べ替え・外す"),
+            BarWidgetCatalog.All.Select(w => ToggleRow(L.T(w.Title), L.T(w.Description), _s.BarWidgets.Contains(w.Id),
+                v => { if (v) { if (!_s.BarWidgets.Contains(w.Id)) _s.BarWidgets.Add(w.Id); } else _s.BarWidgets.Remove(w.Id); }, on)).ToArray());
+
         Group(p, "", L.T("プレビュー"), L.T("カーソルを置いたときに出る一覧"),
             ToggleRow(L.T("ウィンドウのプレビューを表示"), L.T("実行中のアプリのボタンに置くと、ウィンドウの中身を縮小表示します。クリックで切り替え、× で閉じます。複数ウィンドウのボタンをクリックしたときもプレビューを出します（オフのときは、ウィンドウ名のリストを出します）"),
                 _s.ShowThumbnailPreview, v => _s.ShowThumbnailPreview = v, on),
