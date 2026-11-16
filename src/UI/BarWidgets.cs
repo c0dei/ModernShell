@@ -43,7 +43,7 @@ public abstract class BarWidget
         var inner = BuildContent();
         var card = new Border
         {
-            Background = T.Surface, CornerRadius = T.Corner(6), Child = inner,
+            Background = Brushes.Transparent, CornerRadius = T.Corner(6), Child = inner,
             Padding = vertical ? new Thickness(0, 4, 0, 4) : new Thickness(8, 0, 8, 0),
         };
         if (vertical) card.Width = tileH; else card.Height = tileH;
