@@ -303,6 +303,7 @@ public sealed partial class TaskbarController : IDisposable
         {
             // ---- 帯型: 1 枚のウィンドウを 3 つの領域（始まり・中央・終わり）に分ける ----
             var grid = new Grid();
+            _bandGrid = grid;
             // トレイは中身の大きさをそのまま確保する（均等に分けると、バーが短い／縦のバーでトレイが半分に収まらないとき、
             // 「^」や先頭のアイコンが切れる）。中央寄せのときだけ、アプリを中央に置くために左右を同じ大きさにする
             var endLen = _settings.TaskbarAlignment != TaskbarAlignment.Left ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
@@ -522,6 +523,25 @@ public sealed partial class TaskbarController : IDisposable
     /// 丸め・領域の確保のずれで、画面の端とのあいだに 1〜2px の線ができて後ろのウィンドウが見えるのを防ぐ。
     /// 隣にモニターがあるときは、そちらに映ってしまうのではみ出させない。
     /// </summary>
+    private Grid? _bandGrid;
+
+    /// <summary>
+    /// 画面の端の外へはみ出した分（見えない部分）だけ、中身を内側へ寄せて、見える範囲の真ん中にボタンが来るようにする
+    /// （はみ出した分、窓が長くなるので、そのままだと中身が画面の端の側へずれて、上下の余白が不揃いに見える）。
+    /// </summary>
+    private void ApplyBleedMargin(int bleedPx, double scale)
+    {
+        if (_bandGrid == null) return;
+        double d = scale > 0 ? bleedPx / scale : 0;
+        _bandGrid.Margin = Edge switch
+        {
+            TaskbarEdge.Top => new Thickness(0, d, 0, 0),
+            TaskbarEdge.Left => new Thickness(d, 0, 0, 0),
+            TaskbarEdge.Right => new Thickness(0, 0, d, 0),
+            _ => new Thickness(0, 0, 0, d),
+        };
+    }
+
     private (int x, int y, int w, int h) FlushRect(Win32.RECT r, double scale)
     {
         int bleed = (int)Math.Ceiling(3 * scale);
@@ -546,6 +566,7 @@ public sealed partial class TaskbarController : IDisposable
             }
         }
         if (neighbor) bleed = 0;
+        ApplyBleedMargin(bleed, scale);
         return Edge switch
         {
             TaskbarEdge.Top => (r.Left, r.Top - bleed, r.Width, r.Height + bleed),
@@ -570,6 +591,7 @@ public sealed partial class TaskbarController : IDisposable
             int thick = (int)Math.Round(_settings.TaskbarHeight * s.Scale); // バーの太さ（横のバーなら高さ、縦のバーなら幅）
             if (s.Placement == BarSurface.Anchor.Fill)
             {
+                if (across > 0 || along > 0) ApplyBleedMargin(0, 1); // 浮かせた帯は、はみ出さない
                 // 帯型: 余白 0 なら画面端に密着（Windows はこの場合角を丸めない）、余白があれば離して角丸にする
                 if (Vertical)
                 {
