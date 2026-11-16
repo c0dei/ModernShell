@@ -19,13 +19,14 @@ namespace ModernShell.UI;
 /// </summary>
 public sealed class SettingsWindow : Window
 {
-    private enum Page { Start, Taskbar, Pins, Widgets, Look, General, About }
+    private enum Page { Start, Taskbar, TaskbarItems, Pins, Widgets, Look, General, About }
 
     // 表示言語を切り替えたら名前も変わるので、毎回作る
     private static (Page page, string glyph, string label)[] Pages => new[]
     {
         (Page.Start, "", L.T("スタート メニュー")),
         (Page.Taskbar, "", L.T("タスクバー")),
+        (Page.TaskbarItems, "", L.T("ボタンと操作")),
         (Page.Pins, "", L.T("ピン留めとアイコン")),
         (Page.Widgets, "", L.T("ウィジェット")),
         (Page.Look, "", L.T("外観")),
@@ -237,6 +238,7 @@ public sealed class SettingsWindow : Window
         {
             case Page.Start: StartPage(p); break;
             case Page.Taskbar: TaskbarPage(p); break;
+            case Page.TaskbarItems: TaskbarItemsPage(p); break;
             case Page.Pins: PinsPage(p); break;
             case Page.Widgets: WidgetsPage(p); break;
             case Page.Look: LookPage(p); break;
@@ -312,7 +314,8 @@ public sealed class SettingsWindow : Window
             ToggleRow(L.T("「よく使う」を表示"), L.T("ピン留めの下に、よく開くアプリ（2 回以上）を 1 行で表示します"), _s.ShowFrequentApps, v => _s.ShowFrequentApps = v),
             ButtonRow(L.T("利用履歴を消去"), L.T("「最近使った」「よく使う」の元になっている、アプリを開いた記録を消します"), L.T("消去"),
                 () => { if (Confirm(L.T("アプリを開いた記録を消しますか？"))) { UsageStats.Clear(); _s.Save(); } }),
-            ToggleRow(L.T("ウィジェットを表示"), L.T("スタート メニューの右側に表示します。内容は「ウィジェット」で選べます"), _s.ShowWidgets, v => _s.ShowWidgets = v));
+            ButtonRow(L.T("ウィジェット"), L.T("スタート メニューの右側に出すウィジェット（天気・時計など）の設定は、「ウィジェット」ページにあります"), L.T("開く"),
+                () => { _page = Page.Widgets; Build(); }));
 
         p.Children.Add(Note(L.T("ピン留めはスタート メニュー上でドラッグして並べ替え、右クリックで追加・削除できます。初期状態に戻すには「ピン留めとアイコン」へ。")));
     }
@@ -373,6 +376,27 @@ public sealed class SettingsWindow : Window
                 Margins(floating), (floating ? _s.IslandMarginY : _s.BandMarginY).ToString(),
                 v => { if (floating) _s.IslandMarginY = int.Parse(v); else _s.BandMarginY = int.Parse(v); }, on));
 
+        p.Children.Add(Section(L.T("見た目")));
+        Group(p, "\uE75B", L.T("タスクバー"), L.T("タスクバーと、そこから開くプレビュー・一覧・メニューの背景"),
+            DropDownRow(L.T("背景"), L.T("透過なし: テーマの色（ライト/ダーク）。透過: テーマの色を半透明で。ぼかし: 壁紙を強くぼかした下地にテーマの色を重ねる"),
+                new[] { ("Solid", L.T("透過なし")), ("Transparent", L.T("透過")), ("Blur", L.T("ぼかし")) }, _s.TaskbarBackground.ToString(), v => _s.TaskbarBackground = Enum.Parse<SurfaceStyle>(v), _s.UseCustomTaskbar),
+            SliderRow(L.T("不透明度"), L.T("重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ"),
+                _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.UseCustomTaskbar && _s.TaskbarBackground != SurfaceStyle.Solid),
+            ToggleRow(L.T("バーをピル型にする"), L.T("バーの角を、高さの半分まで丸めます。画面の端から離す（余白を付ける）と、浮いたピルのように見えます"), _s.TaskbarPill, v => _s.TaskbarPill = v, _s.UseCustomTaskbar));
+        p.Children.Add(Section(L.T("タスクバーの背景に重ねる色")));
+        p.Children.Add(BarTintSwatches());
+
+        if (!_flat)
+            p.Children.Add(InfoBar(L.T("困ったときは Ctrl + Alt + Shift + F12"),
+                L.T("いつでも ModernShell を終了して純正タスクバーに戻せます。トレイの「^」→ ModernShell アイコンの右クリック、スタートの電源メニューからも終了できます。")));
+    }
+
+    /// <summary>「ボタンと操作」ページ: ボタン・時計・プレビュー・メニューの位置。</summary>
+    private void TaskbarItemsPage(StackPanel p)
+    {
+        bool on = _s.UseCustomTaskbar;
+        bool vertical = _s.TaskbarEdge is TaskbarEdge.Left or TaskbarEdge.Right;
+        if (!on && !_flat) p.Children.Add(Note(L.T("「タスクバー」ページで ModernShell のタスクバーを使うと、ここの設定が反映されます。")));
         p.Children.Add(Section(L.T("ボタンと時計")));
         Group(p, "", L.T("ボタン"), L.T("タスクバーに並べるもの"),
             ToggleRow(L.T("タスクバーを自動的に隠す"), L.T("使わないときは画面の外に隠し、画面の端（タスクバーのある側）にカーソルを当てると出します。作業領域は確保しません"), _s.AutoHideTaskbar, v => _s.AutoHideTaskbar = v, on),
@@ -419,11 +443,6 @@ public sealed class SettingsWindow : Window
             DropDownRow(L.T("ウィンドウ名のリスト"), L.T("プレビューをオフにしたときに出るリスト"), AlignOptions(), _s.WindowListAlign.ToString(), v => _s.WindowListAlign = Enum.Parse<MenuAlign>(v), on),
             DropDownRow(L.T("仮想デスクトップの一覧"), "", AlignOptions(), _s.DesktopsAlign.ToString(), v => _s.DesktopsAlign = Enum.Parse<MenuAlign>(v), on),
             DropDownRow(L.T("隠れているトレイアイコンの一覧"), L.T("「^」ボタンで開く一覧"), AlignOptions(), _s.TrayOverflowAlign.ToString(), v => _s.TrayOverflowAlign = Enum.Parse<MenuAlign>(v), on));
-
-        p.Children.Add(Note(L.T("背景の素材と不透明度は「外観」で変えられます。")));
-        if (!_flat)
-            p.Children.Add(InfoBar(L.T("困ったときは Ctrl + Alt + Shift + F12"),
-                L.T("いつでも ModernShell を終了して純正タスクバーに戻せます。トレイの「^」→ ModernShell アイコンの右クリック、スタートの電源メニューからも終了できます。")));
     }
 
     private void PinsPage(StackPanel p)
@@ -579,14 +598,7 @@ public sealed class SettingsWindow : Window
             SliderRow(L.T("不透明度"), L.T("重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ"),
                 _s.StartMenuOpacity, v => _s.StartMenuOpacity = v, _s.StartMenuBackground != SurfaceStyle.Solid));
 
-        Group(p, "\uE75B", L.T("タスクバー"), L.T("タスクバーと、そこから開くプレビュー・一覧・メニューの背景"),
-            DropDownRow(L.T("背景"), L.T("透過なし: テーマの色（ライト/ダーク）。透過: テーマの色を半透明で。ぼかし: 壁紙を強くぼかした下地にテーマの色を重ねる"),
-                new[] { ("Solid", L.T("透過なし")), ("Transparent", L.T("透過")), ("Blur", L.T("ぼかし")) }, _s.TaskbarBackground.ToString(), v => _s.TaskbarBackground = Enum.Parse<SurfaceStyle>(v), _s.UseCustomTaskbar),
-            SliderRow(L.T("不透明度"), L.T("重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ"),
-                _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.UseCustomTaskbar && _s.TaskbarBackground != SurfaceStyle.Solid),
-            ToggleRow(L.T("バーをピル型にする"), L.T("バーの角を、高さの半分まで丸めます。画面の端から離す（余白を付ける）と、浮いたピルのように見えます"), _s.TaskbarPill, v => _s.TaskbarPill = v, _s.UseCustomTaskbar));
-        p.Children.Add(Section(L.T("タスクバーの背景に重ねる色")));
-        p.Children.Add(BarTintSwatches());
+        p.Children.Add(Note(L.T("タスクバーの背景・色・形は「タスクバー」ページで変えられます。")));
 
         Group(p, "\uE916", L.T("アニメーション"), L.T("開くときに滑り込ませるか、パッと表示するか"),
             ToggleRow(L.T("GPU が無い PC では軽く動かす"),
