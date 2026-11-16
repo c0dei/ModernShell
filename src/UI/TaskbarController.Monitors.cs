@@ -26,6 +26,7 @@ public sealed partial class TaskbarController
         public required BarSurface Surface;
         public required StackPanel Apps;
         public required TextBlock Time, Date;
+        public MagnifyEngine? Magnify;
     }
 
     private readonly List<SecondaryBar> _secondaries = new();
@@ -120,6 +121,7 @@ public sealed partial class TaskbarController
         _monitorWatch?.Stop();
         foreach (var s in _secondaries)
         {
+            try { s.Magnify?.Dispose(); } catch { }
             try { s.Surface.Close(); } catch { }
             try { s.Reservation.Dispose(); } catch { }
         }
@@ -141,6 +143,8 @@ public sealed partial class TaskbarController
         foreach (var bar in _secondaries)
         {
             bar.Apps.Children.Clear();
+            bar.Magnify?.Dispose();
+            _currentMag = bar.Magnify = NewMagnify(bar.Apps);
             var groups = BuildGroups(TaskWindows().Where(w => ScreenNameOf(w) == bar.Screen), withPins: false);
             foreach (var g in groups.Where(x => !_order.Contains(x.Key))) _order.Add(g.Key);
             foreach (var g in groups.OrderBy(x => _order.IndexOf(x.Key)))
@@ -151,6 +155,7 @@ public sealed partial class TaskbarController
             }
             bar.Apps.Visibility = bar.Apps.Children.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         }
+        _currentMag = null;
     }
 
     private void UpdateSecondaryClocks(DateTime now)

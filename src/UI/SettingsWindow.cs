@@ -408,6 +408,11 @@ public sealed class SettingsWindow : Window
             ToggleRow(L.T("進捗とバッジを表示"), L.T("ダウンロードなどの進捗バーと、通知の数などの小さな印（アプリが付けるもの）をボタンに表示します"), _s.ShowTaskbarBadges, v => _s.ShowTaskbarBadges = v, on),
             ToggleRow(L.T("ボタンにウィンドウ名を表示"), "", _s.ShowTaskbarLabels, v => _s.ShowTaskbarLabels = v, on),
             ToggleRow(L.T("ホバー時にアイコンを拡大"), L.T("カーソルを置いたアプリのアイコンを少し大きくします"), _s.MagnifyOnHover, v => _s.MagnifyOnHover = v, on),
+            DropDownRow(L.T("拡大率"), L.T("カーソルを置いたアイコンの最大の拡大率。バーの太さ・ボタンの大きさに収まる範囲で効きます"),
+                new[] { ("115", L.T("弱（115%）")), ("130", L.T("標準（130%）")), ("150", L.T("強（150%）")), ("180", L.T("最大（180%）")) },
+                _s.MagnifyScale.ToString(), v => _s.MagnifyScale = int.Parse(v), on && _s.MagnifyOnHover),
+            ToggleRow(L.T("両隣のアイコンも拡大"), L.T("Mac のドックのように、カーソルの下を最大に、両隣も距離に応じてなめらかに拡大します。オフのときは、カーソルの下のアイコンだけ"),
+                _s.MagnifyNeighbors, v => _s.MagnifyNeighbors = v, on && _s.MagnifyOnHover),
             ToggleRow(L.T("IME の状態を表示"), L.T("日本語入力の状態（あ / A など）。クリックでオン/オフを切り替えます"), _s.ShowImeIndicator, v => _s.ShowImeIndicator = v, on),
             ToggleRow(L.T("時計に秒を表示"), "", _s.ShowSeconds, v => _s.ShowSeconds = v, on));
 

@@ -134,6 +134,8 @@ public sealed partial class TaskbarController
         LiveReorder? reorder = null;
         if (!PinsFromWindows)
             reorder = new LiveReorder(_apps, Flow, (from, to) => CommitPinnedOrder(pinnedIds, from, to));
+        _magnify?.Dispose();
+        _currentMag = _magnify = NewMagnify(_apps);
         foreach (var g in ordered)
         {
             var tile = AppButton(g);
@@ -147,6 +149,7 @@ public sealed partial class TaskbarController
             }
         }
         _apps.Visibility = _apps.Children.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        _currentMag = null;
         RebuildSecondaryApps();
         PruneWatched();
         LogGroups(ordered);
@@ -405,28 +408,35 @@ public sealed partial class TaskbarController
                ?? (exe != null && !exe.EndsWith("ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase) ? ExeEntry(exe, w.Icon) : null);
     }
 
-    /// <summary>アイランド型のホバー拡大（Mac のドック風）。レイアウトは変えず描画だけ拡大する。</summary>
+    private MagnifyEngine? _magnify, _currentMag;
+
+    /// <summary>拡大の上限（設定の拡大率。ただし、ボタンの幅・バーの太さに収まる範囲）。</summary>
+    private double MagnifyMax()
+    {
+        double want = Math.Clamp(_settings.MagnifyScale, 100, 250) / 100.0;
+        double fitBar = (_settings.TaskbarHeight - 4) / IconSz;
+        double fitTile = (Vertical ? TileSize.Height : TileSize.Width) / IconSz;
+        return Math.Max(1.0, Math.Min(want, Math.Min(fitBar, fitTile)));
+    }
+
+    /// <summary>アプリのボタンの並び用の拡大エンジンを作る（ボタンを作り直すたびに作り直す）。</summary>
+    private MagnifyEngine? NewMagnify(System.Windows.Controls.Panel panel) =>
+        _settings.MagnifyOnHover && !Anim.LightMode
+            ? new MagnifyEngine(panel, Vertical, MagnifyMax(), _settings.MagnifyNeighbors, (Vertical ? TileSize.Height : TileSize.Width) + 4)
+            : null;
+
+    /// <summary>ホバー拡大（Mac のドック風）に、このボタンのアイコンを登録する。</summary>
     private void AddMagnify(Tile tile, Image icon)
     {
-        var scale = new ScaleTransform(1, 1);
-        icon.RenderTransform = scale;
         // 画面の端の側を支点にして、中央側へ向かって大きくなる
-        icon.RenderTransformOrigin = Edge switch
+        var origin = Edge switch
         {
             TaskbarEdge.Top => new Point(0.5, 0.2),
             TaskbarEdge.Left => new Point(0.2, 0.5),
             TaskbarEdge.Right => new Point(0.8, 0.5),
             _ => new Point(0.5, 0.8),
         };
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        void To(double v)
-        {
-            var a = new DoubleAnimation(v, TimeSpan.FromMilliseconds(140)) { EasingFunction = ease };
-            scale.BeginAnimation(ScaleTransform.ScaleXProperty, a);
-            scale.BeginAnimation(ScaleTransform.ScaleYProperty, a);
-        }
-        tile.MouseEnter += (_, _) => To(1.25);
-        tile.MouseLeave += (_, _) => To(1.0);
+        _currentMag?.Register(tile, icon, origin);
     }
 
     /// <summary>アイコンのメニュー（右クリック・ウィンドウ名のリスト）。設定の基準（左・中央・右）でアイコンに合わせて出す。</summary>

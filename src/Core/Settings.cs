@@ -86,6 +86,10 @@ public sealed class Settings
     public int BandMarginY { get; set; } = 0;
     /// <summary>アイランド型のときホバーでアイコンを拡大する。</summary>
     public bool MagnifyOnHover { get; set; } = true;
+    /// <summary>アイコンの拡大率（%）。バーの太さ・ボタンの大きさに収まる範囲で効く。</summary>
+    public int MagnifyScale { get; set; } = 130;
+    /// <summary>カーソルの下だけでなく、両隣のアイコンも距離に応じて拡大する（Mac のドック風）。</summary>
+    public bool MagnifyNeighbors { get; set; } = false;
     /// <summary>タスクバーに IME の状態（あ / A）を表示する。</summary>
     public bool ShowImeIndicator { get; set; } = true;
     /// <summary>開くときのアニメーション（それぞれ切り替えられる）。</summary>
