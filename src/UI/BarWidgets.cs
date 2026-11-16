@@ -21,6 +21,8 @@ public static class BarWidgetCatalog
         new BarWidgetInfo("system", "システム", "CPU・メモリ", "CPU とメモリの使用率を円グラフで表示します。クリックで詳細", () => new SystemBarWidget()),
         new BarWidgetInfo("battery", "システム", "バッテリー", "バッテリー残量と充電中の表示（バッテリーの無い PC では表示されません）", () => new BatteryBarWidget()),
         new BarWidgetInfo("nowplaying", "メディア", "再生中の曲", "再生中の曲名とアーティスト。クリックで再生/一時停止、右クリックで前後の曲へ", () => new NowPlayingBarWidget()),
+        new BarWidgetInfo("weather", "天気", "天気", "今の天気（温度・天気）。設定の天気の地点と更新間隔を使います。クリックで今すぐ更新", () => new WeatherBarWidget()),
+        new BarWidgetInfo("notification", "システム", "通知センター", "クリックで Windows の通知センターを開くボタン", () => new NotificationBarWidget()),
         new BarWidgetInfo("pomodoro", "生産性", "ポモドーロ", "25 分の集中と 5 分の休憩を繰り返すタイマー。クリックで開始/一時停止", () => new PomodoroBarWidget()),
     };
 
@@ -360,4 +362,82 @@ public sealed class PomodoroBarWidget : BarWidget
         new MenuItemSpec("", L.T("次へ進む"), () => { NextPhase(); Refresh(); }),
         MenuItemSpec.Separator,
     };
+}
+
+// ---------------------------------------------------------------------------
+
+/// <summary>今の天気（アイコン・温度・天気）。取得は天気のウィジェットと同じ（地点・更新間隔は設定のもの）。</summary>
+public sealed class WeatherBarWidget : BarWidget
+{
+    public override string Id => "weather";
+    private TextBlock? _icon, _temp, _desc;
+    private string _city = "";
+    private bool _busy;
+
+    protected override FrameworkElement BuildContent()
+    {
+        _icon = UiKit.Glyph("\uE753", Vertical ? 18 : 22, T.AccentBrush);
+        _temp = UiKit.Label("—", 13, T.Text, FontWeights.SemiBold);
+        _desc = UiKit.Label("", 11, T.TextSecondary);
+        _desc.MaxWidth = 160;
+        _desc.TextTrimming = TextTrimming.CharacterEllipsis;
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+        text.Children.Add(_temp);
+        text.Children.Add(_desc);
+        var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        row.Children.Add(_icon);
+        if (!Vertical) row.Children.Add(text);
+        Tick(0);
+        return row;
+    }
+
+    private void Apply(Weather.Report w)
+    {
+        if (_icon != null) _icon.Text = w.IsClear ? "\uE706" : "\uE753";
+        if (_temp != null) _temp.Text = $"{w.Temperature:0}°";
+        if (_desc != null) _desc.Text = $"{w.Place}  {w.Description}";
+        if (Card != null) Card.ToolTip = $"{w.Place}  {w.Description}  {w.Temperature:0}°（{L.F("最高 {0:0}° / 最低 {1:0}°", w.Max, w.Min)}）";
+    }
+
+    private void Fetch(bool force)
+    {
+        if (_busy) return;
+        var city = Settings.Current?.WeatherCity ?? "";
+        if (string.IsNullOrWhiteSpace(city)) return;
+        _busy = true;
+        System.Threading.Tasks.Task.Run(() => force ? Weather.RefreshAsync(city) : Weather.GetAsync(city)).ContinueWith(r =>
+        {
+            (Card?.Dispatcher ?? System.Windows.Application.Current.Dispatcher).BeginInvoke(() =>
+            {
+                _busy = false;
+                if (r.Exception == null && r.Result is { } w) Apply(w);
+            });
+        }, System.Threading.Tasks.TaskScheduler.Default);
+    }
+
+    public override void Tick(int count)
+    {
+        var city = Settings.Current?.WeatherCity ?? "";
+        if (city != _city) { _city = city; if (Weather.Cached(city) is { } c) Apply(c); }
+        else if (count == 0 && Weather.Cached(city) is { } c0) Apply(c0);
+        // 30 秒ごとに、新しさを確かめる（更新間隔を過ぎていれば取りに行く。それまでは通信しない）
+        if (count % 30 == 0 && !Weather.IsFresh(city)) Fetch(false);
+    }
+
+    public override bool OnClick() { Fetch(true); return true; }
+}
+
+/// <summary>通知センターを開くボタン（Windows の Win+N と同じ）。</summary>
+public sealed class NotificationBarWidget : BarWidget
+{
+    public override string Id => "notification";
+
+    protected override FrameworkElement BuildContent()
+    {
+        var g = UiKit.Glyph("\uEA8F", 16, T.Text);
+        g.ToolTip = L.T("通知センター");
+        return g;
+    }
+
+    public override bool OnClick() { SystemActions.NotificationCenter(); return true; }
 }

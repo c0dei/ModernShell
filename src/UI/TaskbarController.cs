@@ -268,7 +268,7 @@ public sealed partial class TaskbarController : IDisposable
         _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarHeight, _settings.TaskbarIconSize, _settings.IslandMarginX, _settings.IslandMarginY,
         _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds,
         _settings.MagnifyOnHover, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
-        _settings.MultiMonitorTaskbar, _settings.AutoHideTaskbar, string.Join(",", _settings.BarWidgets.Select(w => w + ":" + (_settings.BarWidgetZones.GetValueOrDefault(w) ?? "Tray"))), _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language, _settings.ShowImeIndicator);
+        _settings.MultiMonitorTaskbar, _settings.AutoHideTaskbar, _settings.TaskbarPill, _settings.ShowBarDividers, _settings.TaskbarTint, _settings.TaskbarCustomColor, string.Join(",", _settings.BarWidgets.Select(w => w + ":" + (_settings.BarWidgetZones.GetValueOrDefault(w) ?? "Tray"))), _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language, _settings.ShowImeIndicator);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e)
     {
         _online = e.IsAvailable;
@@ -319,16 +319,24 @@ public sealed partial class TaskbarController : IDisposable
             grid.Children.Add(line);
 
             bool center = _settings.TaskbarAlignment == TaskbarAlignment.Center;
+            _barHosts.TryGetValue("Edge", out var edge); // 「バーの左端」のウィジェット
+            FrameworkElement? leftEl = null;
             if (StartAtLeftEdge)
             {
                 if (center)
                 {
-                    Place(grid, startGroup, 0, Alignment.Start);
+                    leftEl = Stack(edge, startGroup);
+                    Place(grid, leftEl, 0, Alignment.Start);
                     Place(grid, appsArea, 1, Alignment.Center);
                 }
-                else Place(grid, Stack(startGroup, appsArea), 0, Alignment.Start);
+                else Place(grid, StartAndApps(edge, startGroup, appsArea), 0, Alignment.Start);
             }
-            else Place(grid, Stack(startGroup, appsArea), center ? 1 : 0, center ? Alignment.Center : Alignment.Start);
+            else if (center)
+            {
+                if (edge != null) { leftEl = edge; Place(grid, edge, 0, Alignment.Start); }
+                Place(grid, StartAndApps(null, startGroup, appsArea), 1, Alignment.Center);
+            }
+            else Place(grid, StartAndApps(edge, startGroup, appsArea), 0, Alignment.Start);
 
             tray.Children.Add(ShowDesktopSliver());
             Place(grid, tray, 2, Alignment.End);
@@ -341,13 +349,13 @@ public sealed partial class TaskbarController : IDisposable
                     double total = Vertical ? grid.ActualHeight : grid.ActualWidth;
                     if (total <= 0) return;
                     double right = (Vertical ? tray.ActualHeight : tray.ActualWidth) + 16;
-                    double left = StartAtLeftEdge ? (Vertical ? startGroup.ActualHeight : startGroup.ActualWidth) + 16 : 0;
+                    double left = leftEl != null ? (Vertical ? leftEl.ActualHeight : leftEl.ActualWidth) + 16 : 0;
                     double limit = Math.Max(48, total - 2 * Math.Max(left, right));
                     if (Vertical) grid.RowDefinitions[1].MaxHeight = limit; else grid.ColumnDefinitions[1].MaxWidth = limit;
                 }
                 grid.SizeChanged += (_, _) => Fit();
                 tray.SizeChanged += (_, _) => Fit();
-                startGroup.SizeChanged += (_, _) => Fit();
+                if (leftEl != null) leftEl.SizeChanged += (_, _) => Fit();
             }
             AddSurface(BarSurface.Anchor.Fill, h, grid);
             _reservation.AutoHide = _settings.AutoHideTaskbar;
@@ -357,12 +365,17 @@ public sealed partial class TaskbarController : IDisposable
         {
             // ---- アイランド型: 島ごとに別ウィンドウ ----
             var appsAnchor = _settings.TaskbarAlignment == TaskbarAlignment.Center ? BarSurface.Anchor.Center : BarSurface.Anchor.Left;
+            _barHosts.TryGetValue("Edge", out var edgeIsland);
             if (StartAtLeftEdge && appsAnchor == BarSurface.Anchor.Center)
             {
-                AddSurface(BarSurface.Anchor.Left, h, Island(startGroup));
+                AddSurface(BarSurface.Anchor.Left, h, Island(Stack(edgeIsland, startGroup)));
                 AddSurface(BarSurface.Anchor.Center, h, Island(appsArea));
             }
-            else AddSurface(appsAnchor, h, Island(Stack(startGroup, appsArea)));
+            else
+            {
+                if (edgeIsland != null && appsAnchor == BarSurface.Anchor.Center) AddSurface(BarSurface.Anchor.Left, h, Island(edgeIsland));
+                AddSurface(appsAnchor, h, Island(StartAndApps(appsAnchor == BarSurface.Anchor.Left ? edgeIsland : null, startGroup, appsArea)));
+            }
             AddSurface(BarSurface.Anchor.Right, h, Island(tray));
             _reservation.AutoHide = _settings.AutoHideTaskbar;
             _reservation.Reserve(Edge, h + across * 2);
@@ -413,12 +426,21 @@ public sealed partial class TaskbarController : IDisposable
         g.Children.Add(e);
     }
 
-    private StackPanel Stack(params UIElement[] children)
+    private StackPanel Stack(params UIElement?[] children)
     {
         var p = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-        foreach (var c in children) p.Children.Add(c);
+        foreach (var c in children) if (c != null) p.Children.Add(c);
         return p;
     }
+
+    /// <summary>グループのあいだの細い区切り線（設定でオンのとき）。</summary>
+    private UIElement? Divider() => !_settings.ShowBarDividers ? null : Vertical
+        ? new Border { Height = 1, Width = TileH * 0.6, Background = Theme.Current.Stroke, Margin = new Thickness(0, 4, 0, 4), HorizontalAlignment = HorizontalAlignment.Center }
+        : new Border { Width = 1, Height = TileH * 0.55, Background = Theme.Current.Stroke, Margin = new Thickness(4, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center };
+
+    /// <summary>（左端のウィジェット）｜スタート｜アプリ の並び。</summary>
+    private StackPanel StartAndApps(FrameworkElement? edge, FrameworkElement startGroup, FrameworkElement appsArea) =>
+        Stack(edge, edge != null ? Divider() : null, startGroup, Divider(), appsArea);
 
     private FrameworkElement Island(FrameworkElement content)
     {

@@ -20,6 +20,8 @@ public enum StartButtonPosition { WithApps, LeftEdge }
 public enum SurfaceStyle { Solid, Transparent, Blur }
 /// <summary>開くときのアニメーションの速さ（Fast = 短く / Slow = ゆっくり）。</summary>
 public enum AnimationSpeed { Fast, Normal, Slow }
+/// <summary>タスクバーの背景に重ねる色（Theme: ライト/ダークの色 / Accent: アクセント色 / Custom: 好きな色）。</summary>
+public enum BarTintMode { Theme, Accent, Custom }
 /// <summary>スタートのピン留めのフォルダー（Items はアプリの ID）。</summary>
 public sealed class PinnedFolder
 {
@@ -111,6 +113,14 @@ public sealed class Settings
     public List<string> BarWidgets { get; set; } = new();
     /// <summary>ウィジェットごとの表示位置（"Left" = スタートボタンの隣 / "Apps" = アプリの右隣 / 既定 "Tray" = トレイの手前）。</summary>
     public Dictionary<string, string> BarWidgetZones { get; set; } = new();
+    /// <summary>バーの角を丸薬（ピル）型にする（高さの半分まで丸める）。</summary>
+    public bool TaskbarPill { get; set; } = false;
+    /// <summary>スタート・アプリ・ウィジェット・トレイのあいだに、細い区切り線を引く。</summary>
+    public bool ShowBarDividers { get; set; } = false;
+    /// <summary>バーの背景に重ねる色。</summary>
+    public BarTintMode TaskbarTint { get; set; } = BarTintMode.Theme;
+    /// <summary>TaskbarTint が Custom のときの色（#RRGGBB）。</summary>
+    public string TaskbarCustomColor { get; set; } = "";
     public bool GroupTaskbarButtons { get; set; } = true;
     public bool ShowTaskbarLabels { get; set; } = false;
     /// <summary>アプリが付ける進捗バーとオーバーレイ アイコン（通知の数など）をボタンに表示する。</summary>

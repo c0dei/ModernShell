@@ -63,10 +63,10 @@ public static class SurfacePaint
     /// content を背景で包む。opacity は重ねるテーマ色の濃さ (0–100)。
     /// 透過・ぼかしでも、クリックが裏へ抜けないようにごく薄く色を残す。
     /// </summary>
-    public static Painted Wrap(FrameworkElement content, SurfaceStyle style, int opacity, CornerRadius corner, bool border = true, bool shadow = false)
+    public static Painted Wrap(FrameworkElement content, SurfaceStyle style, int opacity, CornerRadius corner, bool border = true, bool shadow = false, Color? tintColor = null)
     {
         var t = Theme.Current;
-        var c = t.SolidColor;
+        var c = tintColor ?? t.SolidColor;
         byte alpha = (byte)Math.Max(1, Math.Round(Math.Clamp(opacity, 0, 100) / 100.0 * 255));
         var tint = new SolidColorBrush(Color.FromArgb(alpha, c.R, c.G, c.B));
         tint.Freeze();
@@ -77,7 +77,8 @@ public static class SurfacePaint
         switch (style)
         {
             case SurfaceStyle.Solid:
-                background = t.SolidBackground;
+                if (tintColor is { } sc) { var sb = new SolidColorBrush(sc); sb.Freeze(); background = sb; }
+                else background = t.SolidBackground;
                 break;
             case SurfaceStyle.Transparent:
                 background = tint;

@@ -14,7 +14,7 @@ public sealed partial class TaskbarController
 
     private readonly Dictionary<string, FrameworkElement> _barHosts = new();
 
-    private string ZoneOf(string id) => _settings.BarWidgetZones.TryGetValue(id, out var z) && z is "Left" or "Apps" ? z : "Tray";
+    private string ZoneOf(string id) => _settings.BarWidgetZones.TryGetValue(id, out var z) && z is "Left" or "Edge" or "Apps" ? z : "Tray";
 
     /// <summary>設定の並び順で、位置（Left / Apps / Tray）ごとのウィジェットの入れ物を作る。</summary>
     private void BuildBarWidgetHosts()
@@ -68,6 +68,7 @@ public sealed partial class TaskbarController
             {
                 Children = () => new[]
                 {
+                    new MenuItemSpec(zone == "Edge" ? "\uE73E" : "", L.T("バーの左端"), () => Move("Edge")),
                     new MenuItemSpec(zone == "Left" ? "\uE73E" : "", L.T("スタートボタンの隣"), () => Move("Left")),
                     new MenuItemSpec(zone == "Apps" ? "\uE73E" : "", L.T("アプリの右隣"), () => Move("Apps")),
                     new MenuItemSpec(zone == "Tray" ? "\uE73E" : "", L.T("右側（トレイの手前）"), () => Move("Tray")),

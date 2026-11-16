@@ -379,6 +379,7 @@ public sealed class SettingsWindow : Window
             ToggleRow(L.T("検索ボタンを表示"), "", _s.ShowSearchButton, v => _s.ShowSearchButton = v, on),
             ToggleRow(L.T("タスク ビュー ボタンを表示"), "", _s.ShowTaskViewButton, v => _s.ShowTaskViewButton = v, on),
             ToggleRow(L.T("同じアプリのボタンをまとめる"), L.T("複数のウィンドウは一覧で選べます"), _s.GroupTaskbarButtons, v => _s.GroupTaskbarButtons = v, on),
+            ToggleRow(L.T("グループのあいだに区切り線を引く"), L.T("スタート・アプリ・ウィジェット・トレイのあいだに、細い線を引きます"), _s.ShowBarDividers, v => _s.ShowBarDividers = v, on),
             ToggleRow(L.T("進捗とバッジを表示"), L.T("ダウンロードなどの進捗バーと、通知の数などの小さな印（アプリが付けるもの）をボタンに表示します"), _s.ShowTaskbarBadges, v => _s.ShowTaskbarBadges = v, on),
             ToggleRow(L.T("ボタンにウィンドウ名を表示"), "", _s.ShowTaskbarLabels, v => _s.ShowTaskbarLabels = v, on),
             ToggleRow(L.T("ホバー時にアイコンを拡大"), L.T("カーソルを置いたアプリのアイコンを少し大きくします"), _s.MagnifyOnHover, v => _s.MagnifyOnHover = v, on),
@@ -391,7 +392,7 @@ public sealed class SettingsWindow : Window
                 ToggleRow(L.T(w.Title), L.T(w.Description), _s.BarWidgets.Contains(w.Id),
                     v => { if (v) { if (!_s.BarWidgets.Contains(w.Id)) _s.BarWidgets.Add(w.Id); } else { _s.BarWidgets.Remove(w.Id); _s.BarWidgetZones.Remove(w.Id); } }, on),
                 DropDownRow("      " + L.T("表示位置"), "",
-                    new[] { ("Left", L.T("スタートボタンの隣")), ("Apps", L.T("アプリの右隣")), ("Tray", L.T("右側（トレイの手前）")) },
+                    new[] { ("Edge", L.T("バーの左端")), ("Left", L.T("スタートボタンの隣")), ("Apps", L.T("アプリの右隣")), ("Tray", L.T("右側（トレイの手前）")) },
                     _s.BarWidgetZones.GetValueOrDefault(w.Id) ?? "Tray", v => { if (v == "Tray") _s.BarWidgetZones.Remove(w.Id); else _s.BarWidgetZones[w.Id] = v; },
                     on && _s.BarWidgets.Contains(w.Id)),
             }).ToArray());
@@ -544,7 +545,11 @@ public sealed class SettingsWindow : Window
             DropDownRow(L.T("背景"), L.T("透過なし: テーマの色（ライト/ダーク）。透過: テーマの色を半透明で。ぼかし: 壁紙を強くぼかした下地にテーマの色を重ねる"),
                 new[] { ("Solid", L.T("透過なし")), ("Transparent", L.T("透過")), ("Blur", L.T("ぼかし")) }, _s.TaskbarBackground.ToString(), v => _s.TaskbarBackground = Enum.Parse<SurfaceStyle>(v), _s.UseCustomTaskbar),
             SliderRow(L.T("不透明度"), L.T("重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ"),
-                _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.UseCustomTaskbar && _s.TaskbarBackground != SurfaceStyle.Solid));
+                _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.UseCustomTaskbar && _s.TaskbarBackground != SurfaceStyle.Solid),
+            ToggleRow(L.T("バーを丸薬（ピル）型にする"), L.T("バーの角を、高さの半分まで丸めます。画面の端から離す（余白を付ける）と、浮いた丸薬のように見えます"), _s.TaskbarPill, v => _s.TaskbarPill = v, _s.UseCustomTaskbar),
+            DropDownRow(L.T("背景に重ねる色"), L.T("テーマ: ライト/ダークの色。アクセント: Windows のアクセント色。好きな色: 下の欄の色（#RRGGBB）"),
+                new[] { ("Theme", L.T("テーマ")), ("Accent", L.T("アクセント")), ("Custom", L.T("好きな色")) }, _s.TaskbarTint.ToString(), v => _s.TaskbarTint = Enum.Parse<BarTintMode>(v), _s.UseCustomTaskbar),
+            TextRow(L.T("好きな色"), L.T("例: #6B3FA0（「好きな色」を選んだときだけ使います）"), _s.TaskbarCustomColor, v => _s.TaskbarCustomColor = v.Trim(), _s.UseCustomTaskbar && _s.TaskbarTint == BarTintMode.Custom));
 
         Group(p, "\uE916", L.T("アニメーション"), L.T("開くときに滑り込ませるか、パッと表示するか"),
             ToggleRow(L.T("GPU が無い PC では軽く動かす"),
