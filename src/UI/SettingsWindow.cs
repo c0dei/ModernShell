@@ -367,7 +367,9 @@ public sealed class SettingsWindow : Window
                 0, 64, floating ? _s.IslandMarginX : _s.BandMarginX, "px", v => { if (floating) _s.IslandMarginX = (int)v; else _s.BandMarginX = (int)v; }, on, def: floating ? 8 : 0),
             NumberRow(floating ? L.T("アイランドの余白（上下）") : L.T("帯の余白（上下）"),
                 floating ? L.T("島と画面の上下の端とのあいだの距離") : L.T("帯と画面の上下の端とのあいだの距離。Windows は画面端に接したウィンドウの角を丸めないので、角丸にしたいときは余白を付けてください"),
-                0, 64, floating ? _s.IslandMarginY : _s.BandMarginY, "px", v => { if (floating) _s.IslandMarginY = (int)v; else _s.BandMarginY = (int)v; }, on, def: floating ? 8 : 0));
+                0, 64, floating ? _s.IslandMarginY : _s.BandMarginY, "px", v => { if (floating) _s.IslandMarginY = (int)v; else _s.BandMarginY = (int)v; }, on, def: floating ? 8 : 0),
+            NumberRow(L.T("画面端の位置調整"), L.T("標準は 0 px（ぴったり）です。画面の端とバーのあいだに細い隙間が見えるときだけ、マイナスにして、バーを画面の端の外へ動かします（帯型で余白が 0 のときに効きます）"),
+                -32, 0, _s.TaskbarEdgeOffset, "px", v => _s.TaskbarEdgeOffset = (int)v, on && !floating, def: 0));
 
         p.Children.Add(Section(L.T("見た目")));
         Group(p, "\uE75B", L.T("タスクバー"), L.T("タスクバーと、そこから開くプレビュー・一覧・メニューの背景"),

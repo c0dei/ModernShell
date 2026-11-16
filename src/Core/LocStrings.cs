@@ -309,6 +309,8 @@ public static partial class L
         ["Mac のドックのように、カーソルの下を最大に、両隣も距離に応じてなめらかに拡大します。オフのときは、カーソルの下のアイコンだけ"] = "Like the Mac Dock: the icon under the cursor is largest and its neighbors scale smoothly with distance. When off, only the icon under the cursor is magnified",
         ["列"] = "cols", ["分"] = "min",
         ["既定値（{0}）に戻す"] = "Reset to default ({0})",
+        ["画面端の位置調整"] = "Screen edge adjustment",
+        ["標準は 0 px（ぴったり）です。画面の端とバーのあいだに細い隙間が見えるときだけ、マイナスにして、バーを画面の端の外へ動かします（帯型で余白が 0 のときに効きます）"] = "0 px (flush) is the default. Only if a thin gap shows between the screen edge and the bar, set a negative value to move the bar past the edge (applies to the band style with 0 margin)",
         ["天気の更新間隔"] = "Weather update interval",
         ["スタート メニューを開いている間も、この間隔で自動更新します（カードの更新ボタンで今すぐ更新もできます）"] = "Also refreshes automatically at this interval while the Start menu is open (or use the card's refresh button)",
         ["10 分"] = "10 min", ["20 分"] = "20 min", ["30 分"] = "30 min", ["1 時間"] = "1 hour", ["3 時間"] = "3 hours",

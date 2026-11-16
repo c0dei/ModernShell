@@ -268,7 +268,7 @@ public sealed partial class TaskbarController : IDisposable
         _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarHeight, _settings.TaskbarIconSize, _settings.IslandMarginX, _settings.IslandMarginY,
         _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds,
         _settings.MagnifyOnHover, _settings.MagnifyScale, _settings.MagnifyNeighbors, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
-        _settings.MultiMonitorTaskbar, _settings.AutoHideTaskbar, _settings.TaskbarPill, _settings.ShowBarDividers, _settings.ClockAlign, _settings.ClockDateFirst, _settings.ClockTimeFormat, _settings.ClockDateFormat, _settings.TaskbarTint, _settings.TaskbarCustomColor, string.Join(",", _settings.BarWidgets.Select(w => w + ":" + (_settings.BarWidgetZones.GetValueOrDefault(w) ?? "Tray"))), _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language, _settings.ShowImeIndicator);
+        _settings.MultiMonitorTaskbar, _settings.AutoHideTaskbar, _settings.TaskbarEdgeOffset, _settings.TaskbarPill, _settings.ShowBarDividers, _settings.ClockAlign, _settings.ClockDateFirst, _settings.ClockTimeFormat, _settings.ClockDateFormat, _settings.TaskbarTint, _settings.TaskbarCustomColor, string.Join(",", _settings.BarWidgets.Select(w => w + ":" + (_settings.BarWidgetZones.GetValueOrDefault(w) ?? "Tray"))), _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language, _settings.ShowImeIndicator);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e)
     {
         _online = e.IsAvailable;
@@ -519,8 +519,8 @@ public sealed partial class TaskbarController : IDisposable
     }
 
     /// <summary>
-    /// 画面の端に密着した帯の位置。画面の端の向こう側へ 3px ほどはみ出させる（見えない部分）。
-    /// 丸め・領域の確保のずれで、画面の端とのあいだに 1〜2px の線ができて後ろのウィンドウが見えるのを防ぐ。
+    /// 画面の端に密着した帯の位置。設定の「画面端の位置調整」がマイナスのとき、その分だけ画面の端の向こう側へはみ出させる（見えない部分）。
+    /// 画面の端とのあいだに細い隙間が見える環境で、それを埋めるための手動の調整（標準は 0 = はみ出さない）。
     /// 隣にモニターがあるときは、そちらに映ってしまうのではみ出させない。
     /// </summary>
     private Grid? _bandGrid;
@@ -544,7 +544,8 @@ public sealed partial class TaskbarController : IDisposable
 
     private (int x, int y, int w, int h) FlushRect(Win32.RECT r, double scale)
     {
-        int bleed = (int)Math.Ceiling(3 * scale);
+        // 設定の「画面端の位置調整」（マイナスの値）の分だけ、端の外へはみ出させる。標準（0）ははみ出さない
+        int bleed = Math.Max(0, (int)Math.Round(-_settings.TaskbarEdgeOffset * scale));
         var mon = System.Windows.Forms.Screen.AllScreens.FirstOrDefault(m =>
             m.Bounds.Left <= r.Left && m.Bounds.Right >= r.Right && m.Bounds.Top <= r.Top && m.Bounds.Bottom >= r.Bottom);
         bool neighbor = false;

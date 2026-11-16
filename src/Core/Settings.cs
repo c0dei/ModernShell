@@ -83,6 +83,8 @@ public sealed class Settings
     public int IslandMarginY { get; set; } = 8;
     /// <summary>帯型の余白 (DIP)。X = 左右、Y = 上下。0 より大きいと帯は画面の端から離れて角丸になる。</summary>
     public int BandMarginX { get; set; } = 0;
+    /// <summary>画面端に密着した帯の位置の微調整（px。0 = ぴったり、マイナス = 画面の端の外へ動かす）。端との隙間が見えるときだけ使う。</summary>
+    public int TaskbarEdgeOffset { get; set; } = 0;
     public int BandMarginY { get; set; } = 0;
     /// <summary>アイランド型のときホバーでアイコンを拡大する。</summary>
     public bool MagnifyOnHover { get; set; } = true;
