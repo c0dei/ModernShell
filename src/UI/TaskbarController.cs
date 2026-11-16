@@ -268,7 +268,7 @@ public sealed partial class TaskbarController : IDisposable
         _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarHeight, _settings.TaskbarIconSize, _settings.IslandMarginX, _settings.IslandMarginY,
         _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds,
         _settings.MagnifyOnHover, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
-        _settings.MultiMonitorTaskbar, _settings.AutoHideTaskbar, string.Join(",", _settings.BarWidgets), _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language, _settings.ShowImeIndicator);
+        _settings.MultiMonitorTaskbar, _settings.AutoHideTaskbar, string.Join(",", _settings.BarWidgets.Select(w => w + ":" + (_settings.BarWidgetZones.GetValueOrDefault(w) ?? "Tray"))), _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language, _settings.ShowImeIndicator);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e)
     {
         _online = e.IsAvailable;
@@ -289,10 +289,13 @@ public sealed partial class TaskbarController : IDisposable
 
         var t = Theme.Current;
         double h = _settings.TaskbarHeight;
+        BuildBarWidgetHosts();
         var startGroup = StartGroup(t);
         _apps = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         var tray = TrayGroup(t);
         _trayHost = tray;
+        // 「アプリの右隣」のウィジェットは、アプリのボタンと一緒に並べる（ボタンの作り直しで消えないよう別の入れ物に入れておく）
+        FrameworkElement appsArea = _barHosts.TryGetValue("Apps", out var afterApps) ? Stack(_apps, afterApps) : _apps;
 
         // 並べる向きの「始まり」「中央」「終わり」。横のバーなら 左・中央・右、縦のバーなら 上・中央・下
         var (across, along) = Margins;
@@ -321,11 +324,11 @@ public sealed partial class TaskbarController : IDisposable
                 if (center)
                 {
                     Place(grid, startGroup, 0, Alignment.Start);
-                    Place(grid, _apps, 1, Alignment.Center);
+                    Place(grid, appsArea, 1, Alignment.Center);
                 }
-                else Place(grid, Stack(startGroup, _apps), 0, Alignment.Start);
+                else Place(grid, Stack(startGroup, appsArea), 0, Alignment.Start);
             }
-            else Place(grid, Stack(startGroup, _apps), center ? 1 : 0, center ? Alignment.Center : Alignment.Start);
+            else Place(grid, Stack(startGroup, appsArea), center ? 1 : 0, center ? Alignment.Center : Alignment.Start);
 
             tray.Children.Add(ShowDesktopSliver());
             Place(grid, tray, 2, Alignment.End);
@@ -357,9 +360,9 @@ public sealed partial class TaskbarController : IDisposable
             if (StartAtLeftEdge && appsAnchor == BarSurface.Anchor.Center)
             {
                 AddSurface(BarSurface.Anchor.Left, h, Island(startGroup));
-                AddSurface(BarSurface.Anchor.Center, h, Island(_apps));
+                AddSurface(BarSurface.Anchor.Center, h, Island(appsArea));
             }
-            else AddSurface(appsAnchor, h, Island(Stack(startGroup, _apps)));
+            else AddSurface(appsAnchor, h, Island(Stack(startGroup, appsArea)));
             AddSurface(BarSurface.Anchor.Right, h, Island(tray));
             _reservation.AutoHide = _settings.AutoHideTaskbar;
             _reservation.Reserve(Edge, h + across * 2);
@@ -600,6 +603,7 @@ public sealed partial class TaskbarController : IDisposable
         p.Children.Add(start);
         if (_settings.ShowSearchButton) p.Children.Add(SmallButton("", L.T("検索"), () => SearchClicked?.Invoke()));
         if (_settings.ShowTaskViewButton) p.Children.Add(SmallButton("", L.T("タスク ビュー"), SystemActions.TaskView, HookDesktops));
+        if (_barHosts.TryGetValue("Left", out var leftWidgets)) p.Children.Add(leftWidgets);
         return p;
     }
 

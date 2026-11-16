@@ -12,11 +12,15 @@ public sealed partial class TaskbarController
     private readonly List<BarWidget> _barWidgets = new();
     private int _barTick;
 
-    private FrameworkElement? BuildBarWidgetsHost()
+    private readonly Dictionary<string, FrameworkElement> _barHosts = new();
+
+    private string ZoneOf(string id) => _settings.BarWidgetZones.TryGetValue(id, out var z) && z is "Left" or "Apps" ? z : "Tray";
+
+    /// <summary>設定の並び順で、位置（Left / Apps / Tray）ごとのウィジェットの入れ物を作る。</summary>
+    private void BuildBarWidgetHosts()
     {
         _barWidgets.Clear();
-        if (_settings.BarWidgets.Count == 0) return null;
-        var host = new System.Windows.Controls.StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        _barHosts.Clear();
         foreach (var id in _settings.BarWidgets.ToList())
         {
             var info = BarWidgetCatalog.Find(id);
@@ -34,23 +38,45 @@ public sealed partial class TaskbarController
                     if (details.Count > 0) ShowIconMenu(x, details);
                 };
                 tile.RightClick += x => ShowIconMenu(x, w.ExtraMenu().Concat(BarWidgetMenu(id)).ToList());
-                host.Children.Add(tile);
+                string zone = ZoneOf(id);
+                if (!_barHosts.TryGetValue(zone, out var host))
+                    _barHosts[zone] = host = new System.Windows.Controls.StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+                ((System.Windows.Controls.StackPanel)host).Children.Add(tile);
                 _barWidgets.Add(w);
             }
             catch (Exception ex) { Log.Error("bar widget " + id, ex); }
         }
-        return host.Children.Count == 0 ? null : host;
     }
 
-    /// <summary>ウィジェットの右クリック: 並べ替えと、バーから外す。</summary>
+    /// <summary>ウィジェットの右クリック: 位置・並べ替え・バーから外す。</summary>
     private IEnumerable<MenuItemSpec> BarWidgetMenu(string id)
     {
         var list = _settings.BarWidgets;
-        int i = list.IndexOf(id);
-        var items = new List<MenuItemSpec>();
-        if (i > 0) items.Add(new("", L.T("左へ移動"), () => { list.RemoveAt(i); list.Insert(i - 1, id); _settings.Save(); }));
-        if (i >= 0 && i < list.Count - 1) items.Add(new("", L.T("右へ移動"), () => { list.RemoveAt(i); list.Insert(i + 1, id); _settings.Save(); }));
-        items.Add(new("", L.T("バーから外す"), () => { list.Remove(id); _settings.Save(); }));
+        string zone = ZoneOf(id);
+        var sameZone = list.Where(x => ZoneOf(x) == zone).ToList();
+        int i = sameZone.IndexOf(id);
+        void Swap(string other)
+        {
+            int a = list.IndexOf(id), b = list.IndexOf(other);
+            (list[a], list[b]) = (list[b], list[a]);
+            _settings.Save();
+        }
+        void Move(string z) { if (z == "Tray") _settings.BarWidgetZones.Remove(id); else _settings.BarWidgetZones[id] = z; _settings.Save(); }
+        var items = new List<MenuItemSpec>
+        {
+            new("\uE8A7", L.T("表示位置"), () => { })
+            {
+                Children = () => new[]
+                {
+                    new MenuItemSpec(zone == "Left" ? "\uE73E" : "", L.T("スタートボタンの隣"), () => Move("Left")),
+                    new MenuItemSpec(zone == "Apps" ? "\uE73E" : "", L.T("アプリの右隣"), () => Move("Apps")),
+                    new MenuItemSpec(zone == "Tray" ? "\uE73E" : "", L.T("右側（トレイの手前）"), () => Move("Tray")),
+                },
+            },
+        };
+        if (i > 0) items.Add(new("\uE76B", L.T("前へ移動"), () => Swap(sameZone[i - 1])));
+        if (i >= 0 && i < sameZone.Count - 1) items.Add(new("\uE76C", L.T("後ろへ移動"), () => Swap(sameZone[i + 1])));
+        items.Add(new("\uE74D", L.T("バーから外す"), () => { list.Remove(id); _settings.BarWidgetZones.Remove(id); _settings.Save(); }));
         return items;
     }
 

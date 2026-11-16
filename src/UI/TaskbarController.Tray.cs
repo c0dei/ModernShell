@@ -46,8 +46,7 @@ public sealed partial class TaskbarController
         };
         _overflowButton.Click += ShowOverflow;
         MakeOverflowDropTarget(_overflowButton); // 「^」の上に落としてもしまえる
-        var barWidgets = BuildBarWidgetsHost();
-        if (barWidgets != null) p.Children.Add(barWidgets);
+        if (_barHosts.TryGetValue("Tray", out var barWidgets)) p.Children.Add(barWidgets);
         p.Children.Add(_overflowButton);
 
         _trayIcons = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
