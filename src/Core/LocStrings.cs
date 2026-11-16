@@ -301,6 +301,7 @@ public static partial class L
         ["時間ごと"] = "Hourly", ["週間予報"] = "7-day forecast", ["今日"] = "Today", ["明日"] = "Tomorrow",
         ["体感 {0:0}°"] = "Feels like {0:0}°", ["湿度 {0}%"] = "Humidity {0}%", ["風 {0:0} km/h"] = "Wind {0:0} km/h",
         ["日の出 {0}"] = "Sunrise {0}", ["日の入 {0}"] = "Sunset {0}", ["{0} に更新"] = "Updated {0}",
+        ["今"] = "Now", ["体感"] = "Feels", ["湿度"] = "Humidity", ["風"] = "Wind",
         ["天気の更新間隔"] = "Weather update interval",
         ["スタート メニューを開いている間も、この間隔で自動更新します（カードの更新ボタンで今すぐ更新もできます）"] = "Also refreshes automatically at this interval while the Start menu is open (or use the card's refresh button)",
         ["10 分"] = "10 min", ["20 分"] = "20 min", ["30 分"] = "30 min", ["1 時間"] = "1 hour", ["3 時間"] = "3 hours",
