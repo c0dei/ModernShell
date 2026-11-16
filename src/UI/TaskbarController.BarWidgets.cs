@@ -34,6 +34,7 @@ public sealed partial class TaskbarController
                 tile.Click += x =>
                 {
                     if (w.OnClick()) return;
+                    if (w.BuildDetailsView() is { } view) { ShowBarPopup(x, view); return; }
                     var details = w.Details().ToList();
                     if (details.Count > 0) ShowIconMenu(x, details);
                 };
@@ -46,6 +47,18 @@ public sealed partial class TaskbarController
             }
             catch (Exception ex) { Log.Error("bar widget " + id, ex); }
         }
+    }
+
+    /// <summary>ウィジェットのクリックで開く詳細のポップアップ（メニューでは足りない内容用）。</summary>
+    private void ShowBarPopup(FrameworkElement anchor, FrameworkElement content)
+    {
+        var popup = FluentSurface.Create(content, anchor, System.Windows.Controls.Primitives.PlacementMode.Custom);
+        popup.StaysOpen = false;
+        FluentSurface.UseTaskbarLook(popup);
+        FluentSurface.PlaceAligned(popup, anchor, Edge, _settings.IconMenuAlign);
+        if (_settings.AnimateMenus) FluentSurface.SlideIn(popup, Edge);
+        popup.IsOpen = true;
+        Flyout.ToggleGuard(popup, anchor);
     }
 
     /// <summary>ウィジェットの右クリック: 位置・並べ替え・バーから外す。</summary>

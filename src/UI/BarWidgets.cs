@@ -21,7 +21,7 @@ public static class BarWidgetCatalog
         new BarWidgetInfo("system", "システム", "CPU・メモリ", "CPU とメモリの使用率を円グラフで表示します。クリックで詳細", () => new SystemBarWidget()),
         new BarWidgetInfo("battery", "システム", "バッテリー", "バッテリー残量と充電中の表示（バッテリーの無い PC では表示されません）", () => new BatteryBarWidget()),
         new BarWidgetInfo("nowplaying", "メディア", "再生中の曲", "再生中の曲名とアーティスト。クリックで再生/一時停止、右クリックで前後の曲へ", () => new NowPlayingBarWidget()),
-        new BarWidgetInfo("weather", "天気", "天気", "今の天気（温度・天気）。設定の天気の地点と更新間隔を使います。クリックで今すぐ更新", () => new WeatherBarWidget()),
+        new BarWidgetInfo("weather", "天気", "天気", "今の天気（温度・天気）。クリックで時間ごと・週間の予報を表示。設定の天気の地点と更新間隔を使います", () => new WeatherBarWidget()),
         new BarWidgetInfo("pomodoro", "生産性", "ポモドーロ", "25 分の集中と 5 分の休憩を繰り返すタイマー。クリックで開始/一時停止", () => new PomodoroBarWidget()),
     };
 
@@ -82,6 +82,9 @@ public abstract class BarWidget
 
     /// <summary>クリックしたときの詳細（メニュー形式）。</summary>
     public virtual IEnumerable<MenuItemSpec> Details() => Enumerable.Empty<MenuItemSpec>();
+
+    /// <summary>クリックで開く、凝った詳細（メニューでは足りないとき）。null ならメニュー形式の <see cref="Details"/> を使う。</summary>
+    public virtual FrameworkElement? BuildDetailsView() => null;
 
     /// <summary>左クリック。既定は詳細を出す。true を返したら処理済み（詳細は出さない）。</summary>
     public virtual bool OnClick() => false;
@@ -442,7 +445,17 @@ public sealed class WeatherBarWidget : BarWidget
         if (count % 30 == 0 && !Weather.IsFresh(city)) Fetch(false);
     }
 
-    public override bool OnClick() { Fetch(true); return true; }
+    public override FrameworkElement? BuildDetailsView()
+    {
+        var city = Settings.Current?.WeatherCity ?? "";
+        return string.IsNullOrWhiteSpace(city) ? null : new WeatherDetailsView(city, Weather.Cached(city));
+    }
+
+    public override IEnumerable<MenuItemSpec> ExtraMenu() => new[]
+    {
+        new MenuItemSpec("\uE72C", L.T("今すぐ更新"), () => Fetch(true)),
+        MenuItemSpec.Separator,
+    };
 }
 
 // ---------------------------------------------------------------------------

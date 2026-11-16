@@ -348,6 +348,17 @@ public sealed class WidgetPanel : ScrollViewer
                 }), TaskScheduler.Default);
         }
         refreshBtn.MouseLeftButtonDown += (_, e) => { e.Handled = true; Fetch(true); };
+
+        // カードをクリックすると、時間ごと・週間の詳細を出す（更新ボタンの上は除く）
+        card.Cursor = Cursors.Hand;
+        card.MouseLeftButtonUp += (_, e) =>
+        {
+            for (var d = e.OriginalSource as DependencyObject; d != null; d = d is Visual or System.Windows.Media.Media3D.Visual3D ? System.Windows.Media.VisualTreeHelper.GetParent(d) : null)
+                if (ReferenceEquals(d, refreshBtn)) return;
+            var popup = FluentSurface.Create(new WeatherDetailsView(city, Weather.Cached(city)), card, System.Windows.Controls.Primitives.PlacementMode.Left);
+            popup.StaysOpen = false;
+            popup.IsOpen = true;
+        };
         refreshBtn.MouseEnter += (_, _) => refreshBtn.Background = t.Hover;
         refreshBtn.MouseLeave += (_, _) => refreshBtn.Background = Brushes.Transparent;
 
