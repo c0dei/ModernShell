@@ -305,7 +305,7 @@ public sealed class WidgetPanel : ScrollViewer
         var temp = UiKit.Label("—", Fs(30), t.Text, FontWeights.SemiBold);
         var desc = UiKit.Label(L.T("読み込み中…"), Fs(13), t.TextSecondary);
         var range = UiKit.Label("", Fs(12), t.TextSecondary);
-        var glyph = UiKit.Glyph("", 34, t.AccentBrush);
+        var glyph = WeatherSymbols.Create(2, true, 48);
         glyph.Margin = new Thickness(0, 0, 16, 0);
         var text = new StackPanel();
         text.Children.Add(temp);
@@ -325,7 +325,7 @@ public sealed class WidgetPanel : ScrollViewer
             temp.Text = $"{w.Temperature:0}°";
             desc.Text = $"{w.Place}  {w.Description}";
             range.Text = L.F("最高 {0:0}° / 最低 {1:0}°", w.Max, w.Min);
-            WeatherSymbols.Apply(glyph, w.Code);
+            WeatherSymbols.Apply(glyph, w.Code, w.IsDay);
             refreshBtn.ToolTip = L.F("{0} に更新（クリックで今すぐ更新）", w.FetchedAt.ToString("H:mm"));
         }
 

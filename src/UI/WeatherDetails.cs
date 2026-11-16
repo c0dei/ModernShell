@@ -32,11 +32,13 @@ public sealed class WeatherDetailsView : Border
 
     private TextBlock Label(string text, double size, Brush? fg = null, FontWeight? w = null) => UiKit.Label(text, size, fg ?? _t.Text, w);
 
-    private TextBlock Sym(int code, double size, Brush? fg = null) => new()
+    private System.Windows.Controls.Image Sym(int code, double size, bool isDay = true)
     {
-        Text = Weather.Symbol(code), FontFamily = new FontFamily("Segoe UI Symbol"), FontSize = size, Foreground = fg ?? WeatherSymbols.Brush(code),
-        HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-    };
+        var img = WeatherSymbols.Create(code, isDay, size);
+        img.HorizontalAlignment = HorizontalAlignment.Center;
+        img.VerticalAlignment = VerticalAlignment.Center;
+        return img;
+    }
 
     /// <summary>最新の天気を取り直して、表示を入れ替える（今の表示は消さない）。</summary>
     private void Refresh()
@@ -111,7 +113,7 @@ public sealed class WeatherDetailsView : Border
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var big = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        big.Children.Add(Sym(w.Code, 44));
+        big.Children.Add(Sym(w.Code, 52, w.IsDay));
         var temp = Label(Num(w.Temperature), 46, _t.Text, FontWeights.SemiBold);
         temp.Margin = new Thickness(10, -4, 0, 0);
         big.Children.Add(temp);
@@ -156,7 +158,7 @@ public sealed class WeatherDetailsView : Border
                 var time = Label(now ? L.T("今") : L.IsEnglish ? h.Time.ToString("h tt", L.Culture) : h.Time.Hour + "時", 11, now ? _t.Text : _t.TextSecondary, now ? FontWeights.SemiBold : null);
                 time.HorizontalAlignment = HorizontalAlignment.Center;
                 col.Children.Add(time);
-                var sym = Sym(h.Code, 22); sym.Margin = new Thickness(0, 4, 0, 2);
+                var sym = Sym(h.Code, 30, h.IsDay); sym.Margin = new Thickness(0, 2, 0, 0);
                 col.Children.Add(sym);
                 var t = Label(Num(h.Temp), 14, _t.Text, FontWeights.SemiBold); t.HorizontalAlignment = HorizontalAlignment.Center;
                 col.Children.Add(t);
@@ -185,7 +187,7 @@ public sealed class WeatherDetailsView : Border
                 var dayLabel = Label(day, 13, dayBrush, i == 0 ? FontWeights.SemiBold : null);
                 dayLabel.VerticalAlignment = VerticalAlignment.Center;
                 g.Children.Add(dayLabel);
-                var s = Sym(d.Code, 18); Grid.SetColumn(s, 1); g.Children.Add(s);
+                var s = Sym(d.Code, 26); Grid.SetColumn(s, 1); g.Children.Add(s);
                 var rain = RainLabel(d.Rain, 11);
                 rain.HorizontalAlignment = HorizontalAlignment.Right; rain.VerticalAlignment = VerticalAlignment.Center; rain.Margin = new Thickness(0, 0, 8, 0);
                 Grid.SetColumn(rain, 2); g.Children.Add(rain);
@@ -230,24 +232,44 @@ public sealed class WeatherDetailsView : Border
     }
 }
 
-/// <summary>天気の記号の見た目（色付きの Segoe UI Symbol）。</summary>
+/// <summary>天気のアイコン（Meteocons の多色 PNG。実行ファイルに埋め込み）。昼は太陽、夜は月で切り替える。</summary>
 public static class WeatherSymbols
 {
-    public static readonly FontFamily Font = new("Segoe UI Symbol");
+    private static readonly System.Collections.Generic.Dictionary<string, System.Windows.Media.Imaging.BitmapSource?> Cache = new();
 
-    public static Brush Brush(int code)
+    /// <summary>アイコンの画像。見つからないとき（埋め込みの欠け）は null。</summary>
+    public static System.Windows.Media.Imaging.BitmapSource? Source(int code, bool isDay)
     {
-        var (r, g, b) = Weather.SymbolRgb(code);
-        var br = new SolidColorBrush(Color.FromRgb(r, g, b));
-        br.Freeze();
-        return br;
+        var name = Weather.IconName(code, isDay);
+        if (Cache.TryGetValue(name, out var cached)) return cached;
+        System.Windows.Media.Imaging.BitmapSource? img = null;
+        try
+        {
+            using var s = typeof(WeatherSymbols).Assembly.GetManifestResourceStream("weather." + name + ".png");
+            if (s != null)
+            {
+                var b = new System.Windows.Media.Imaging.BitmapImage();
+                b.BeginInit();
+                b.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                b.StreamSource = s;
+                b.EndInit();
+                b.Freeze();
+                img = b;
+            }
+        }
+        catch (Exception ex) { Log.Error("weather icon " + name, ex); }
+        Cache[name] = img;
+        return img;
     }
 
-    /// <summary>既存の TextBlock（アイコン用）を、天気コードの記号・色にする。</summary>
-    public static void Apply(TextBlock t, int code)
+    /// <summary>アイコンの Image 要素（size は表示の大きさ）。</summary>
+    public static System.Windows.Controls.Image Create(int code, bool isDay, double size)
     {
-        t.FontFamily = Font;
-        t.Text = Weather.Symbol(code);
-        t.Foreground = Brush(code);
+        var img = new System.Windows.Controls.Image { Width = size, Height = size, Stretch = Stretch.Uniform, SnapsToDevicePixels = true };
+        RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.HighQuality);
+        img.Source = Source(code, isDay);
+        return img;
     }
+
+    public static void Apply(System.Windows.Controls.Image img, int code, bool isDay) => img.Source = Source(code, isDay);
 }

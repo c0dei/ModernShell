@@ -18,11 +18,40 @@ public static class Weather
         public bool IsClear => Code is 0 or 1;
         /// <summary>詳細（体感温度・湿度・風・時間ごと・週間）。取れなかったときは null。</summary>
         public MoreInfo? More { get; init; }
+        /// <summary>今が昼か（夜は月のアイコンにする）。</summary>
+        public bool IsDay { get; init; } = true;
     }
 
     public sealed record DayForecast(DateTime Date, int Code, double Max, double Min, int? Rain);
-    public sealed record HourForecast(DateTime Time, int Code, double Temp, int? Rain);
+    public sealed record HourForecast(DateTime Time, int Code, double Temp, int? Rain, bool IsDay = true);
     public sealed record MoreInfo(double? Feels, int? Humidity, double? Wind, List<DayForecast> Days, List<HourForecast> Hours, string? Sunrise, string? Sunset);
+
+    /// <summary>
+    /// 天気コード（WMO）→ アイコン名（Meteocons。実行ファイルに埋め込んだ PNG の名前）。夜は月・星のアイコンにする。
+    /// </summary>
+    public static string IconName(int code, bool isDay)
+    {
+        string dn = isDay ? "day" : "night";
+        return code switch
+        {
+            0 or 1 => "clear-" + dn,
+            2 => "partly-cloudy-" + dn,
+            3 => "overcast",
+            45 or 48 => "fog-" + dn,
+            51 or 53 or 55 => "drizzle",
+            56 or 57 or 66 or 67 => "sleet",
+            61 or 63 or 65 => "rain",
+            80 => "partly-cloudy-" + dn + "-rain",
+            81 => "rain",
+            82 => "extreme-rain",
+            71 or 73 or 75 or 77 => "snow",
+            85 => "partly-cloudy-" + dn + "-snow",
+            86 => "extreme-snow",
+            95 => "thunderstorms-" + dn,
+            96 or 99 => "thunderstorms-" + dn + "-rain",
+            _ => "overcast",
+        };
+    }
 
     /// <summary>天気コード → 記号の色（晴れは黄、曇りは青みの灰、雨は青、雪は水色、雷は紫）。一目で天気が分かるよう、アクセント色ではなく天気ごとの色にする。</summary>
     public static (byte r, byte g, byte b) SymbolRgb(int code) => code switch
@@ -129,12 +158,14 @@ public static class Weather
             {
                 var ht = h.GetProperty("time"); var hc = h.GetProperty("weather_code"); var htemp = h.GetProperty("temperature_2m");
                 h.TryGetProperty("precipitation_probability", out var hr);
+                h.TryGetProperty("is_day", out var hd);
                 var start = DateTime.Now.AddMinutes(-30); // 今の時間帯から
                 for (int i = 0; i < ht.GetArrayLength() && hours.Count < 24; i++)
                 {
                     var t = DateTime.Parse(ht[i].GetString()!, System.Globalization.CultureInfo.InvariantCulture);
                     if (t < start) continue;
-                    hours.Add(new HourForecast(t, hc[i].GetInt32(), htemp[i].GetDouble(), hr.ValueKind == JsonValueKind.Array && hr[i].ValueKind == JsonValueKind.Number ? hr[i].GetInt32() : null));
+                    hours.Add(new HourForecast(t, hc[i].GetInt32(), htemp[i].GetDouble(), hr.ValueKind == JsonValueKind.Array && hr[i].ValueKind == JsonValueKind.Number ? hr[i].GetInt32() : null,
+                        !(hd.ValueKind == JsonValueKind.Array && hd[i].ValueKind == JsonValueKind.Number) || hd[i].GetInt32() != 0));
                 }
             }
             string? Time(string name) => daily.TryGetProperty(name, out var v) && v.GetArrayLength() > 0 ? DateTime.Parse(v[0].GetString()!, System.Globalization.CultureInfo.InvariantCulture).ToString("H:mm") : null;
@@ -161,7 +192,7 @@ public static class Weather
             string name = place.TryGetProperty("name", out var n) ? n.GetString() ?? city : city;
 
             var url = FormattableString.Invariant(
-                $"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code,relative_humidity_2m,apparent_temperature,wind_speed_10m&hourly=temperature_2m,weather_code,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&timezone=auto&forecast_days=7");
+                $"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code,relative_humidity_2m,apparent_temperature,wind_speed_10m,is_day&hourly=temperature_2m,weather_code,precipitation_probability,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&timezone=auto&forecast_days=7");
             using var doc = JsonDocument.Parse(await GetWithRetryAsync(url));
             var cur = doc.RootElement.GetProperty("current");
             var daily = doc.RootElement.GetProperty("daily");
@@ -170,7 +201,7 @@ public static class Weather
                 daily.GetProperty("temperature_2m_max")[0].GetDouble(),
                 daily.GetProperty("temperature_2m_min")[0].GetDouble(),
                 cur.GetProperty("weather_code").GetInt32(),
-                DateTime.Now) { More = ParseMore(doc.RootElement, cur, daily) };
+                DateTime.Now) { More = ParseMore(doc.RootElement, cur, daily), IsDay = !cur.TryGetProperty("is_day", out var isDay) || isDay.ValueKind != JsonValueKind.Number || isDay.GetInt32() != 0 };
             _cacheCity = city;
             return _cache;
         }

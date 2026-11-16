@@ -35,4 +35,8 @@
   <ItemGroup>
     <Compile Remove="verify/**" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- 天気のアイコン（Meteocons, MIT License）。実行ファイルに埋め込む -->
+    <EmbeddedResource Include="assets\weather\*.png" LogicalName="weather.%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

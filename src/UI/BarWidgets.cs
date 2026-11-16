@@ -391,13 +391,14 @@ public sealed class PomodoroBarWidget : BarWidget
 public sealed class WeatherBarWidget : BarWidget
 {
     public override string Id => "weather";
-    private TextBlock? _icon, _temp, _desc;
+    private System.Windows.Controls.Image? _icon;
+    private TextBlock? _temp, _desc;
     private string _city = "";
     private bool _busy;
 
     protected override FrameworkElement BuildContent()
     {
-        _icon = UiKit.Glyph("\uE753", Vertical ? 18 : 22, T.AccentBrush);
+        _icon = WeatherSymbols.Create(2, true, Vertical ? 26 : 30);
         _temp = UiKit.Label("—", 13, T.Text, FontWeights.SemiBold);
         _desc = UiKit.Label("", 11, T.TextSecondary);
         _desc.MaxWidth = 160;
@@ -414,7 +415,7 @@ public sealed class WeatherBarWidget : BarWidget
 
     private void Apply(Weather.Report w)
     {
-        if (_icon != null) WeatherSymbols.Apply(_icon, w.Code);
+        if (_icon != null) WeatherSymbols.Apply(_icon, w.Code, w.IsDay);
         if (_temp != null) _temp.Text = $"{w.Temperature:0}°";
         if (_desc != null) _desc.Text = $"{w.Place}  {w.Description}";
         if (Card != null) Card.ToolTip = $"{w.Place}  {w.Description}  {w.Temperature:0}°（{L.F("最高 {0:0}° / 最低 {1:0}°", w.Max, w.Min)}）";

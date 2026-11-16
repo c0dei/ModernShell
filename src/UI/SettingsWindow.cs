@@ -733,6 +733,7 @@ public sealed class SettingsWindow : Window
             L.T("Releases を開く"), () => Open("https://github.com/c0dei/ModernShell/releases")));
         p.Children.Add(ButtonRow(L.T("ソースコード"), "github.com/c0dei/ModernShell", L.T("GitHub で開く"), () => Open("https://github.com/c0dei/ModernShell")));
         p.Children.Add(Note(L.T("通知領域とタスク一覧には ManagedShell (Apache-2.0, cairoshell) を使用しています。")));
+        p.Children.Add(Note(L.T("天気のアイコンは Meteocons (MIT License, © Bas Milius) を使用しています。")));
     }
 
     private static void Open(string url)
