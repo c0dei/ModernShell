@@ -546,7 +546,7 @@ public sealed class SettingsWindow : Window
                 new[] { ("Solid", L.T("透過なし")), ("Transparent", L.T("透過")), ("Blur", L.T("ぼかし")) }, _s.TaskbarBackground.ToString(), v => _s.TaskbarBackground = Enum.Parse<SurfaceStyle>(v), _s.UseCustomTaskbar),
             SliderRow(L.T("不透明度"), L.T("重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ"),
                 _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.UseCustomTaskbar && _s.TaskbarBackground != SurfaceStyle.Solid),
-            ToggleRow(L.T("バーを丸薬（ピル）型にする"), L.T("バーの角を、高さの半分まで丸めます。画面の端から離す（余白を付ける）と、浮いた丸薬のように見えます"), _s.TaskbarPill, v => _s.TaskbarPill = v, _s.UseCustomTaskbar),
+            ToggleRow(L.T("バーをピル型にする"), L.T("バーの角を、高さの半分まで丸めます。画面の端から離す（余白を付ける）と、浮いたピルのように見えます"), _s.TaskbarPill, v => _s.TaskbarPill = v, _s.UseCustomTaskbar),
             DropDownRow(L.T("背景に重ねる色"), L.T("テーマ: ライト/ダークの色。アクセント: Windows のアクセント色。好きな色: 下の欄の色（#RRGGBB）"),
                 new[] { ("Theme", L.T("テーマ")), ("Accent", L.T("アクセント")), ("Custom", L.T("好きな色")) }, _s.TaskbarTint.ToString(), v => _s.TaskbarTint = Enum.Parse<BarTintMode>(v), _s.UseCustomTaskbar),
             TextRow(L.T("好きな色"), L.T("例: #6B3FA0（「好きな色」を選んだときだけ使います）"), _s.TaskbarCustomColor, v => _s.TaskbarCustomColor = v.Trim(), _s.UseCustomTaskbar && _s.TaskbarTint == BarTintMode.Custom));

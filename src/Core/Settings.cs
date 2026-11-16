@@ -113,7 +113,7 @@ public sealed class Settings
     public List<string> BarWidgets { get; set; } = new();
     /// <summary>ウィジェットごとの表示位置（"Left" = スタートボタンの隣 / "Apps" = アプリの右隣 / 既定 "Tray" = トレイの手前）。</summary>
     public Dictionary<string, string> BarWidgetZones { get; set; } = new();
-    /// <summary>バーの角を丸薬（ピル）型にする（高さの半分まで丸める）。</summary>
+    /// <summary>バーの角をピル型にする（高さの半分まで丸める）。</summary>
     public bool TaskbarPill { get; set; } = false;
     /// <summary>スタート・アプリ・ウィジェット・トレイのあいだに、細い区切り線を引く。</summary>
     public bool ShowBarDividers { get; set; } = false;
