@@ -352,8 +352,8 @@ public sealed class SettingsWindow : Window
 
         p.Children.Add(Section(L.T("詳細")));
         Group(p, "", L.T("配置と大きさ"), L.T("位置・高さ・余白"),
-            DropDownRow(L.T("アプリの配置"), L.T("アプリのボタン（「アプリと一緒」のときはスタートボタンも）の位置"),
-                new[] { ("Center", L.T("中央")), ("Left", L.T("左")) }, _s.TaskbarAlignment.ToString(), v => _s.TaskbarAlignment = Enum.Parse<TaskbarAlignment>(v), on),
+            DropDownRow(L.T("アプリの配置"), L.T("アプリのボタン（「アプリと一緒」のときはスタートボタンも）の位置。「すべて中央」は、スタート・アプリ・ウィジェット・トレイを 1 つのかたまりにして中央に置きます"),
+                new[] { ("Center", L.T("中央")), ("AllCenter", L.T("すべて中央")), ("Left", L.T("左")) }, _s.TaskbarAlignment.ToString(), v => _s.TaskbarAlignment = Enum.Parse<TaskbarAlignment>(v), on),
             DropDownRow(L.T("画面上の位置"), L.T("左・右に置くと、縦向きのタスクバーになります（ボタンが縦に並びます）"),
                 new[] { ("Bottom", L.T("下")), ("Top", L.T("上")), ("Left", L.T("左")), ("Right", L.T("右")) }, _s.TaskbarEdge.ToString(),
                 v => _s.TaskbarEdge = Enum.Parse<TaskbarEdge>(v), on),
@@ -396,6 +396,22 @@ public sealed class SettingsWindow : Window
                     _s.BarWidgetZones.GetValueOrDefault(w.Id) ?? "Tray", v => { if (v == "Tray") _s.BarWidgetZones.Remove(w.Id); else _s.BarWidgetZones[w.Id] = v; },
                     on && _s.BarWidgets.Contains(w.Id)),
             }).ToArray());
+
+        // 区切り線とスペース: 何個でも足せる。置く場所と並び順は、ウィジェットと同じ（右クリックでも動かせる）
+        var partRows = new List<Border>();
+        foreach (var pid in _s.BarWidgets.Where(BarWidgetCatalog.IsPart).ToList())
+        {
+            var info = BarWidgetCatalog.Find(pid);
+            if (info == null) continue;
+            string id = pid;
+            partRows.Add(DropDownRow(L.T(info.Title), L.T(info.Description),
+                new[] { ("Edge", L.T("バーの左端")), ("Left", L.T("スタートボタンの隣")), ("Apps", L.T("アプリの右隣")), ("Tray", L.T("右側（トレイの手前）")) },
+                _s.BarWidgetZones.GetValueOrDefault(id) ?? "Tray", v => { if (v == "Tray") _s.BarWidgetZones.Remove(id); else _s.BarWidgetZones[id] = v; }, on));
+            partRows.Add(ButtonRow("      " + L.T("このパーツを削除"), "", L.T("削除"), () => { _s.BarWidgets.Remove(id); _s.BarWidgetZones.Remove(id); _s.Save(); }, enabled: on));
+        }
+        partRows.Add(ButtonRow(L.T("区切り線を追加"), L.T("グループのあいだに細い線を入れます"), L.T("追加"), () => { _s.BarWidgets.Add(BarWidgetCatalog.NewPartId("divider")); _s.Save(); }, enabled: on));
+        partRows.Add(ButtonRow(L.T("スペースを追加"), L.T("ウィジェットやボタンのあいだに空きを入れます"), L.T("追加"), () => { _s.BarWidgets.Add(BarWidgetCatalog.NewPartId("spacer")); _s.Save(); }, enabled: on));
+        Group(p, "", L.T("バーのパーツ"), L.T("区切り線とスペースを自由に足して、並びを整えられます"), partRows.ToArray());
 
         Group(p, "", L.T("プレビュー"), L.T("カーソルを置いたときに出る一覧"),
             ToggleRow(L.T("ウィンドウのプレビューを表示"), L.T("実行中のアプリのボタンに置くと、ウィンドウの中身を縮小表示します。クリックで切り替え、× で閉じます。複数ウィンドウのボタンをクリックしたときもプレビューを出します（オフのときは、ウィンドウ名のリストを出します）"),
@@ -546,10 +562,9 @@ public sealed class SettingsWindow : Window
                 new[] { ("Solid", L.T("透過なし")), ("Transparent", L.T("透過")), ("Blur", L.T("ぼかし")) }, _s.TaskbarBackground.ToString(), v => _s.TaskbarBackground = Enum.Parse<SurfaceStyle>(v), _s.UseCustomTaskbar),
             SliderRow(L.T("不透明度"), L.T("重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ"),
                 _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.UseCustomTaskbar && _s.TaskbarBackground != SurfaceStyle.Solid),
-            ToggleRow(L.T("バーをピル型にする"), L.T("バーの角を、高さの半分まで丸めます。画面の端から離す（余白を付ける）と、浮いたピルのように見えます"), _s.TaskbarPill, v => _s.TaskbarPill = v, _s.UseCustomTaskbar),
-            DropDownRow(L.T("背景に重ねる色"), L.T("テーマ: ライト/ダークの色。アクセント: Windows のアクセント色。好きな色: 下の欄の色（#RRGGBB）"),
-                new[] { ("Theme", L.T("テーマ")), ("Accent", L.T("アクセント")), ("Custom", L.T("好きな色")) }, _s.TaskbarTint.ToString(), v => _s.TaskbarTint = Enum.Parse<BarTintMode>(v), _s.UseCustomTaskbar),
-            TextRow(L.T("好きな色"), L.T("例: #6B3FA0（「好きな色」を選んだときだけ使います）"), _s.TaskbarCustomColor, v => _s.TaskbarCustomColor = v.Trim(), _s.UseCustomTaskbar && _s.TaskbarTint == BarTintMode.Custom));
+            ToggleRow(L.T("バーをピル型にする"), L.T("バーの角を、高さの半分まで丸めます。画面の端から離す（余白を付ける）と、浮いたピルのように見えます"), _s.TaskbarPill, v => _s.TaskbarPill = v, _s.UseCustomTaskbar));
+        p.Children.Add(Section(L.T("タスクバーの背景に重ねる色")));
+        p.Children.Add(BarTintSwatches());
 
         Group(p, "\uE916", L.T("アニメーション"), L.T("開くときに滑り込ませるか、パッと表示するか"),
             ToggleRow(L.T("GPU が無い PC では軽く動かす"),
@@ -1155,6 +1170,71 @@ public sealed class SettingsWindow : Window
             Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(8),
             Padding = new Thickness(16), Margin = new Thickness(0, 0, 0, 6),
             Child = new Border { CornerRadius = T.Corner(6), ClipToBounds = true, Child = area },
+        };
+    }
+
+    private bool _barPickerOpen;
+
+    /// <summary>バーの背景に重ねる色: テーマ / アクセント / 色見本 / 好きな色（カラーパレット）。</summary>
+    private FrameworkElement BarTintSwatches()
+    {
+        string[] presets = { "#000000", "#FFFFFF", "#1F2937", "#0067C0", "#00706A", "#107C10", "#6B3FB5", "#B4009E", "#C50F1F", "#A34A00" };
+        var custom = _s.TaskbarCustomColor.Trim();
+        var colors = presets.ToList();
+        if (custom.Length > 0 && !colors.Contains(custom, StringComparer.OrdinalIgnoreCase) && Theme.ParseColor(custom) != null) colors.Add(custom.ToUpperInvariant());
+        var wrap = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+
+        Tile Make(Brush fill, string label, bool sel, string tip, Action onClick)
+        {
+            var inner = new Grid();
+            if (label.Length > 0) inner.Children.Add(UiKit.Label(label, 10, Brushes.White));
+            if (sel) inner.Children.Add(UiKit.Glyph("\uE73E", 14, Brushes.White));
+            foreach (UIElement c in inner.Children) if (c is FrameworkElement fe) { fe.HorizontalAlignment = HorizontalAlignment.Center; fe.VerticalAlignment = VerticalAlignment.Center; }
+            var tile = new Tile
+            {
+                Width = 44, Height = 44, Margin = new Thickness(0, 0, 8, 8), CornerRadius = T.Corner(4), Background = fill,
+                BorderThickness = new Thickness(2), BorderBrush = sel ? T.Text : Brushes.Transparent, Child = inner, ToolTip = tip,
+            };
+            tile.MouseLeave += (_, _) => { tile.Background = fill; tile.BorderBrush = sel ? T.Text : Brushes.Transparent; };
+            tile.MouseEnter += (_, _) => tile.Background = fill;
+            tile.Click += _ => onClick();
+            return tile;
+        }
+
+        wrap.Children.Add(Make(new SolidColorBrush(T.SolidColor), L.T("テーマ"), _s.TaskbarTint == BarTintMode.Theme, L.T("ライト/ダークのテーマの色"),
+            () => { _s.TaskbarTint = BarTintMode.Theme; _barPickerOpen = false; Commit(); }));
+        wrap.Children.Add(Make(new SolidColorBrush(T.Accent), L.T("アクセント"), _s.TaskbarTint == BarTintMode.Accent, L.T("Windows のアクセント カラー"),
+            () => { _s.TaskbarTint = BarTintMode.Accent; _barPickerOpen = false; Commit(); }));
+        foreach (var hex in colors)
+        {
+            bool sel = _s.TaskbarTint == BarTintMode.Custom && string.Equals(custom, hex, StringComparison.OrdinalIgnoreCase);
+            var h = hex;
+            wrap.Children.Add(Make(new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)), "", sel, hex,
+                () => { _s.TaskbarTint = BarTintMode.Custom; _s.TaskbarCustomColor = h; _barPickerOpen = false; Commit(); }));
+        }
+        var plus = new Tile
+        {
+            Width = 44, Height = 44, Margin = new Thickness(0, 0, 8, 8), CornerRadius = T.Corner(4), Background = T.ControlFill,
+            BorderThickness = new Thickness(1), BorderBrush = T.ControlBorder, Child = UiKit.Glyph("\uE710", 16), ToolTip = L.T("色を選ぶ"),
+        };
+        plus.MouseLeave += (_, _) => { plus.Background = T.ControlFill; plus.BorderBrush = T.ControlBorder; };
+        plus.Click += _ => { _barPickerOpen = !_barPickerOpen; Commit(); };
+        wrap.Children.Add(plus);
+
+        var content = new StackPanel();
+        content.Children.Add(wrap);
+        if (_barPickerOpen)
+        {
+            var start = Theme.ParseColor(custom) ?? T.Accent;
+            var picker = new ColorPicker(start) { Margin = new Thickness(0, 8, 0, 14) };
+            picker.Applied += c => { _s.TaskbarTint = BarTintMode.Custom; _s.TaskbarCustomColor = $"#{c.R:X2}{c.G:X2}{c.B:X2}"; _barPickerOpen = false; Commit(); };
+            picker.Cancelled += () => { _barPickerOpen = false; Commit(); };
+            content.Children.Add(picker);
+        }
+        return new Border
+        {
+            Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6),
+            Padding = new Thickness(20, 14, 12, 6), Child = content, Tag = L.T("タスクバーの背景に重ねる色"),
         };
     }
 

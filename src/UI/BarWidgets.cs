@@ -25,13 +25,32 @@ public static class BarWidgetCatalog
         new BarWidgetInfo("pomodoro", "生産性", "ポモドーロ", "25 分の集中と 5 分の休憩を繰り返すタイマー。クリックで開始/一時停止", () => new PomodoroBarWidget()),
     };
 
-    public static BarWidgetInfo? Find(string id) => All.FirstOrDefault(w => w.Id == id);
+    /// <summary>並べ方を整えるパーツ（何個でも置ける。ID は "divider:xxxx" / "spacer:xxxx"）。</summary>
+    public static readonly IReadOnlyList<BarWidgetInfo> Parts = new[]
+    {
+        new BarWidgetInfo("divider", "パーツ", "区切り線", "グループのあいだの細い線", () => new DividerBarPart()),
+        new BarWidgetInfo("spacer", "パーツ", "スペース", "ウィジェットのあいだの空き", () => new SpacerBarPart()),
+    };
+
+    public static bool IsPart(string id) => id.StartsWith("divider:", StringComparison.Ordinal) || id.StartsWith("spacer:", StringComparison.Ordinal);
+
+    /// <summary>新しいパーツの ID（kind は "divider" か "spacer"）。</summary>
+    public static string NewPartId(string kind) => kind + ":" + Guid.NewGuid().ToString("N")[..6];
+
+    public static BarWidgetInfo? Find(string id)
+    {
+        int i = id.IndexOf(':');
+        var key = i < 0 ? id : id[..i];
+        return All.Concat(Parts).FirstOrDefault(w => w.Id == key);
+    }
 }
 
 /// <summary>タスクバーに並ぶウィジェットのカード 1 枚。</summary>
 public abstract class BarWidget
 {
     public abstract string Id { get; }
+    /// <summary>区切り線・スペースなどのパーツか（余白を付けない）。</summary>
+    protected virtual bool IsPart => false;
     protected Theme T => Theme.Current;
     protected bool Vertical { get; private set; }
     protected double TileH { get; private set; }
@@ -45,7 +64,7 @@ public abstract class BarWidget
         var card = new Border
         {
             Background = Brushes.Transparent, CornerRadius = T.Corner(6), Child = inner,
-            Padding = vertical ? new Thickness(0, 4, 0, 4) : new Thickness(8, 0, 8, 0),
+            Padding = IsPart ? new Thickness(0) : vertical ? new Thickness(0, 4, 0, 4) : new Thickness(8, 0, 8, 0),
         };
         if (vertical) card.Width = tileH; else card.Height = tileH;
         Card = card;
@@ -424,4 +443,26 @@ public sealed class WeatherBarWidget : BarWidget
     }
 
     public override bool OnClick() { Fetch(true); return true; }
+}
+
+// ---------------------------------------------------------------------------
+
+/// <summary>区切り線（細い縦線。縦のバーでは横線）。</summary>
+public sealed class DividerBarPart : BarWidget
+{
+    public override string Id => "divider";
+    protected override bool IsPart => true;
+    protected override FrameworkElement BuildContent() => Vertical
+        ? new Border { Height = 1, Width = TileH * 0.6, Background = T.Stroke, Margin = new Thickness(0, 4, 0, 4), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+        : new Border { Width = 1, Height = TileH * 0.55, Background = T.Stroke, Margin = new Thickness(4, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+}
+
+/// <summary>スペース（ただの空き）。</summary>
+public sealed class SpacerBarPart : BarWidget
+{
+    public override string Id => "spacer";
+    protected override bool IsPart => true;
+    protected override FrameworkElement BuildContent() => Vertical
+        ? new Border { Height = 20, Width = 1, Background = Brushes.Transparent }
+        : new Border { Width = 20, Height = 1, Background = Brushes.Transparent };
 }

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 namespace ModernShell.Core;
 
 public enum ThemeMode { System, Light, Dark }
-public enum TaskbarAlignment { Center, Left }
+public enum TaskbarAlignment { Center, Left, AllCenter }
 /// <summary>タスクバーを置く画面の端。Left / Right は縦向きのタスクバー。</summary>
 public enum TaskbarEdge { Bottom, Top, Left, Right }
 /// <summary>スタート・検索・タスクビューの位置。WithApps: アプリと一緒（中央 or 左） / LeftEdge: 常に左端（3 分割）</summary>

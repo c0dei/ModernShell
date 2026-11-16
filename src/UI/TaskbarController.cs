@@ -78,7 +78,7 @@ public sealed partial class TaskbarController : IDisposable
     private bool StartAtLeftEdge => _settings.StartButtonPosition == StartButtonPosition.LeftEdge;
     public Win32.RECT BarRect => _reservation.Rect;
     /// <summary>スタートメニューを中央に出すか（スタートボタンが中央のかたまりにあるとき）。</summary>
-    public bool StartCentered => !StartAtLeftEdge && _settings.TaskbarAlignment == TaskbarAlignment.Center;
+    public bool StartCentered => _settings.TaskbarAlignment == TaskbarAlignment.AllCenter || !StartAtLeftEdge && _settings.TaskbarAlignment == TaskbarAlignment.Center;
 
     private readonly WindowsPins _windowsPins;
     private readonly ThumbnailPreview _preview;
@@ -305,7 +305,7 @@ public sealed partial class TaskbarController : IDisposable
             var grid = new Grid();
             // トレイは中身の大きさをそのまま確保する（均等に分けると、バーが短い／縦のバーでトレイが半分に収まらないとき、
             // 「^」や先頭のアイコンが切れる）。中央寄せのときだけ、アプリを中央に置くために左右を同じ大きさにする
-            var endLen = _settings.TaskbarAlignment == TaskbarAlignment.Center ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+            var endLen = _settings.TaskbarAlignment != TaskbarAlignment.Left ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
             foreach (var len in new[] { new GridLength(1, GridUnitType.Star), GridLength.Auto, endLen })
             {
                 if (Vertical) grid.RowDefinitions.Add(new RowDefinition { Height = len });
@@ -318,6 +318,24 @@ public sealed partial class TaskbarController : IDisposable
             if (Vertical) Grid.SetRowSpan(line, 3); else Grid.SetColumnSpan(line, 3);
             grid.Children.Add(line);
 
+            if (_settings.TaskbarAlignment == TaskbarAlignment.AllCenter)
+            {
+                // すべて中央: 左端のウィジェット・スタート・アプリ・トレイを、1 つのかたまりにして中央に置く
+                _barHosts.TryGetValue("Edge", out var edgeAll);
+                tray.Children.Add(ShowDesktopSliver());
+                var cluster = Stack(edgeAll, edgeAll != null ? Divider() : null, startGroup, Divider(), appsArea, Divider(), tray);
+                Place(grid, cluster, 1, Alignment.Center);
+                void FitAll()
+                {
+                    double total = Vertical ? grid.ActualHeight : grid.ActualWidth;
+                    if (total <= 0) return;
+                    double limit = Math.Max(48, total - 32);
+                    if (Vertical) grid.RowDefinitions[1].MaxHeight = limit; else grid.ColumnDefinitions[1].MaxWidth = limit;
+                }
+                grid.SizeChanged += (_, _) => FitAll();
+            }
+            else
+            {
             bool center = _settings.TaskbarAlignment == TaskbarAlignment.Center;
             _barHosts.TryGetValue("Edge", out var edge); // 「バーの左端」のウィジェット
             FrameworkElement? leftEl = null;
@@ -357,6 +375,7 @@ public sealed partial class TaskbarController : IDisposable
                 tray.SizeChanged += (_, _) => Fit();
                 if (leftEl != null) leftEl.SizeChanged += (_, _) => Fit();
             }
+            }
             AddSurface(BarSurface.Anchor.Fill, h, grid);
             _reservation.AutoHide = _settings.AutoHideTaskbar;
             _reservation.Reserve(Edge, h + across * 2);
@@ -365,6 +384,13 @@ public sealed partial class TaskbarController : IDisposable
         {
             // ---- アイランド型: 島ごとに別ウィンドウ ----
             var appsAnchor = _settings.TaskbarAlignment == TaskbarAlignment.Center ? BarSurface.Anchor.Center : BarSurface.Anchor.Left;
+            if (_settings.TaskbarAlignment == TaskbarAlignment.AllCenter)
+            {
+                _barHosts.TryGetValue("Edge", out var edgeAllIsland);
+                AddSurface(BarSurface.Anchor.Center, h, Island(Stack(edgeAllIsland, edgeAllIsland != null ? Divider() : null, startGroup, Divider(), appsArea, Divider(), tray)));
+            }
+            else
+            {
             _barHosts.TryGetValue("Edge", out var edgeIsland);
             if (StartAtLeftEdge && appsAnchor == BarSurface.Anchor.Center)
             {
@@ -377,6 +403,7 @@ public sealed partial class TaskbarController : IDisposable
                 AddSurface(appsAnchor, h, Island(StartAndApps(appsAnchor == BarSurface.Anchor.Left ? edgeIsland : null, startGroup, appsArea)));
             }
             AddSurface(BarSurface.Anchor.Right, h, Island(tray));
+            }
             _reservation.AutoHide = _settings.AutoHideTaskbar;
             _reservation.Reserve(Edge, h + across * 2);
         }
