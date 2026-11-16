@@ -157,8 +157,8 @@ public sealed partial class TaskbarController
     {
         foreach (var bar in _secondaries)
         {
-            bar.Time.Text = ClockStacked ? now.Hour + "\n" + now.ToString("mm") : now.ToString("H:mm");
-            bar.Date.Text = now.ToString(L.IsEnglish ? "M/d/yyyy" : "yyyy/MM/dd", L.Culture);
+            bar.Time.Text = ClockStacked ? now.Hour + "\n" + now.ToString("mm") : Vertical ? now.ToString("H:mm") : FormatTime(now);
+            bar.Date.Text = Vertical ? now.ToString("M/d", L.Culture) : FormatDate(now);
         }
     }
 

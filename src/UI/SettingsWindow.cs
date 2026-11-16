@@ -386,6 +386,18 @@ public sealed class SettingsWindow : Window
             ToggleRow(L.T("IME の状態を表示"), L.T("日本語入力の状態（あ / A など）。クリックでオン/オフを切り替えます"), _s.ShowImeIndicator, v => _s.ShowImeIndicator = v, on),
             ToggleRow(L.T("時計に秒を表示"), "", _s.ShowSeconds, v => _s.ShowSeconds = v, on));
 
+        Group(p, "", L.T("時計"), L.T("右端の日時の表示（縦のバーでは、幅に合わせて自動で短くします）"),
+            DropDownRow(L.T("文字の揃え"), "", new[] { ("Left", L.T("左揃え")), ("Center", L.T("中央揃え")), ("Right", L.T("右揃え")) },
+                _s.ClockAlign.ToString(), v => _s.ClockAlign = Enum.Parse<ClockAlign>(v), on && !vertical),
+            DropDownRow(L.T("並び順"), "", new[] { ("Time", L.T("上が時刻、下が日付")), ("Date", L.T("上が日付、下が時刻")) },
+                _s.ClockDateFirst ? "Date" : "Time", v => _s.ClockDateFirst = v == "Date", on && !vertical),
+            DropDownRow(L.T("時刻の形式"), L.T("「システム」は、Windows の地域設定（設定 → 時刻と言語 → 日付と時刻）の短い時刻の形です"),
+                new[] { ("System", L.T("システムに合わせる")), ("H24", L.T("24 時間（9:05）")), ("H24Pad", L.T("24 時間（09:05）")), ("H12", L.T("12 時間（午前/午後）")) },
+                _s.ClockTimeFormat.ToString(), v => _s.ClockTimeFormat = Enum.Parse<ClockTimeFormat>(v), on && !vertical),
+            DropDownRow(L.T("日付の形式"), L.T("「システム」は、Windows の地域設定の短い日付の形です"),
+                new[] { ("System", L.T("システムに合わせる")), ("YearMonthDay", "2026/11/16"), ("MonthDay", "11/16"), ("WithWeekday", L.T("11月16日 (月)")), ("Hidden", L.T("表示しない")) },
+                _s.ClockDateFormat.ToString(), v => _s.ClockDateFormat = Enum.Parse<ClockDateFormat>(v), on && !vertical));
+
         Group(p, "", L.T("バーのウィジェット"), L.T("タスクバーの右側に並べる小さなカード。クリックで詳細、右クリックで並べ替え・外す"),
             BarWidgetCatalog.All.SelectMany(w => new[]
             {

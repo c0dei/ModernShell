@@ -20,6 +20,12 @@ public enum StartButtonPosition { WithApps, LeftEdge }
 public enum SurfaceStyle { Solid, Transparent, Blur }
 /// <summary>開くときのアニメーションの速さ（Fast = 短く / Slow = ゆっくり）。</summary>
 public enum AnimationSpeed { Fast, Normal, Slow }
+/// <summary>時計の文字の揃え。</summary>
+public enum ClockAlign { Left, Center, Right }
+/// <summary>時刻の書式。System: Windows の地域設定（短い時刻）に合わせる。</summary>
+public enum ClockTimeFormat { System, H24, H24Pad, H12 }
+/// <summary>日付の書式。System: Windows の地域設定（短い日付）に合わせる。</summary>
+public enum ClockDateFormat { System, YearMonthDay, MonthDay, WithWeekday, Hidden }
 /// <summary>タスクバーの背景に重ねる色（Theme: ライト/ダークの色 / Accent: アクセント色 / Custom: 好きな色）。</summary>
 public enum BarTintMode { Theme, Accent, Custom }
 /// <summary>スタートのピン留めのフォルダー（Items はアプリの ID）。</summary>
@@ -121,6 +127,12 @@ public sealed class Settings
     public BarTintMode TaskbarTint { get; set; } = BarTintMode.Theme;
     /// <summary>TaskbarTint が Custom のときの色（#RRGGBB）。</summary>
     public string TaskbarCustomColor { get; set; } = "";
+    /// <summary>時計（横のバー）の文字の揃え。</summary>
+    public ClockAlign ClockAlign { get; set; } = ClockAlign.Right;
+    /// <summary>時計で日付を上、時刻を下にする（既定は時刻が上）。</summary>
+    public bool ClockDateFirst { get; set; } = false;
+    public ClockTimeFormat ClockTimeFormat { get; set; } = ClockTimeFormat.System;
+    public ClockDateFormat ClockDateFormat { get; set; } = ClockDateFormat.System;
     public bool GroupTaskbarButtons { get; set; } = true;
     public bool ShowTaskbarLabels { get; set; } = false;
     /// <summary>アプリが付ける進捗バーとオーバーレイ アイコン（通知の数など）をボタンに表示する。</summary>

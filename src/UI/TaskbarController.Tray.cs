@@ -80,7 +80,9 @@ public sealed partial class TaskbarController
         MeasureClock();
         _time = UiKit.Label("", 12);
         _date = UiKit.Label("", 12);
-        _time.HorizontalAlignment = _date.HorizontalAlignment = Vertical ? HorizontalAlignment.Center : HorizontalAlignment.Right;
+        var clockAlign = Vertical ? HorizontalAlignment.Center : _settings.ClockAlign switch { ClockAlign.Left => HorizontalAlignment.Left, ClockAlign.Center => HorizontalAlignment.Center, _ => HorizontalAlignment.Right };
+        _time.HorizontalAlignment = _date.HorizontalAlignment = clockAlign;
+        _time.TextAlignment = _date.TextAlignment = clockAlign switch { HorizontalAlignment.Left => TextAlignment.Left, HorizontalAlignment.Center => TextAlignment.Center, _ => TextAlignment.Right };
         // 縦のバーでは文字が省略記号（…）にならないよう、省略せず、中央に揃える
         if (Vertical)
         {
@@ -88,9 +90,10 @@ public sealed partial class TaskbarController
             _time.TextAlignment = _date.TextAlignment = TextAlignment.Center;
         }
         var clockStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-        clockStack.Children.Add(_time);
-        clockStack.Children.Add(_date);
-        if (Compact || ClockStacked || (Vertical && !_dateFits)) _date.Visibility = Visibility.Collapsed; // 低い・細いバーでは日付を省略（ツールチップで確認）
+        // 横のバーでは、設定で日付を上にもできる
+        if (_settings.ClockDateFirst && !Vertical) { clockStack.Children.Add(_date); clockStack.Children.Add(_time); }
+        else { clockStack.Children.Add(_time); clockStack.Children.Add(_date); }
+        if (Compact || ClockStacked || (Vertical && !_dateFits) || (!Vertical && _settings.ClockDateFormat == ClockDateFormat.Hidden)) _date.Visibility = Visibility.Collapsed; // 低い・細いバーでは日付を省略（ツールチップで確認）
         var clock = new Tile
         {
             Padding = Vertical ? new Thickness(0, 6, 0, 6) : new Thickness(10, 0, 10, 0), Margin = Vertical ? new Thickness(0, 2, 0, 2) : new Thickness(2, 0, 2, 0),
@@ -583,9 +586,33 @@ public sealed partial class TaskbarController
         var now = DateTime.Now;
         // 縦のバーは幅が狭いので、秒は出さず、日付も短くする。さらに細いバーでは時刻を「時」「分」の 2 段にする
         _time.Text = ClockStacked ? now.Hour + "\n" + now.ToString("mm") // 1 文字だけの書式（"H"）は標準の書式と見なされて例外になるので使わない
-            : now.ToString(_settings.ShowSeconds && !Vertical ? "H:mm:ss" : "H:mm");
-        _date.Text = now.ToString(Vertical ? "M/d" : L.IsEnglish ? "M/d/yyyy" : "yyyy/MM/dd", L.Culture);
+            : Vertical ? now.ToString(_settings.ShowSeconds && !Vertical ? "H:mm:ss" : "H:mm") : FormatTime(now);
+        _date.Text = Vertical ? now.ToString("M/d", L.Culture) : FormatDate(now);
     }
+
+    /// <summary>設定の書式で時刻を文字にする。「システム」は Windows の地域設定（短い時刻。秒を表示するときは長い時刻）。</summary>
+    private string FormatTime(DateTime now)
+    {
+        bool sec = _settings.ShowSeconds;
+        var sys = System.Globalization.CultureInfo.CurrentCulture;
+        return _settings.ClockTimeFormat switch
+        {
+            ClockTimeFormat.H24 => now.ToString(sec ? "H:mm:ss" : "H:mm", L.Culture),
+            ClockTimeFormat.H24Pad => now.ToString(sec ? "HH:mm:ss" : "HH:mm", L.Culture),
+            ClockTimeFormat.H12 => now.ToString(sec ? "h:mm:ss tt" : "h:mm tt", L.Culture),
+            _ => now.ToString(sec ? "T" : "t", sys), // 標準の書式（t = 短い時刻 / T = 長い時刻）。地域設定の形になる
+        };
+    }
+
+    /// <summary>設定の書式で日付を文字にする。「システム」は Windows の地域設定（短い日付）。</summary>
+    private string FormatDate(DateTime now) => _settings.ClockDateFormat switch
+    {
+        ClockDateFormat.YearMonthDay => now.ToString("yyyy/MM/dd", L.Culture),
+        ClockDateFormat.MonthDay => now.ToString("M/d", L.Culture),
+        ClockDateFormat.WithWeekday => L.IsEnglish ? now.ToString("ddd, MMM d", L.Culture) : now.ToString("M月d日 (ddd)", L.Culture),
+        ClockDateFormat.Hidden => "",
+        _ => now.ToString("d", System.Globalization.CultureInfo.CurrentCulture),
+    };
 
     /// <summary>ネットワーク接続とバッテリー残量をアイコンに反映。</summary>
     /// <summary>ネットワークにつながっているか（最後に調べた結果）。</summary>
