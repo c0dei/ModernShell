@@ -325,7 +325,7 @@ public sealed class WidgetPanel : ScrollViewer
             temp.Text = $"{w.Temperature:0}°";
             desc.Text = $"{w.Place}  {w.Description}";
             range.Text = L.F("最高 {0:0}° / 最低 {1:0}°", w.Max, w.Min);
-            glyph.Text = w.IsClear ? "\uE706" : "\uE753";
+            WeatherSymbols.Apply(glyph, w.Code);
             refreshBtn.ToolTip = L.F("{0} に更新（クリックで今すぐ更新）", w.FetchedAt.ToString("H:mm"));
         }
 

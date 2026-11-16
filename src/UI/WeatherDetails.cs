@@ -34,7 +34,7 @@ public sealed class WeatherDetailsView : Border
 
     private TextBlock Sym(int code, double size, Brush? fg = null) => new()
     {
-        Text = Weather.Symbol(code), FontFamily = new FontFamily("Segoe UI Symbol"), FontSize = size, Foreground = fg ?? _t.AccentBrush,
+        Text = Weather.Symbol(code), FontFamily = new FontFamily("Segoe UI Symbol"), FontSize = size, Foreground = fg ?? WeatherSymbols.Brush(code),
         HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
     };
 
@@ -163,5 +163,27 @@ public sealed class WeatherDetailsView : Border
         var h = Label(text, 12, _t.TextSecondary, FontWeights.SemiBold);
         h.Margin = new Thickness(0, 14, 0, 6);
         return h;
+    }
+}
+
+/// <summary>天気の記号の見た目（色付きの Segoe UI Symbol）。</summary>
+public static class WeatherSymbols
+{
+    public static readonly FontFamily Font = new("Segoe UI Symbol");
+
+    public static Brush Brush(int code)
+    {
+        var (r, g, b) = Weather.SymbolRgb(code);
+        var br = new SolidColorBrush(Color.FromRgb(r, g, b));
+        br.Freeze();
+        return br;
+    }
+
+    /// <summary>既存の TextBlock（アイコン用）を、天気コードの記号・色にする。</summary>
+    public static void Apply(TextBlock t, int code)
+    {
+        t.FontFamily = Font;
+        t.Text = Weather.Symbol(code);
+        t.Foreground = Brush(code);
     }
 }

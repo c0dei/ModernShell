@@ -24,6 +24,18 @@ public static class Weather
     public sealed record HourForecast(DateTime Time, int Code, double Temp, int? Rain);
     public sealed record MoreInfo(double? Feels, int? Humidity, double? Wind, List<DayForecast> Days, List<HourForecast> Hours, string? Sunrise, string? Sunset);
 
+    /// <summary>天気コード → 記号の色（晴れは黄、曇りは灰、雨は青、雪は水色、雷は紫）。一目で天気が分かるよう、アクセント色ではなく天気ごとの色にする。</summary>
+    public static (byte r, byte g, byte b) SymbolRgb(int code) => code switch
+    {
+        0 or 1 => (0xF2, 0xA9, 0x00),
+        2 => (0xE0, 0xA0, 0x30),
+        3 or 45 or 48 => (0x8A, 0x97, 0xA6),
+        >= 51 and <= 67 or >= 80 and <= 82 => (0x3B, 0x8E, 0xEA),
+        >= 71 and <= 77 or 85 or 86 => (0x5F, 0xC1, 0xE6),
+        >= 95 => (0x8E, 0x63, 0xD6),
+        _ => (0x8A, 0x97, 0xA6),
+    };
+
     /// <summary>天気コード → 小さな記号（Segoe UI Symbol の単色の文字）。</summary>
     public static string Symbol(int code) => code switch
     {

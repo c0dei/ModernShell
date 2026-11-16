@@ -414,7 +414,7 @@ public sealed class WeatherBarWidget : BarWidget
 
     private void Apply(Weather.Report w)
     {
-        if (_icon != null) _icon.Text = w.IsClear ? "\uE706" : "\uE753";
+        if (_icon != null) WeatherSymbols.Apply(_icon, w.Code);
         if (_temp != null) _temp.Text = $"{w.Temperature:0}°";
         if (_desc != null) _desc.Text = $"{w.Place}  {w.Description}";
         if (Card != null) Card.ToolTip = $"{w.Place}  {w.Description}  {w.Temperature:0}°（{L.F("最高 {0:0}° / 最低 {1:0}°", w.Max, w.Min)}）";
