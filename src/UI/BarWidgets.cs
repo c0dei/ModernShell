@@ -22,7 +22,6 @@ public static class BarWidgetCatalog
         new BarWidgetInfo("battery", "システム", "バッテリー", "バッテリー残量と充電中の表示（バッテリーの無い PC では表示されません）", () => new BatteryBarWidget()),
         new BarWidgetInfo("nowplaying", "メディア", "再生中の曲", "再生中の曲名とアーティスト。クリックで再生/一時停止、右クリックで前後の曲へ", () => new NowPlayingBarWidget()),
         new BarWidgetInfo("weather", "天気", "天気", "今の天気（温度・天気）。設定の天気の地点と更新間隔を使います。クリックで今すぐ更新", () => new WeatherBarWidget()),
-        new BarWidgetInfo("notification", "システム", "通知センター", "クリックで Windows の通知センターを開くボタン", () => new NotificationBarWidget()),
         new BarWidgetInfo("pomodoro", "生産性", "ポモドーロ", "25 分の集中と 5 分の休憩を繰り返すタイマー。クリックで開始/一時停止", () => new PomodoroBarWidget()),
     };
 
@@ -425,19 +424,4 @@ public sealed class WeatherBarWidget : BarWidget
     }
 
     public override bool OnClick() { Fetch(true); return true; }
-}
-
-/// <summary>通知センターを開くボタン（Windows の Win+N と同じ）。</summary>
-public sealed class NotificationBarWidget : BarWidget
-{
-    public override string Id => "notification";
-
-    protected override FrameworkElement BuildContent()
-    {
-        var g = UiKit.Glyph("\uEA8F", 16, T.Text);
-        g.ToolTip = L.T("通知センター");
-        return g;
-    }
-
-    public override bool OnClick() { SystemActions.NotificationCenter(); return true; }
 }

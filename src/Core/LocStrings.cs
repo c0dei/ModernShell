@@ -251,8 +251,6 @@ public static partial class L
         ["アプリの右隣"] = "Right of the apps",
         ["右側（トレイの手前）"] = "Right side (before the tray)",
         ["今の天気（温度・天気）。設定の天気の地点と更新間隔を使います。クリックで今すぐ更新"] = "Current weather (temperature and conditions). Uses the weather location and interval from settings. Click to refresh",
-        ["通知センター"] = "Notification center",
-        ["クリックで Windows の通知センターを開くボタン"] = "A button that opens the Windows notification center",
         ["バーの左端"] = "Far left of the bar",
         ["グループのあいだに区切り線を引く"] = "Draw dividers between groups",
         ["スタート・アプリ・ウィジェット・トレイのあいだに、細い線を引きます"] = "Draws thin lines between Start, apps, widgets and tray",
