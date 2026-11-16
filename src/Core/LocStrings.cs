@@ -307,6 +307,8 @@ public static partial class L
         ["弱（115%）"] = "Low (115%)", ["標準（130%）"] = "Default (130%)", ["強（150%）"] = "High (150%)", ["最大（180%）"] = "Max (180%)",
         ["両隣のアイコンも拡大"] = "Also magnify neighboring icons",
         ["Mac のドックのように、カーソルの下を最大に、両隣も距離に応じてなめらかに拡大します。オフのときは、カーソルの下のアイコンだけ"] = "Like the Mac Dock: the icon under the cursor is largest and its neighbors scale smoothly with distance. When off, only the icon under the cursor is magnified",
+        ["列"] = "cols", ["分"] = "min",
+        ["既定値（{0}）に戻す"] = "Reset to default ({0})",
         ["天気の更新間隔"] = "Weather update interval",
         ["スタート メニューを開いている間も、この間隔で自動更新します（カードの更新ボタンで今すぐ更新もできます）"] = "Also refreshes automatically at this interval while the Start menu is open (or use the card's refresh button)",
         ["10 分"] = "10 min", ["20 分"] = "20 min", ["30 分"] = "30 min", ["1 時間"] = "1 hour", ["3 時間"] = "3 hours",

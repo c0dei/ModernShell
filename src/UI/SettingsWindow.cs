@@ -308,8 +308,7 @@ public sealed class SettingsWindow : Window
 
         Group(p, "", L.T("レイアウト"), "",
             ToggleRow(L.T("開いたときに「すべてのアプリ」を表示"), L.T("ピン留めではなくアプリの一覧から始めます"), _s.ShowAllAppsFirst, v => _s.ShowAllAppsFirst = v),
-            DropDownRow(L.T("ピン留めの列数"), "", new[] { ("4", L.T("4 列")), ("5", L.T("5 列")), ("6", L.T("6 列")), ("7", L.T("7 列")), ("8", L.T("8 列")) },
-                _s.PinnedColumns.ToString(), v => _s.PinnedColumns = int.Parse(v)),
+            NumberRow(L.T("ピン留めの列数"), "", 3, 8, _s.PinnedColumns, L.T("列"), v => _s.PinnedColumns = (int)v, def: 6),
             ToggleRow(L.T("「最近使った」を表示"), L.T("ピン留めの下に、最近開いたアプリを 1 行で表示します（開いた記録はこの PC の中だけに保存されます）"), _s.ShowRecentApps, v => _s.ShowRecentApps = v),
             ToggleRow(L.T("「よく使う」を表示"), L.T("ピン留めの下に、よく開くアプリ（2 回以上）を 1 行で表示します"), _s.ShowFrequentApps, v => _s.ShowFrequentApps = v),
             ButtonRow(L.T("利用履歴を消去"), L.T("「最近使った」「よく使う」の元になっている、アプリを開いた記録を消します"), L.T("消去"),
@@ -360,28 +359,21 @@ public sealed class SettingsWindow : Window
             DropDownRow(L.T("画面上の位置"), L.T("左・右に置くと、縦向きのタスクバーになります（ボタンが縦に並びます）"),
                 new[] { ("Bottom", L.T("下")), ("Top", L.T("上")), ("Left", L.T("左")), ("Right", L.T("右")) }, _s.TaskbarEdge.ToString(),
                 v => _s.TaskbarEdge = Enum.Parse<TaskbarEdge>(v), on),
-            DropDownRow(vertical ? L.T("幅") : L.T("高さ"), vertical ? L.T("縦向きのタスクバーの太さです") : L.T("40 px 未満では時計の日付を省略します"),
-                new[] { ("28", "28 px"), ("32", "32 px"), ("36", "36 px"), ("40", "40 px"), ("44", "44 px"), ("48", L.T("48 px（標準）")), ("56", "56 px"), ("64", "64 px") },
-                _s.TaskbarHeight.ToString(), v => _s.TaskbarHeight = int.Parse(v), on),
-            DropDownRow(L.T("アプリ アイコンの大きさ"), "",
-                new[] { ("16", L.T("16 px（小）")), ("20", "20 px"), ("24", L.T("24 px（標準）")), ("28", "28 px"), ("32", L.T("32 px（大）")) },
-                _s.TaskbarIconSize.ToString(), v => _s.TaskbarIconSize = int.Parse(v), on),
+            NumberRow(vertical ? L.T("幅") : L.T("高さ"), vertical ? L.T("縦向きのタスクバーの太さです") : L.T("40 px 未満では時計の日付を省略します"), 24, 96, _s.TaskbarHeight, "px", v => _s.TaskbarHeight = (int)v, on, def: 48),
+            NumberRow(L.T("アプリ アイコンの大きさ"), "", 12, 40, _s.TaskbarIconSize, "px", v => _s.TaskbarIconSize = (int)v, on, def: 24),
             // 余白は左右と上下を別々に（画面を基準にした向き）。帯なら 0 で画面端に密着、アイランドなら島と画面の端のあいだの距離
-            DropDownRow(floating ? L.T("アイランドの余白（左右）") : L.T("帯の余白（左右）"),
+            NumberRow(floating ? L.T("アイランドの余白（左右）") : L.T("帯の余白（左右）"),
                 floating ? L.T("島と画面の左右の端とのあいだの距離") : L.T("帯と画面の左右の端とのあいだの距離。0 より大きいと帯は端から離れて角丸になります"),
-                Margins(floating), (floating ? _s.IslandMarginX : _s.BandMarginX).ToString(),
-                v => { if (floating) _s.IslandMarginX = int.Parse(v); else _s.BandMarginX = int.Parse(v); }, on),
-            DropDownRow(floating ? L.T("アイランドの余白（上下）") : L.T("帯の余白（上下）"),
+                0, 64, floating ? _s.IslandMarginX : _s.BandMarginX, "px", v => { if (floating) _s.IslandMarginX = (int)v; else _s.BandMarginX = (int)v; }, on, def: floating ? 8 : 0),
+            NumberRow(floating ? L.T("アイランドの余白（上下）") : L.T("帯の余白（上下）"),
                 floating ? L.T("島と画面の上下の端とのあいだの距離") : L.T("帯と画面の上下の端とのあいだの距離。Windows は画面端に接したウィンドウの角を丸めないので、角丸にしたいときは余白を付けてください"),
-                Margins(floating), (floating ? _s.IslandMarginY : _s.BandMarginY).ToString(),
-                v => { if (floating) _s.IslandMarginY = int.Parse(v); else _s.BandMarginY = int.Parse(v); }, on));
+                0, 64, floating ? _s.IslandMarginY : _s.BandMarginY, "px", v => { if (floating) _s.IslandMarginY = (int)v; else _s.BandMarginY = (int)v; }, on, def: floating ? 8 : 0));
 
         p.Children.Add(Section(L.T("見た目")));
         Group(p, "\uE75B", L.T("タスクバー"), L.T("タスクバーと、そこから開くプレビュー・一覧・メニューの背景"),
             DropDownRow(L.T("背景"), L.T("透過なし: テーマの色（ライト/ダーク）。透過: テーマの色を半透明で。ぼかし: 壁紙を強くぼかした下地にテーマの色を重ねる"),
                 new[] { ("Solid", L.T("透過なし")), ("Transparent", L.T("透過")), ("Blur", L.T("ぼかし")) }, _s.TaskbarBackground.ToString(), v => _s.TaskbarBackground = Enum.Parse<SurfaceStyle>(v), _s.UseCustomTaskbar),
-            SliderRow(L.T("不透明度"), L.T("重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ"),
-                _s.TaskbarOpacity, v => _s.TaskbarOpacity = v, _s.UseCustomTaskbar && _s.TaskbarBackground != SurfaceStyle.Solid),
+            NumberRow(L.T("不透明度"), L.T("重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ"), 0, 100, _s.TaskbarOpacity, "%", v => _s.TaskbarOpacity = (int)v, _s.UseCustomTaskbar && _s.TaskbarBackground != SurfaceStyle.Solid, def: 60),
             ToggleRow(L.T("バーをピル型にする"), L.T("バーの角を、高さの半分まで丸めます。画面の端から離す（余白を付ける）と、浮いたピルのように見えます"), _s.TaskbarPill, v => _s.TaskbarPill = v, _s.UseCustomTaskbar));
         p.Children.Add(Section(L.T("タスクバーの背景に重ねる色")));
         p.Children.Add(BarTintSwatches());
@@ -408,9 +400,7 @@ public sealed class SettingsWindow : Window
             ToggleRow(L.T("進捗とバッジを表示"), L.T("ダウンロードなどの進捗バーと、通知の数などの小さな印（アプリが付けるもの）をボタンに表示します"), _s.ShowTaskbarBadges, v => _s.ShowTaskbarBadges = v, on),
             ToggleRow(L.T("ボタンにウィンドウ名を表示"), "", _s.ShowTaskbarLabels, v => _s.ShowTaskbarLabels = v, on),
             ToggleRow(L.T("ホバー時にアイコンを拡大"), L.T("カーソルを置いたアプリのアイコンを少し大きくします"), _s.MagnifyOnHover, v => _s.MagnifyOnHover = v, on),
-            DropDownRow(L.T("拡大率"), L.T("カーソルを置いたアイコンの最大の拡大率。バーの太さ・ボタンの大きさに収まる範囲で効きます"),
-                new[] { ("115", L.T("弱（115%）")), ("130", L.T("標準（130%）")), ("150", L.T("強（150%）")), ("180", L.T("最大（180%）")) },
-                _s.MagnifyScale.ToString(), v => _s.MagnifyScale = int.Parse(v), on && _s.MagnifyOnHover),
+            NumberRow(L.T("拡大率"), L.T("カーソルを置いたアイコンの最大の拡大率。バーの太さ・ボタンの大きさに収まる範囲で効きます"), 100, 250, _s.MagnifyScale, "%", v => _s.MagnifyScale = (int)v, on && _s.MagnifyOnHover, step: 5, def: 130),
             ToggleRow(L.T("両隣のアイコンも拡大"), L.T("Mac のドックのように、カーソルの下を最大に、両隣も距離に応じてなめらかに拡大します。オフのときは、カーソルの下のアイコンだけ"),
                 _s.MagnifyNeighbors, v => _s.MagnifyNeighbors = v, on && _s.MagnifyOnHover),
             ToggleRow(L.T("IME の状態を表示"), L.T("日本語入力の状態（あ / A など）。クリックでオン/オフを切り替えます"), _s.ShowImeIndicator, v => _s.ShowImeIndicator = v, on),
@@ -434,9 +424,7 @@ public sealed class SettingsWindow : Window
                 _s.ShowThumbnailPreview, v => _s.ShowThumbnailPreview = v, on),
             ToggleRow(L.T("タスク ビュー ボタンで仮想デスクトップを表示"), L.T("カーソルを置くとデスクトップの一覧を表示し、クリックで切り替え、＋ で追加します"),
                 _s.ShowDesktopsOnTaskView, v => _s.ShowDesktopsOnTaskView = v, on && _s.ShowTaskViewButton),
-            DropDownRow(L.T("表示までの待ち時間"), "",
-                new[] { ("0", L.T("すぐ")), ("200", L.T("0.2 秒")), ("400", L.T("0.4 秒（標準）")), ("700", L.T("0.7 秒")), ("1000", L.T("1 秒")) },
-                _s.PreviewDelayMs.ToString(), v => _s.PreviewDelayMs = int.Parse(v), on && (_s.ShowThumbnailPreview || _s.ShowDesktopsOnTaskView)),
+            NumberRow(L.T("表示までの待ち時間"), "", 0, 2000, _s.PreviewDelayMs, "ms", v => _s.PreviewDelayMs = (int)v, on && (_s.ShowThumbnailPreview || _s.ShowDesktopsOnTaskView), step: 50, def: 400),
             DropDownRow(L.T("プレビューの大きさ"), "",
                 new[] { ("Small", L.T("小")), ("Medium", L.T("中（標準）")), ("Large", L.T("大")) },
                 _s.PreviewSize, v => _s.PreviewSize = v, on && _s.ShowThumbnailPreview));
@@ -518,9 +506,7 @@ public sealed class SettingsWindow : Window
             if (id == "weather")
                 p.Children.Add(TextRow(L.T("天気の地点"), L.T("都市名（例: Tokyo, Osaka, 札幌）"), _s.WeatherCity, v => _s.WeatherCity = v, on && _s.WidgetWeather));
             if (id == "weather")
-                p.Children.Add(DropDownRow(L.T("天気の更新間隔"), L.T("スタート メニューを開いている間も、この間隔で自動更新します（カードの更新ボタンで今すぐ更新もできます）"),
-                    new[] { ("10", L.T("10 分")), ("20", L.T("20 分")), ("30", L.T("30 分")), ("60", L.T("1 時間")), ("180", L.T("3 時間")) },
-                    _s.WeatherRefreshMinutes.ToString(), v => _s.WeatherRefreshMinutes = int.Parse(v), on && _s.WidgetWeather));
+                p.Children.Add(NumberRow(L.T("天気の更新間隔"), L.T("スタート メニューを開いている間も、この間隔で自動更新します（カードの更新ボタンで今すぐ更新もできます）"), 5, 360, _s.WeatherRefreshMinutes, L.T("分"), v => _s.WeatherRefreshMinutes = (int)v, on && _s.WidgetWeather, step: 5, def: 20));
         }
         BarWidgetsSection(p);
     }
@@ -600,8 +586,8 @@ public sealed class SettingsWindow : Window
         Group(p, "\uE8FC", L.T("スタート メニュー"), L.T("スタート メニューと、そこから開くメニューの背景"),
             DropDownRow(L.T("背景"), L.T("透過なし: テーマの色（ライト/ダーク）。透過: テーマの色を半透明で。ぼかし: 壁紙を強くぼかした下地にテーマの色を重ねる"),
                 new[] { ("Solid", L.T("透過なし")), ("Transparent", L.T("透過")), ("Blur", L.T("ぼかし")) }, _s.StartMenuBackground.ToString(), v => _s.StartMenuBackground = Enum.Parse<SurfaceStyle>(v)),
-            SliderRow(L.T("不透明度"), L.T("重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ"),
-                _s.StartMenuOpacity, v => _s.StartMenuOpacity = v, _s.StartMenuBackground != SurfaceStyle.Solid));
+            NumberRow(L.T("不透明度"), L.T("重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ"), 0, 100, _s.StartMenuOpacity, "%",
+                v => _s.StartMenuOpacity = (int)v, _s.StartMenuBackground != SurfaceStyle.Solid, def: 70));
 
         p.Children.Add(Note(L.T("タスクバーの背景・色・形は「タスクバー」ページで変えられます。")));
 
@@ -620,14 +606,9 @@ public sealed class SettingsWindow : Window
 
         Group(p, "", L.T("形と文字"), "",
             FontRow(),
-            DropDownRow(L.T("角の丸み"), "", new[] { ("0", L.T("なし")), ("4", L.T("小")), ("8", L.T("標準")), ("12", L.T("大")) },
-                ((int)_s.CornerRadius).ToString(), v => _s.CornerRadius = double.Parse(v)),
-            DropDownRow(L.T("スタート メニューの文字サイズ"), L.T("アプリ名・見出し・検索欄・ウィジェットなど、スタート メニューの文字すべて"),
-                new[] { ("90", L.T("90%（小）")), ("100", L.T("100%（標準）")), ("110", "110%"), ("125", L.T("125%（大）")), ("150", "150%") },
-                _s.StartMenuTextScale.ToString(), v => _s.StartMenuTextScale = int.Parse(v)),
-            DropDownRow(L.T("メニューの文字サイズ"), L.T("右クリックメニュー・ジャンプリスト・サブメニュー共通"),
-                new[] { ("12", L.T("12 px（小）")), ("13", "13 px"), ("14", L.T("14 px（標準）")), ("15", "15 px"), ("16", L.T("16 px（大）")) },
-                _s.MenuFontSize.ToString(), v => _s.MenuFontSize = int.Parse(v)));
+            NumberRow(L.T("角の丸み"), "", 0, 24, _s.CornerRadius, "px", v => _s.CornerRadius = v, def: 8),
+            NumberRow(L.T("スタート メニューの文字サイズ"), L.T("アプリ名・見出し・検索欄・ウィジェットなど、スタート メニューの文字すべて"), 80, 200, _s.StartMenuTextScale, "%", v => _s.StartMenuTextScale = (int)v, step: 5, def: 100),
+            NumberRow(L.T("メニューの文字サイズ"), "", 10, 20, _s.MenuFontSize, "px", v => _s.MenuFontSize = (int)v, def: 14));
 
         if (!_flat)
             p.Children.Add(InfoBar(L.T("ぼかしについて"),
@@ -880,17 +861,61 @@ public sealed class SettingsWindow : Window
     }
 
     /// <summary>スライダー行（0–100%）。値は離したときに保存する。</summary>
-    private Border SliderRow(string title, string desc, int value, Action<int> set, bool enabled = true)
+    /// <summary>数値の設定: スライダーと、直接入力の欄（単位付き）。入力した値は範囲内に丸める。「既定値」を渡すと、違うときだけ戻すボタンが出る。</summary>
+    private Border NumberRow(string title, string desc, double min, double max, double value, string unit, Action<double> set,
+        bool enabled = true, double step = 1, double? def = null)
     {
-        var label = UiKit.Label($"{value}%", 14);
-        label.MinWidth = 44;
-        label.TextAlignment = TextAlignment.Right;
-        var slider = new FluentSlider(0, 100, value);
-        slider.ValueChanged += v => label.Text = $"{v:0}%";
-        slider.ValueCommitted += v => { set((int)v); Commit(); };
-        var right = new StackPanel { Orientation = Orientation.Horizontal };
-        right.Children.Add(label);
-        right.Children.Add(Spaced(slider, 12));
+        string Fmt(double v) => step < 1 ? v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : ((int)Math.Round(v)).ToString();
+        var slider = new FluentSlider(min, max, value, 180, step);
+        var box = new TextBox
+        {
+            Text = Fmt(slider.Value), Width = 60, Padding = new Thickness(6, 4, 6, 4), TextAlignment = TextAlignment.Right, VerticalContentAlignment = VerticalAlignment.Center,
+            Background = T.SolidBackground, Foreground = T.Text, CaretBrush = T.Text, BorderBrush = T.Stroke, BorderThickness = new Thickness(1, 1, 1, 2), IsEnabled = enabled,
+        };
+        slider.ValueChanged += v => box.Text = Fmt(v);
+        slider.ValueCommitted += v => { set(v); Commit(); };
+        void Apply()
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(box.Text.Replace('，', '.').Replace('．', '.'), @"-?\d+(\.\d+)?");
+            if (!m.Success || !double.TryParse(m.Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v)) { box.Text = Fmt(slider.Value); return; }
+            v = slider.Snap(v);
+            if (Math.Abs(v - slider.Value) < 1e-9) { box.Text = Fmt(v); return; }
+            slider.SetValue(v);
+            box.Text = Fmt(v);
+            set(v);
+            Commit();
+        }
+        box.LostFocus += (_, _) => Apply();
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter) { Apply(); e.Handled = true; }
+            else if (e.Key is Key.Up or Key.Down)
+            {
+                double cur = double.TryParse(box.Text, out var c) ? c : slider.Value;
+                box.Text = Fmt(slider.Snap(cur + (e.Key == Key.Up ? step : -step)));
+                Apply();
+                e.Handled = true;
+            }
+        };
+        var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        right.Children.Add(slider);
+        right.Children.Add(Spaced(box, 12));
+        var unitLabel = UiKit.Label(unit, 13, T.TextSecondary);
+        unitLabel.MinWidth = 32;
+        unitLabel.Margin = new Thickness(6, 0, 0, 0);
+        unitLabel.VerticalAlignment = VerticalAlignment.Center;
+        right.Children.Add(unitLabel);
+        if (def is { } d)
+        {
+            var reset = new Tile
+            {
+                Width = 28, Height = 28, Margin = new Thickness(6, 0, 0, 0), CornerRadius = T.Corner(4), Child = UiKit.Glyph("\uE777", 12, T.TextSecondary),
+                ToolTip = L.F("既定値（{0}）に戻す", Fmt(d)), Opacity = Math.Abs(value - d) < 1e-9 ? 0.25 : 1, IsEnabled = Math.Abs(value - d) >= 1e-9,
+            };
+            reset.Click += _ => { set(d); Commit(); };
+            right.Children.Add(reset);
+        }
+        else right.Children.Add(new Border { Width = 34 }); // ほかの行と右端をそろえる
         return Card(Texts(title, desc), right, enabled);
     }
 

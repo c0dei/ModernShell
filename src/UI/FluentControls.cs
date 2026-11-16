@@ -415,7 +415,7 @@ public sealed class FluentComboBox : Border
 /// </summary>
 public sealed class FluentSlider : Grid
 {
-    private readonly double _min, _max;
+    private readonly double _min, _max, _step;
     private readonly Border _fill;
     private readonly Grid _thumb;
     private readonly Ellipse _dot;
@@ -427,10 +427,10 @@ public sealed class FluentSlider : Grid
 
     public double Value => _value;
 
-    public FluentSlider(double min, double max, double value, double width = 220)
+    public FluentSlider(double min, double max, double value, double width = 220, double step = 1)
     {
         var t = Theme.Current;
-        _min = min; _max = max; _value = Math.Clamp(value, min, max);
+        _min = min; _max = max; _step = Math.Max(0.001, step); _value = Math.Clamp(value, min, max);
         Width = width;
         Height = 32;
         Background = Brushes.Transparent; // 全体をつかめるように
@@ -456,7 +456,7 @@ public sealed class FluentSlider : Grid
         Focusable = true;
         KeyDown += (_, e) =>
         {
-            double step = (_max - _min) / 20;
+            double step = Math.Max(_step, (_max - _min) / 20);
             if (e.Key is Key.Left or Key.Down) { Set(_value - step); ValueCommitted?.Invoke(_value); e.Handled = true; }
             else if (e.Key is Key.Right or Key.Up) { Set(_value + step); ValueCommitted?.Invoke(_value); e.Handled = true; }
         };
@@ -473,11 +473,21 @@ public sealed class FluentSlider : Grid
 
     private void Set(double v)
     {
-        v = Math.Round(Math.Clamp(v, _min, _max));
+        v = Snap(v);
         if (v == _value) return;
         _value = v;
         Layout();
         ValueChanged?.Invoke(v);
+    }
+
+    /// <summary>刻み（step）に丸めて、範囲内に収める。</summary>
+    public double Snap(double v) => Math.Clamp(_min + Math.Round((v - _min) / _step) * _step, _min, _max);
+
+    /// <summary>値だけを入れ替える（直接入力との同期用。変更のイベントは出さない）。</summary>
+    public void SetValue(double v)
+    {
+        _value = Snap(v);
+        Layout();
     }
 
     private void Layout()
