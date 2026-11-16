@@ -373,6 +373,7 @@ public sealed class SettingsWindow : Window
                 Margins(floating), (floating ? _s.IslandMarginY : _s.BandMarginY).ToString(),
                 v => { if (floating) _s.IslandMarginY = int.Parse(v); else _s.BandMarginY = int.Parse(v); }, on));
 
+        p.Children.Add(Section(L.T("ボタンと時計")));
         Group(p, "", L.T("ボタン"), L.T("タスクバーに並べるもの"),
             ToggleRow(L.T("タスクバーを自動的に隠す"), L.T("使わないときは画面の外に隠し、画面の端（タスクバーのある側）にカーソルを当てると出します。作業領域は確保しません"), _s.AutoHideTaskbar, v => _s.AutoHideTaskbar = v, on),
             ToggleRow(L.T("複数のモニターにタスクバーを表示"), L.T("メイン以外のモニターにもタスクバーを出し、そのモニターにあるウィンドウのボタンだけを並べます（時計付き）。メインのモニターには、メインにあるウィンドウだけが出ます"), _s.MultiMonitorTaskbar, v => _s.MultiMonitorTaskbar = v, on),
@@ -398,33 +399,7 @@ public sealed class SettingsWindow : Window
                 new[] { ("System", L.T("システムに合わせる")), ("YearMonthDay", "2026/11/16"), ("MonthDay", "11/16"), ("WithWeekday", L.T("11月16日 (月)")), ("Hidden", L.T("表示しない")) },
                 _s.ClockDateFormat.ToString(), v => _s.ClockDateFormat = Enum.Parse<ClockDateFormat>(v), on && !vertical));
 
-        Group(p, "", L.T("バーのウィジェット"), L.T("タスクバーの右側に並べる小さなカード。クリックで詳細、右クリックで並べ替え・外す"),
-            BarWidgetCatalog.All.SelectMany(w => new[]
-            {
-                ToggleRow(L.T(w.Title), L.T(w.Description), _s.BarWidgets.Contains(w.Id),
-                    v => { if (v) { if (!_s.BarWidgets.Contains(w.Id)) _s.BarWidgets.Add(w.Id); } else { _s.BarWidgets.Remove(w.Id); _s.BarWidgetZones.Remove(w.Id); } }, on),
-                DropDownRow("      " + L.T("表示位置"), "",
-                    new[] { ("Edge", L.T("バーの左端")), ("Left", L.T("スタートボタンの隣")), ("Apps", L.T("アプリの右隣")), ("Tray", L.T("右側（トレイの手前）")) },
-                    _s.BarWidgetZones.GetValueOrDefault(w.Id) ?? "Tray", v => { if (v == "Tray") _s.BarWidgetZones.Remove(w.Id); else _s.BarWidgetZones[w.Id] = v; },
-                    on && _s.BarWidgets.Contains(w.Id)),
-            }).ToArray());
-
-        // 区切り線とスペース: 何個でも足せる。置く場所と並び順は、ウィジェットと同じ（右クリックでも動かせる）
-        var partRows = new List<Border>();
-        foreach (var pid in _s.BarWidgets.Where(BarWidgetCatalog.IsPart).ToList())
-        {
-            var info = BarWidgetCatalog.Find(pid);
-            if (info == null) continue;
-            string id = pid;
-            partRows.Add(DropDownRow(L.T(info.Title), L.T(info.Description),
-                new[] { ("Edge", L.T("バーの左端")), ("Left", L.T("スタートボタンの隣")), ("Apps", L.T("アプリの右隣")), ("Tray", L.T("右側（トレイの手前）")) },
-                _s.BarWidgetZones.GetValueOrDefault(id) ?? "Tray", v => { if (v == "Tray") _s.BarWidgetZones.Remove(id); else _s.BarWidgetZones[id] = v; }, on));
-            partRows.Add(ButtonRow("      " + L.T("このパーツを削除"), "", L.T("削除"), () => { _s.BarWidgets.Remove(id); _s.BarWidgetZones.Remove(id); _s.Save(); }, enabled: on));
-        }
-        partRows.Add(ButtonRow(L.T("区切り線を追加"), L.T("グループのあいだに細い線を入れます"), L.T("追加"), () => { _s.BarWidgets.Add(BarWidgetCatalog.NewPartId("divider")); _s.Save(); }, enabled: on));
-        partRows.Add(ButtonRow(L.T("スペースを追加"), L.T("ウィジェットやボタンのあいだに空きを入れます"), L.T("追加"), () => { _s.BarWidgets.Add(BarWidgetCatalog.NewPartId("spacer")); _s.Save(); }, enabled: on));
-        Group(p, "", L.T("バーのパーツ"), L.T("区切り線とスペースを自由に足して、並びを整えられます"), partRows.ToArray());
-
+        p.Children.Add(Section(L.T("ポップアップ")));
         Group(p, "", L.T("プレビュー"), L.T("カーソルを置いたときに出る一覧"),
             ToggleRow(L.T("ウィンドウのプレビューを表示"), L.T("実行中のアプリのボタンに置くと、ウィンドウの中身を縮小表示します。クリックで切り替え、× で閉じます。複数ウィンドウのボタンをクリックしたときもプレビューを出します（オフのときは、ウィンドウ名のリストを出します）"),
                 _s.ShowThumbnailPreview, v => _s.ShowThumbnailPreview = v, on),
@@ -500,7 +475,7 @@ public sealed class SettingsWindow : Window
     {
         p.Children.Add(ToggleRow(L.T("スタート メニューにウィジェットを表示"), L.T("スタート メニューの右側に表示します"), _s.ShowWidgets, v => _s.ShowWidgets = v));
         bool on = _s.ShowWidgets;
-        p.Children.Add(Section(L.T("表示するウィジェットと並び順")));
+        p.Children.Add(Section(L.T("スタート メニューのウィジェット")));
         if (!_flat) p.Children.Add(Note(L.T("↑↓ で並び順を変えられます。スタート メニュー上でもウィジェットの見出しをドラッグして並べ替えできます。")));
         var order = _s.OrderedWidgets();
         for (int i = 0; i < order.Count; i++)
@@ -523,6 +498,7 @@ public sealed class SettingsWindow : Window
                     new[] { ("10", L.T("10 分")), ("20", L.T("20 分")), ("30", L.T("30 分")), ("60", L.T("1 時間")), ("180", L.T("3 時間")) },
                     _s.WeatherRefreshMinutes.ToString(), v => _s.WeatherRefreshMinutes = int.Parse(v), on && _s.WidgetWeather));
         }
+        BarWidgetsSection(p);
     }
 
     /// <summary>ウィジェット 1 行: 名前 / ↑ / ↓ / トグル。</summary>
@@ -546,6 +522,40 @@ public sealed class SettingsWindow : Window
         right.Children.Add(Arrow("", L.T("下へ"), index < count - 1, index + 2));
         right.Children.Add(sw);
         return Card(Texts(title, desc), right, enabled);
+    }
+
+    /// <summary>タスクバーに並べるウィジェットと、区切り線・スペース（「ウィジェット」ページの後半）。</summary>
+    private void BarWidgetsSection(StackPanel p)
+    {
+        bool on = _s.UseCustomTaskbar;
+        p.Children.Add(Section(L.T("タスクバーのウィジェット")));
+        if (!on && !_flat) p.Children.Add(Note(L.T("「タスク バー」ページで ModernShell のタスクバーを使うと、ここで選んだウィジェットが並びます。")));
+        Group(p, "", L.T("バーのウィジェット"), L.T("タスクバーの右側に並べる小さなカード。クリックで詳細、右クリックで並べ替え・外す"),
+            BarWidgetCatalog.All.SelectMany(w => new[]
+            {
+                ToggleRow(L.T(w.Title), L.T(w.Description), _s.BarWidgets.Contains(w.Id),
+                    v => { if (v) { if (!_s.BarWidgets.Contains(w.Id)) _s.BarWidgets.Add(w.Id); } else { _s.BarWidgets.Remove(w.Id); _s.BarWidgetZones.Remove(w.Id); } }, on),
+                DropDownRow("      " + L.T("表示位置"), "",
+                    new[] { ("Edge", L.T("バーの左端")), ("Left", L.T("スタートボタンの隣")), ("Apps", L.T("アプリの右隣")), ("Tray", L.T("右側（トレイの手前）")) },
+                    _s.BarWidgetZones.GetValueOrDefault(w.Id) ?? "Tray", v => { if (v == "Tray") _s.BarWidgetZones.Remove(w.Id); else _s.BarWidgetZones[w.Id] = v; },
+                    on && _s.BarWidgets.Contains(w.Id)),
+            }).ToArray());
+
+        // 区切り線とスペース: 何個でも足せる。置く場所と並び順は、ウィジェットと同じ（右クリックでも動かせる）
+        var partRows = new List<Border>();
+        foreach (var pid in _s.BarWidgets.Where(BarWidgetCatalog.IsPart).ToList())
+        {
+            var info = BarWidgetCatalog.Find(pid);
+            if (info == null) continue;
+            string id = pid;
+            partRows.Add(DropDownRow(L.T(info.Title), L.T(info.Description),
+                new[] { ("Edge", L.T("バーの左端")), ("Left", L.T("スタートボタンの隣")), ("Apps", L.T("アプリの右隣")), ("Tray", L.T("右側（トレイの手前）")) },
+                _s.BarWidgetZones.GetValueOrDefault(id) ?? "Tray", v => { if (v == "Tray") _s.BarWidgetZones.Remove(id); else _s.BarWidgetZones[id] = v; }, on));
+            partRows.Add(ButtonRow("      " + L.T("このパーツを削除"), "", L.T("削除"), () => { _s.BarWidgets.Remove(id); _s.BarWidgetZones.Remove(id); _s.Save(); }, enabled: on));
+        }
+        partRows.Add(ButtonRow(L.T("区切り線を追加"), L.T("グループのあいだに細い線を入れます"), L.T("追加"), () => { _s.BarWidgets.Add(BarWidgetCatalog.NewPartId("divider")); _s.Save(); }, enabled: on));
+        partRows.Add(ButtonRow(L.T("スペースを追加"), L.T("ウィジェットやボタンのあいだに空きを入れます"), L.T("追加"), () => { _s.BarWidgets.Add(BarWidgetCatalog.NewPartId("spacer")); _s.Save(); }, enabled: on));
+        Group(p, "", L.T("バーのパーツ"), L.T("区切り線とスペースを自由に足して、並びを整えられます"), partRows.ToArray());
     }
 
     private void LookPage(StackPanel p)
