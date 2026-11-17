@@ -97,6 +97,9 @@ public sealed class InputHooks : IDisposable
     private volatile Box? _startRect;
     private sealed record Box(Win32.RECT Value);
 
+    /// <summary>Win+Space（入力方式の切り替えポップアップを出す操作）が押された。押し下げのたびに発火（UI スレッドで実行）。</summary>
+    public event Action? WinSpacePressed;
+
     private uint _lastImeKeyDown;
 
     public InputHooks(Dispatcher dispatcher)
@@ -131,6 +134,9 @@ public sealed class InputHooks : IDisposable
         int msg = (int)wParam;
         bool down = msg is Win32.WM_KEYDOWN or Win32.WM_SYSKEYDOWN;
         bool up = msg is Win32.WM_KEYUP or Win32.WM_SYSKEYUP;
+        if (down && k.vkCode == 0x20 && WinSpacePressed != null
+            && ((Win32.GetAsyncKeyState((int)Win32.VK_LWIN) | Win32.GetAsyncKeyState((int)Win32.VK_RWIN)) & 0x8000) != 0)
+            _dispatcher.BeginInvoke(() => WinSpacePressed?.Invoke());
         if (up && ImeKeyReleased != null && IsImeKey(k.vkCode)) _dispatcher.BeginInvoke(() => ImeKeyReleased?.Invoke());
         // 半角/全角（0xF3/0xF4）・漢字（Alt+` など 0x19）・IME オン（0x16）・IME オフ（0x1A）。押し下げのたびに 1 回（押しっぱなしの繰り返しは除く）
         if (down && ImeToggleKeyPressed != null && k.vkCode is 0x19 or 0xF3 or 0xF4 or 0x16 or 0x1A && _lastImeKeyDown != k.vkCode)

@@ -155,6 +155,7 @@ public static class Program
         _hooks.MenuEscape += FluentSurface.CloseTopmost;
         _hooks.ImeKeyReleased += () => _taskbar?.ImeMayHaveChanged();
         _hooks.ImeToggleKeyPressed += vk => _taskbar?.ImeToggleKey(vk);
+        _hooks.WinSpacePressed += () => _taskbar?.MoveImeSwitcher();
         _hooks.Install();
 
         // 天気は、起動したらすぐ裏で取っておく（初めてスタートメニューを開いたときに「読み込み中」にならないように）
