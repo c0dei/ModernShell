@@ -9,6 +9,11 @@ namespace ModernShell.Core;
 
 public enum ThemeMode { System, Light, Dark }
 public enum TaskbarAlignment { Center, Left, AllCenter }
+/// <summary>
+/// タスクバーの大きさ（3 段階）。バーの高さ（縦のバーでは幅）・ボタンの高さ・アプリ アイコンの大きさは、この段階で一緒に決まる。
+/// ウィジェットや機能は、この 3 つの大きさだけで見え方を確かめればよい。
+/// </summary>
+public enum TaskbarSize { Small, Medium, Large }
 /// <summary>タスクバーを置く画面の端。Left / Right は縦向きのタスクバー。</summary>
 public enum TaskbarEdge { Bottom, Top, Left, Right }
 /// <summary>スタート・検索・タスクビューの位置。WithApps: アプリと一緒（中央 or 左） / LeftEdge: 常に左端（3 分割）</summary>
@@ -74,7 +79,13 @@ public sealed class Settings
     public bool UseCustomTaskbar { get; set; } = false;
     public TaskbarAlignment TaskbarAlignment { get; set; } = TaskbarAlignment.Center;
     public TaskbarEdge TaskbarEdge { get; set; } = TaskbarEdge.Bottom;
-    public int TaskbarHeight { get; set; } = 48;
+    public TaskbarSize TaskbarSize { get; set; } = TaskbarSize.Medium;
+    /// <summary>バーの高さ（縦のバーでは幅）(DIP)。<see cref="TaskbarSize"/> から決まる。</summary>
+    [JsonIgnore] public int TaskbarHeight => TaskbarSize switch { TaskbarSize.Small => 40, TaskbarSize.Large => 48, _ => 44 };
+    /// <summary>ボタン・ウィジェットの高さ（縦のバーでは幅）(DIP)。バーより少し小さい。</summary>
+    [JsonIgnore] public int TaskbarTileHeight => TaskbarSize switch { TaskbarSize.Small => 34, TaskbarSize.Large => 42, _ => 38 };
+    /// <summary>アプリ アイコンの大きさ (DIP)。<see cref="TaskbarSize"/> から決まる。</summary>
+    [JsonIgnore] public int TaskbarIconSize => TaskbarSize switch { TaskbarSize.Small => 20, TaskbarSize.Large => 28, _ => 24 };
     public StartButtonPosition StartButtonPosition { get; set; } = StartButtonPosition.WithApps;
     public bool ShowSearchButton { get; set; } = true;
     public bool ShowTaskViewButton { get; set; } = true;
@@ -181,8 +192,6 @@ public sealed class Settings
     public List<string> PinnedTaskbarExtra { get; set; } = new();
     /// <summary>タスクバーのアプリごとのアイコンの差し替え（アプリ ID → "ファイルパス|番号"）。</summary>
     public Dictionary<string, string> CustomIcons { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-    /// <summary>タスクバーのアプリアイコンの大きさ (px)。</summary>
-    public int TaskbarIconSize { get; set; } = 24;
 
     // --- 外観 ---
     public ThemeMode Theme { get; set; } = ThemeMode.System;
@@ -354,6 +363,9 @@ public sealed class Settings
             string? Old(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
             if (!root.TryGetProperty(nameof(TaskbarBackground), out _) && Old("TaskbarMaterial") is { } material)
                 s.TaskbarBackground = material switch { "Solid" => SurfaceStyle.Solid, "Clear" => SurfaceStyle.Transparent, _ => SurfaceStyle.Blur };
+            // 高さ・アイコンの大きさは以前は数値（px）だった。いちばん近い 3 段階に読み替える
+            if (!root.TryGetProperty(nameof(TaskbarSize), out _) && root.TryGetProperty("TaskbarHeight", out var th) && th.TryGetInt32(out var thv))
+                s.TaskbarSize = thv < 42 ? TaskbarSize.Small : thv < 46 ? TaskbarSize.Medium : TaskbarSize.Large;
             // 余白は以前は 1 つ（上下左右とも同じ値）だった
             if (!root.TryGetProperty(nameof(BandMarginX), out _) && root.TryGetProperty("BandMargin", out var bm) && bm.TryGetInt32(out var bmv))
                 s.BandMarginX = s.BandMarginY = bmv;

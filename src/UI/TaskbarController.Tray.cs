@@ -93,7 +93,7 @@ public sealed partial class TaskbarController
         // 横のバーでは、設定で日付を上にもできる
         if (_settings.ClockDateFirst && !Vertical) { clockStack.Children.Add(_date); clockStack.Children.Add(_time); }
         else { clockStack.Children.Add(_time); clockStack.Children.Add(_date); }
-        if (Compact || ClockStacked || (Vertical && !_dateFits) || (!Vertical && _settings.ClockDateFormat == ClockDateFormat.Hidden)) _date.Visibility = Visibility.Collapsed; // 低い・細いバーでは日付を省略（ツールチップで確認）
+        if (ClockStacked || (Vertical && !_dateFits) || (!Vertical && _settings.ClockDateFormat == ClockDateFormat.Hidden)) _date.Visibility = Visibility.Collapsed; // 低い・細いバーでは日付を省略（ツールチップで確認）
         var clock = new Tile
         {
             Padding = Vertical ? new Thickness(0, 6, 0, 6) : new Thickness(10, 0, 10, 0), Margin = Vertical ? new Thickness(0, 2, 0, 2) : new Thickness(2, 0, 2, 0),
@@ -164,7 +164,7 @@ public sealed partial class TaskbarController
                 Background = icon.IsPinned ? Theme.Current.AccentBrush : Theme.Current.TextSecondary, Margin = new Thickness(0, -4, -6, 0),
             });
         }
-        double iconLong = Compact ? 26 : 32, iconShort = Math.Min(36, TileH);
+        double iconLong = 32, iconShort = Math.Min(36, TileH);
         var tile = new Tile
         {
             Width = Vertical ? iconShort : iconLong, Height = Vertical ? iconLong : iconShort,
@@ -322,7 +322,7 @@ public sealed partial class TaskbarController
         if (_trayIcons == null || index == _dropGapIndex) return;
         _dropGapIndex = index;
         CollapseGap(_dropGap);
-        double pitch = (Compact ? 26 : 32) + 2;
+        double pitch = 32 + 2;
         var gap = new Border
         {
             CornerRadius = new CornerRadius(4), Margin = Vertical ? new Thickness(0, 1, 0, 1) : new Thickness(1, 0, 1, 0),

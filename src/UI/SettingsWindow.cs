@@ -359,8 +359,8 @@ public sealed class SettingsWindow : Window
             DropDownRow(L.T("画面上の位置"), L.T("左・右に置くと、縦向きのタスクバーになります（ボタンが縦に並びます）"),
                 new[] { ("Bottom", L.T("下")), ("Top", L.T("上")), ("Left", L.T("左")), ("Right", L.T("右")) }, _s.TaskbarEdge.ToString(),
                 v => _s.TaskbarEdge = Enum.Parse<TaskbarEdge>(v), on),
-            NumberRow(vertical ? L.T("幅") : L.T("高さ"), vertical ? L.T("縦向きのタスクバーの太さです") : L.T("40 px 未満では時計の日付を省略します"), 24, 96, _s.TaskbarHeight, "px", v => _s.TaskbarHeight = (int)v, on, def: 48),
-            NumberRow(L.T("アプリ アイコンの大きさ"), "", 12, 40, _s.TaskbarIconSize, "px", v => _s.TaskbarIconSize = (int)v, on, def: 24),
+            DropDownRow(L.T("タスクバーの大きさ"), L.T("バーの高さ（縦向きなら幅）とアプリ アイコンの大きさが、3 段階で一緒に変わります。小: 40 px・アイコン 20 px / 中: 44 px・24 px / 大: 48 px・28 px"),
+                new[] { ("Small", L.T("小")), ("Medium", L.T("中（標準）")), ("Large", L.T("大")) }, _s.TaskbarSize.ToString(), v => _s.TaskbarSize = Enum.Parse<TaskbarSize>(v), on),
             // 余白は左右と上下を別々に（画面を基準にした向き）。帯なら 0 で画面端に密着、アイランドなら島と画面の端のあいだの距離
             NumberRow(floating ? L.T("アイランドの余白（左右）") : L.T("帯の余白（左右）"),
                 floating ? L.T("島と画面の左右の端とのあいだの距離") : L.T("帯と画面の左右の端とのあいだの距離。0 より大きいと帯は端から離れて角丸になります"),

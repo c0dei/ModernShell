@@ -242,13 +242,13 @@ public sealed partial class TaskbarController
             {
                 marks.HorizontalAlignment = Edge == TaskbarEdge.Left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
                 marks.VerticalAlignment = VerticalAlignment.Center;
-                marks.Margin = new Thickness(Compact ? 0 : 2, 0, Compact ? 0 : 2, 0);
+                marks.Margin = new Thickness(2, 0, 2, 0);
             }
             else
             {
                 marks.VerticalAlignment = IsTop ? VerticalAlignment.Top : VerticalAlignment.Bottom;
                 marks.HorizontalAlignment = HorizontalAlignment.Center;
-                marks.Margin = new Thickness(0, Compact ? 0 : 2, 0, Compact ? 0 : 2);
+                marks.Margin = new Thickness(0, 2, 0, 2);
             }
             content.Children.Add(marks);
         }
@@ -303,7 +303,7 @@ public sealed partial class TaskbarController
                 _ => Color.FromRgb(0x06, 0xB0, 0x25),
             };
             double frac = state == NativeMethods.TBPFLAG.TBPF_INDETERMINATE ? 1 : Math.Clamp(withProgress.ProgressValue / 100.0, 0, 1);
-            var bar = new Grid { Height = 3, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(8, 0, 8, Compact ? 3 : 8) };
+            var bar = new Grid { Height = 3, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(8, 0, 8, 8) };
             bar.Children.Add(new Border { Background = new SolidColorBrush(Color.FromArgb(0x60, 0x80, 0x80, 0x80)), CornerRadius = new CornerRadius(1.5) });
             bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(0.001, frac), GridUnitType.Star) });
             bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(0.001, 1 - frac), GridUnitType.Star) });
@@ -318,7 +318,7 @@ public sealed partial class TaskbarController
             var img = UiKit.Icon(overlay, 14);
             img.HorizontalAlignment = HorizontalAlignment.Right;
             img.VerticalAlignment = VerticalAlignment.Bottom;
-            img.Margin = new Thickness(0, 0, 4, Compact ? 3 : 6);
+            img.Margin = new Thickness(0, 0, 4, 6);
             content.Children.Add(img);
         }
     }

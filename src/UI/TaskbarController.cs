@@ -87,12 +87,11 @@ public sealed partial class TaskbarController : IDisposable
 
     // ---- 大きさ（設定の高さ・アイコンサイズから算出）----
     /// <summary>ボタンの高さ。バーの高さより少し小さくする。</summary>
-    private double TileH => Math.Max(22, Math.Min(40, _settings.TaskbarHeight - 6));
-    private double IconSz => Math.Clamp(_settings.TaskbarIconSize, 12, 40);
+    private double TileH => _settings.TaskbarTileHeight;
+    private double IconSz => _settings.TaskbarIconSize;
     /// <summary>ボタンの幅（アイコンが大きいほど広く、バーが低いほど詰める）。</summary>
     private double TileW => Math.Max(TileH, IconSz + 16);
     private double GlyphSz => Math.Clamp(IconSz * 0.7, 11, 22);
-    private bool Compact => _settings.TaskbarHeight < 40;
 
     public TaskbarController(Settings settings, AppCatalog catalog, ShellHost shell, Dispatcher dispatcher)
     {
@@ -265,7 +264,7 @@ public sealed partial class TaskbarController : IDisposable
 
     private string _layoutKey = "";
     private string LayoutKey() => string.Join("|", _settings.UseCustomTaskbar, _settings.TaskbarStyle, _settings.StartButtonPosition,
-        _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarHeight, _settings.TaskbarIconSize, _settings.IslandMarginX, _settings.IslandMarginY,
+        _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarSize, _settings.IslandMarginX, _settings.IslandMarginY,
         _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds,
         _settings.MagnifyOnHover, _settings.MagnifyScale, _settings.MagnifyNeighbors, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
         _settings.MultiMonitorTaskbar, _settings.AutoHideTaskbar, _settings.TaskbarEdgeOffset, _settings.TaskbarPill, _settings.ShowBarDividers, _settings.ClockAlign, _settings.ClockDateFirst, _settings.ClockTimeFormat, _settings.ClockDateFormat, _settings.TaskbarTint, _settings.TaskbarCustomColor, string.Join(",", _settings.BarWidgets.Select(w => w + ":" + (_settings.BarWidgetZones.GetValueOrDefault(w) ?? "Tray"))), _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language, _settings.ShowImeIndicator,
