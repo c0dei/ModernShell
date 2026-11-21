@@ -49,6 +49,48 @@ public sealed class LiveReorder
     /// <summary>この条件を満たしたら（例: カーソルが「^」ボタンの上に来たら）横方向でも DragOut に引き渡す。</summary>
     public Func<MouseEventArgs, bool>? LeaveWhen { get; set; }
 
+    /// <summary>
+    /// 設定すると、つかんだ要素が並びと直角の方向にも自由に動き、パネルの外（余白 <see cref="OutsideMargin"/> 超え）で離したときに
+    /// 並べ替えではなくこのコールバックが呼ばれる（引数: 要素, 離した位置=パネル座標）。true を返したら呼び出し側が処理した（作り直す）ものとして扱う。
+    /// </summary>
+    public Func<FrameworkElement, Point, bool>? DropOutside { get; set; }
+    /// <summary>ドラッグ中、カーソルが動くたびに呼ばれる（引数: 要素, カーソルのパネル座標）。ほかのパネルへの差し込みの見た目に使う。</summary>
+    public Action<FrameworkElement, Point>? DragMoved { get; set; }
+
+    private int _gap = -1;
+
+    /// <summary>別のパネルからドラッグされてきた要素のために、index 番目以降を size だけずらして場所を空ける。</summary>
+    /// <param name="shiftBefore">true なら index より前を左（上）へ size だけずらす。右（下）寄せのグループで、後ろに空きがなくはみ出すのを避ける。</param>
+    public void ShowGap(int index, double size, bool shiftBefore = false)
+    {
+        int key = shiftBefore ? -index - 2 : index; // 向きが変わったら作り直す
+        if (_gap == key) return;
+        _gap = key;
+        for (int k = 0; k < _items.Count; k++)
+            Set(_items[k], shiftBefore ? (k < index ? -size : 0) : (k >= index ? size : 0), animate: true);
+    }
+
+    /// <summary>ShowGap で空けた場所を閉じる。</summary>
+    public void ClearGap()
+    {
+        if (_gap < 0) return;
+        _gap = -1;
+        foreach (var el in _items) Set(el, 0, animate: true);
+    }
+
+    private const double OutsideMargin = 14;
+    private Point _last;
+
+    /// <summary>並んでいるウィジェット全体の範囲（進行方向）と、パネルの幅・高さ（直角方向）から外に出たか。</summary>
+    private bool IsOutside(Point p)
+    {
+        if (_pos.Length == 0) return false;
+        double along = _horizontal ? p.X : p.Y, across = _horizontal ? p.Y : p.X;
+        double lo = _pos.Min(), hi = _pos.Select((v, i) => v + _size[i]).Max();
+        double acrossLen = _horizontal ? _panel.ActualHeight : _panel.ActualWidth;
+        return along < lo - OutsideMargin || along > hi + OutsideMargin || across < -OutsideMargin || across > acrossLen + OutsideMargin;
+    }
+
     /// <summary>直前の操作がドラッグだったか（クリック処理側で確認し、true ならクリックとして扱わない）。読むとリセット。</summary>
     public bool ConsumeDragged()
     {
@@ -112,6 +154,15 @@ public sealed class LiveReorder
             return;
         }
         Set(_drag, delta, animate: false);
+        _last = e.GetPosition(_panel);
+        if (DropOutside != null)
+        {
+            var tt = (TranslateTransform)_drag.RenderTransform;
+            var other = _horizontal ? TranslateTransform.YProperty : TranslateTransform.XProperty;
+            tt.SetValue(other, across);
+            // 範囲の外へ出ても、隣は入れ替わった位置のまま動かさない（離したときの結果と、見た目が一致する）
+            DragMoved?.Invoke(_drag, _last);
+        }
 
         // つかんだ要素の中心が、どの要素の半分を越えたかで差し込み先を決める
         double center = _pos[_from] + _size[_from] / 2 + delta;
@@ -169,6 +220,23 @@ public sealed class LiveReorder
         _drag = null;
         _justDragged = true;
         int from = _from, to = _to;
+
+        if (DropOutside != null && IsOutside(_last))
+        {
+            bool handled = false;
+            try { handled = DropOutside(item, _last); } catch (Exception ex) { Core.Log.Error("drop outside", ex); }
+            item.Effect = null;
+            item.Opacity = 1;
+            Panel.SetZIndex(item, 0);
+            if (handled) return; // 設定の変更で作り直される
+            foreach (var el in _items) { Set(el, 0, animate: true); }
+            ((TranslateTransform)item.RenderTransform).BeginAnimation(_horizontal ? TranslateTransform.YProperty : TranslateTransform.XProperty,
+                new DoubleAnimation(0, TimeSpan.FromMilliseconds(140)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+            return;
+        }
+        if (DropOutside != null)
+            ((TranslateTransform)item.RenderTransform).BeginAnimation(_horizontal ? TranslateTransform.YProperty : TranslateTransform.XProperty,
+                new DoubleAnimation(0, TimeSpan.FromMilliseconds(100)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
 
         double final = to == from ? 0
             : to > from ? _pos[to] + _size[to] - (_pos[from] + _size[from])

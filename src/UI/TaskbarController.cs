@@ -44,6 +44,7 @@ public sealed partial class TaskbarController : IDisposable
     private StackPanel? _apps, _trayIcons;
     private Tile? _overflowButton;
     private FrameworkElement? _trayHost;
+    private FrameworkElement? _startGroupEl;
     private TextBlock? _time, _date, _network, _battery;
     private Popup? _overflowPopup;
     private bool _trayEditMode;
@@ -292,7 +293,8 @@ public sealed partial class TaskbarController : IDisposable
         double h = _settings.TaskbarHeight;
         BuildBarWidgetHosts();
         var startGroup = StartGroup(t);
-        _apps = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        _startGroupEl = startGroup;
+        _apps =new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         var tray = TrayGroup(t);
         _trayHost = tray;
         // 「アプリの右隣」のウィジェットは、アプリのボタンと一緒に並べる（ボタンの作り直しで消えないよう別の入れ物に入れておく）
