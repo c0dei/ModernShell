@@ -30,8 +30,10 @@ public enum ClockDateFormat { System, YearMonthDay, MonthDay, WithWeekday, Hidde
 public enum BarTintMode { Theme, Accent, Custom, Wallpaper }
 /// <summary>バーの「再生中の曲」の見た目。Standard = サムネイル・曲名・波形・下線の再生位置 / Ring = 再生位置の輪で囲んだ丸いサムネイル（文字なし）。縦のバーは常に Ring。</summary>
 public enum NowPlayingStyle { Standard, Ring }
-/// <summary>「再生中の曲」の再生位置の線。Line = 直線 / Wave = 波線（再生中は波が流れる）。</summary>
-public enum NowPlayingProgressStyle { Line, Wave }
+/// <summary>「再生中の曲」の再生位置の線。Wave = 波線（再生済みが波で流れ、これからは直線。一時停止中は直線）/ Line = 常に直線。</summary>
+public enum NowPlayingProgressStyle { Wave, Line }
+/// <summary>「再生中の曲」の波形の置き場所。Right = 曲名の右（アクセント色）/ Overlay = サムネイルに重ねる（暗い膜と白い棒。横幅の節約）。</summary>
+public enum NowPlayingWavePlacement { Right, Overlay }
 /// <summary>スタートのピン留めのフォルダー（Items はアプリの ID）。</summary>
 public sealed class PinnedFolder
 {
@@ -161,9 +163,10 @@ public sealed class Settings
     public bool NowPlayingThumbnail { get; set; } = true;
     /// <summary>再生中だけ動く波形（棒）を出す。</summary>
     public bool NowPlayingWave { get; set; } = true;
+    public NowPlayingProgressStyle NowPlayingProgressStyle { get; set; } = NowPlayingProgressStyle.Wave;
+    public NowPlayingWavePlacement NowPlayingWavePlacement { get; set; } = NowPlayingWavePlacement.Right;
     /// <summary>曲のどのあたりかを（下線または輪で）出す。</summary>
     public bool NowPlayingProgress { get; set; } = true;
-    public NowPlayingProgressStyle NowPlayingProgressStyle { get; set; } = NowPlayingProgressStyle.Line;
     /// <summary>標準の形の曲名・アーティストの最大の幅（px）。超えた分は「…」で省略する。</summary>
     public int NowPlayingTextWidth { get; set; } = 220;
     /// <summary>タスクビューボタンにカーソルを置くと仮想デスクトップの一覧を表示する。</summary>

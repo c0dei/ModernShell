@@ -53,6 +53,8 @@ public abstract class BarWidget
     protected Theme T => Theme.Current;
     protected bool Vertical { get; private set; }
     protected double TileH { get; private set; }
+    /// <summary>カードの余白を、ウィジェット側で決めたいとき（<see cref="BuildContent"/> の中で入れる）。</summary>
+    protected Thickness? PadOverride { get; set; }
 
     /// <summary>カードを作る。縦のバーでは幅が狭いので、小さな表示にする。</summary>
     public FrameworkElement Build(bool vertical, double tileH)
@@ -63,7 +65,7 @@ public abstract class BarWidget
         var card = new Border
         {
             Background = Brushes.Transparent, CornerRadius = T.Corner(6), Child = inner,
-            Padding = IsPart ? new Thickness(0) : vertical ? new Thickness(0, 4, 0, 4) : new Thickness(8, 0, 8, 0),
+            Padding = IsPart ? new Thickness(0) : PadOverride ?? (vertical ? new Thickness(0, 4, 0, 4) : new Thickness(8, 0, 8, 0)),
         };
         if (vertical) card.Width = tileH; else card.Height = tileH;
         Card = card;

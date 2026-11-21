@@ -20,7 +20,8 @@ public sealed class NowPlayingBarWidget : BarWidget
 {
     public override string Id => "nowplaying";
 
-    private Border? _cover, _fill, _underline, _liveChip;
+    private Border? _cover, _fill, _underline, _liveChip, _playBtn, _film;
+    private TextBlock? _playGlyph;
     private Ring? _ring;
     private Border[]? _bars;
     // 波線の再生位置（Line のときは使わない）
@@ -30,7 +31,6 @@ public sealed class NowPlayingBarWidget : BarWidget
     private const double WaveAmp = 1.8, DotSize = 6;
     private System.Windows.Shapes.Path? _waveDim, _waveAcc;
     private TranslateTransform? _tWave;
-    private bool _waveLine;
     private const double WavePeriod = 20; // 波 1 つの長さ（px）。長いほどゆるやか
     private double _waveBuiltFor;
     private TextBlock? _title, _artist;
@@ -58,7 +58,9 @@ public sealed class NowPlayingBarWidget : BarWidget
     {
         var s = Settings.Current ?? new Settings();
         bool ringStyle = Vertical || s.NowPlayingStyle == NowPlayingStyle.Ring;
-        bool wave = s.NowPlayingWave;
+        bool overlay = s.NowPlayingWavePlacement == NowPlayingWavePlacement.Overlay;
+        bool tiny = !Vertical && TileH < 28;               // 低いバー（24px 相当）: サムネイルと 1 行の曲名と再生位置だけ。操作はホバーで出す
+        bool wave = s.NowPlayingWave && !(tiny && !ringStyle);
         _showThumb = s.NowPlayingThumbnail;
         _showProgress = s.NowPlayingProgress;
         var tc = T.Text is SolidColorBrush sb ? sb.Color : Colors.White;
@@ -66,15 +68,14 @@ public sealed class NowPlayingBarWidget : BarWidget
 
         // バーの高さに合わせる。低いバーでは、下線の分の余白をとり、サムネイルを小さくし、曲名とアーティストを 1 行にする
         bool underline = !ringStyle && _showProgress;
-        _waveLine = underline && s.NowPlayingProgressStyle == NowPlayingProgressStyle.Wave;
-        double lineH = _waveLine ? 6 : TileH < 40 ? 2 : 3;  // 下線の太さ（波線は、波の高さ）
-        double reserve = underline ? lineH + 3 : 0;         // 下線のために、中身の下に空ける高さ
+        double lineH = TileH < 40 ? 2 : 3;                  // 直線の太さ
+        double waveH = 6;                                   // 波線の高さ
+        double reserve = underline ? waveH + 3 : 0;         // 下線のために、中身の下に空ける高さ
         double room = Vertical ? 0 : TileH - reserve;       // 中身に使える高さ
-        _singleLine = !Vertical && room < 38;               // 2 行（約 31px）が入らなければ 1 行
+        _singleLine = !Vertical && TileH < 32;              // デザインの 32px 以上（バー高さの設定 38px 以上）は 2 行。それより低いと 1 行
 
         // サムネイル（読めるまで・無いときは音符）。標準の形は、バーの高さいっぱいの正方形。波形は、その中（下寄り）に重ねる
         FrameworkElement lead;
-        double leadW = 0;       // 標準の形のサムネイルの幅。再生位置の線は、その右（曲名の下）から引く
         double coverSize;       // サムネイルの大きさ（波形の棒の高さの目安）
         Grid? coverHost = null;
         if (ringStyle)
@@ -90,25 +91,30 @@ public sealed class NowPlayingBarWidget : BarWidget
         }
         else
         {
-            double cs = Math.Clamp(TileH - 4, 20, 64); // バーの高さ - 上下 2px ずつの余白
-            leadW = cs;
+            double cs = Math.Clamp(Math.Round(TileH * 0.67), 18, 32); // バーの高さの約 2/3（48px のバーで 32px）
             coverSize = cs;
-            _cover = new Border { Width = cs, Height = cs, CornerRadius = T.Corner(cs < 28 ? 6 : 8), Background = T.Hover, Child = Note(), ClipToBounds = true };
+            _cover = new Border { Width = cs, Height = cs, CornerRadius = T.Corner(cs < 28 ? 4 : 6), Background = T.Hover, Child = Note(), ClipToBounds = true };
             coverHost = new Grid { Width = cs, Height = cs, VerticalAlignment = VerticalAlignment.Center };
             coverHost.Children.Add(_cover);
             lead = coverHost;
         }
 
-        var row = new StackPanel { Orientation = Vertical ? Orientation.Vertical : Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        // 標準の形は、左右 6px の余白で幅いっぱいに。下線の分だけ、中身を上げる
+        var row = new StackPanel
+        {
+            Orientation = Vertical ? Orientation.Vertical : Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = ringStyle ? HorizontalAlignment.Center : HorizontalAlignment.Left, Margin = ringStyle ? new Thickness(0) : new Thickness(6, 0, 6, underline ? 3 : 0),
+        };
         row.Children.Add(lead);
 
         if (!ringStyle)
         {
-            _title = UiKit.Label("", 12, T.Text, FontWeights.SemiBold);
-            _artist = UiKit.Label("", 11, T.TextSecondary);
+            bool compact2 = !_singleLine && TileH < 40; // 2 行で高さに余裕がないときは、少し小さく
+            _title = UiKit.Label("", _singleLine || compact2 ? 12 : 13, T.Text, FontWeights.Medium);
+            _artist = UiKit.Label("", compact2 ? 10 : 11, T.TextSecondary);
             _title.MaxWidth = _artist.MaxWidth = Math.Clamp(s.NowPlayingTextWidth, 80, 400); // 設定の「曲名の最大幅」。超えた分は「…」
             _title.TextTrimming = _artist.TextTrimming = TextTrimming.CharacterEllipsis;
-            var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, underline ? reserve : 0) }; // 下線の分だけ、文字を上げる
+            var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
             text.Children.Add(_title);
             if (!_singleLine) text.Children.Add(_artist);
             row.Children.Add(text);
@@ -125,67 +131,120 @@ public sealed class NowPlayingBarWidget : BarWidget
             row.Children.Add(_liveChip);
         }
 
-        // 動く波形（3 本の棒）。サムネイルの中に、暗い小さな帯の上へ重ねる（ジャケットの明るさに関わらず見える）。
+        // 動く波形（3 本の棒）。サムネイルの中に、暗い膜の上へ重ねる（ジャケットの明るさに関わらず見える）。一時停止中は、膜も棒も消す。
         // 高さは変えず、縦の倍率だけ変えるので、レイアウトのやり直しが起きない
         if (wave)
         {
             int n = Freq.Length;
-            double h = Math.Clamp(coverSize * 0.3, 7, 14);
-            var eq = new StackPanel { Orientation = Orientation.Horizontal };
+            double h = ringStyle || overlay ? Math.Clamp(coverSize * 0.45, 7, 16) : Math.Clamp(room * 0.4, 8, 16);
+            var eq = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             _bars = new Border[n];
             for (int i = 0; i < n; i++)
             {
                 _bars[i] = new Border
                 {
-                    Width = coverSize < 26 ? 2.5 : 3, Height = h, CornerRadius = new CornerRadius(1.5), Background = Brushes.White, Margin = new Thickness(i == 0 ? 0 : 2, 0, 0, 0),
+                    Width = coverSize < 26 ? 2.5 : 3, Height = h, CornerRadius = new CornerRadius(1.5), Background = ringStyle || overlay ? Brushes.White : T.AccentBrush, Margin = new Thickness(i == 0 ? 0 : 2, 0, 0, 0),
                     RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(1, 0.2),
                 };
                 eq.Children.Add(_bars[i]);
             }
-            var pill = new Border
+            if (ringStyle)
             {
-                Background = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0)), CornerRadius = new CornerRadius(4), Padding = new Thickness(3, 2, 3, 2),
-                HorizontalAlignment = HorizontalAlignment.Center, IsHitTestVisible = false, Child = eq,
-            };
-            if (ringStyle) { pill.VerticalAlignment = VerticalAlignment.Center; _ring!.Children.Add(pill); }
-            else { pill.VerticalAlignment = VerticalAlignment.Bottom; pill.Margin = new Thickness(0, 0, 0, 3); coverHost!.Children.Add(pill); }
+                var pill = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0)), CornerRadius = new CornerRadius(4), Padding = new Thickness(3, 2, 3, 2),
+                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false, Child = eq,
+                };
+                _ring!.Children.Add(pill);
+            }
+            else if (!overlay)
+            {
+                eq.Margin = new Thickness(10, 0, 0, 0);
+                eq.IsHitTestVisible = false;
+                row.Children.Add(eq);
+            }
+            else
+            {
+                _film = new Border { Background = new SolidColorBrush(Color.FromArgb(140, 10, 12, 24)), CornerRadius = _cover!.CornerRadius, IsHitTestVisible = false, Child = eq, Visibility = Visibility.Collapsed };
+                coverHost!.Children.Add(_film);
+            }
         }
 
-        var root = new Grid();
+        // 再生/一時停止ボタン（標準の形・横のバー）。クリックはここで受け、詳細のポップアップは開かない
+        if (!ringStyle)
+        {
+            double pb = Math.Clamp(Math.Round(TileH * 0.67), 18, 32);
+            _playGlyph = UiKit.Glyph("", pb < 24 ? 9 : 12, T.Text);
+            _playGlyph.HorizontalAlignment = HorizontalAlignment.Center;
+            _playGlyph.VerticalAlignment = VerticalAlignment.Center;
+            _playBtn = new Border
+            {
+                Width = pb, Height = pb, CornerRadius = new CornerRadius(pb / 2), Background = T.Hover, Child = _playGlyph, Cursor = System.Windows.Input.Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0), ToolTip = L.T("一時停止"),
+            };
+            _playBtn.MouseLeftButtonDown += (_, e) => e.Handled = true; // 外側のタイルに押下を渡さない
+            _playBtn.MouseLeftButtonUp += (_, e) =>
+            {
+                e.Handled = true;
+                try { _ = _session?.TryTogglePlayPauseAsync(); } catch (Exception ex) { Log.Error("now playing toggle", ex); }
+            };
+            row.Children.Add(_playBtn);
+        }
+
+        var root = new Grid { Background = Brushes.Transparent };
         root.Children.Add(row);
+        if (tiny && _playBtn != null) // 低いバーでは、再生ボタンをふだんは隠し、マウスを載せたときだけ出す
+        {
+            var pbtn = _playBtn;
+            pbtn.Visibility = Visibility.Collapsed;
+            root.MouseEnter += (_, _) => pbtn.Visibility = Visibility.Visible;
+            root.MouseLeave += (_, _) => pbtn.Visibility = Visibility.Collapsed;
+        }
 
         // 再生位置の下線（標準の形のみ。リングは輪で出す）
-        if (underline && _waveLine)
+        if (underline)
         {
-            // 波線: 同じ波を 2 枚重ねる（薄い全体 + 再生済みの長さだけ見えるアクセント色）。波は左へ流れ、再生済みの境目は動かない
+            if (s.NowPlayingProgressStyle == NowPlayingProgressStyle.Wave)
+            {
+            // 波線: 薄い直線（全体）の上に、再生済みの長さだけアクセント色の波を重ねる。波は左へ流れ、再生済みの境目は動かない
             _tWave = new TranslateTransform();
             _waveDim = new System.Windows.Shapes.Path { Stroke = track, StrokeThickness = 1.6, StrokeLineJoin = PenLineJoin.Round, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, RenderTransform = _tWave };
             _waveAcc = new System.Windows.Shapes.Path { Stroke = T.AccentBrush, StrokeThickness = 1.6, StrokeLineJoin = PenLineJoin.Round, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, RenderTransform = _tWave };
             // Canvas に入れる: Canvas は中身の大きさを自分の大きさに含めない。Grid に入れると、波の図形（幅 + 1 周期）の分だけ枠が広がり、
             // 枠が広がると波を作り直して、さらに広がる…と際限なく伸びる（CPU も使い続ける）
-            _accHost = new Canvas { HorizontalAlignment = HorizontalAlignment.Left, Width = 0, Height = lineH, ClipToBounds = true };
+            _accHost = new Canvas { HorizontalAlignment = HorizontalAlignment.Left, Width = 0, Height = waveH, ClipToBounds = true };
             _accHost.Children.Add(_waveAcc);
             // 波は、はみ出さないようクリップした入れ物に。現在位置の丸は、その外（波の山・谷で枠の少し外に出てもよい）
-            _waveClip = new Canvas { Height = lineH, ClipToBounds = true };
+            _waveClip = new Canvas { Height = waveH, ClipToBounds = true };
             _waveClip.Children.Add(_waveDim);
             _waveClip.Children.Add(_accHost);
             _dot = new System.Windows.Shapes.Ellipse { Width = DotSize, Height = DotSize, Fill = T.AccentBrush };
-            _waveMid = lineH / 2; // 波を作り直す前でも、丸が正しい高さに出る
-            _waveHost = new Canvas { Height = lineH, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(leadW + 8, 0, 0, 2), Visibility = Visibility.Collapsed };
+            _waveMid = waveH / 2; // 波を作り直す前でも、丸が正しい高さに出る
+            _waveHost = new Canvas { Height = waveH, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 0), Visibility = Visibility.Collapsed };
             _waveHost.Children.Add(_waveClip);
             _waveHost.Children.Add(_dot);
-            _waveHost.SizeChanged += (_, e) => { if (_waveClip != null) _waveClip.Width = e.NewSize.Width; BuildWave(e.NewSize.Width, lineH); };
+            _waveHost.SizeChanged += (_, e) => { if (_waveClip != null) _waveClip.Width = e.NewSize.Width; BuildWave(e.NewSize.Width, waveH); };
             root.Children.Add(_waveHost);
-        }
-        else if (underline)
-        {
+            }
+
+            // 直線（再生済みの長さだけアクセント色）。波線のときは、一時停止中だけ出す
             _fill = new Border { Height = lineH, CornerRadius = new CornerRadius(lineH / 2), Background = T.AccentBrush, HorizontalAlignment = HorizontalAlignment.Left, Width = 0 };
             _underline = new Border
             {
                 Height = lineH, CornerRadius = new CornerRadius(lineH / 2), Background = track, Child = _fill, ClipToBounds = true,
-                VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(leadW + 8, 0, 0, 1), Visibility = Visibility.Collapsed,
+                VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 2), Visibility = Visibility.Collapsed,
             };
             root.Children.Add(_underline);
+        }
+
+        // 標準の形は、薄い地と縁のある角丸のカード。下線が角からはみ出さないよう、角丸で切り抜く
+        FrameworkElement result = root;
+        if (!ringStyle && !Vertical)
+        {
+            var radius = T.Corner(6).TopLeft;
+            root.SizeChanged += (_, e) => root.Clip = new RectangleGeometry(new Rect(0, 0, e.NewSize.Width, e.NewSize.Height), radius, radius);
+            result = new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = root };
+            PadOverride = new Thickness(0);
         }
 
         // バーを作り直すと古いウィジェットは捨てられる。波形のタイマーが残らないよう、画面から外れたら止める
@@ -193,7 +252,7 @@ public sealed class NowPlayingBarWidget : BarWidget
         root.Unloaded += (_, _) => _anim?.Stop();
         SetVisible(false);
         _ = RefreshAsync();
-        return root;
+        return result;
     }
 
     public override void Tick(int count)
@@ -299,14 +358,14 @@ public sealed class NowPlayingBarWidget : BarWidget
         if (_ring != null && Math.Abs(pct - _ringPct) >= 0.3) { _ring.Set(pct, ""); _ringPct = pct; } // 輪は、変わったときだけ描き直す
         if (_waveHost != null && _accHost != null)
         {
-            _waveHost.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            _waveHost.Visibility = show && _playing ? Visibility.Visible : Visibility.Collapsed;
             _accHost.Width = f.HasValue ? Math.Max(0, _waveHost.ActualWidth * f.Value) : 0;
             if (_dot != null) _dot.Visibility = f.HasValue ? Visibility.Visible : Visibility.Collapsed;
             if (f.HasValue) PlaceDot();
         }
         if (_underline != null && _fill != null)
         {
-            _underline.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            _underline.Visibility = show && (!_playing || _waveHost == null) ? Visibility.Visible : Visibility.Collapsed;
             _fill.Width = f.HasValue ? Math.Max(0, _underline.ActualWidth * f.Value) : 0;
         }
     }
@@ -328,8 +387,9 @@ public sealed class NowPlayingBarWidget : BarWidget
                 c.LineTo(new Point(x, mid + amp * Math.Sin(2 * Math.PI * x / WavePeriod)), true, true);
         }
         g.Freeze();
-        _waveDim.Data = g;
-        _waveAcc.Data = g;
+        _waveAcc.Data = g;                                  // 再生済みは波線
+        _waveDim.Data = new LineGeometry(new Point(0, mid), new Point(width + WavePeriod, mid)); // これから再生するところは直線
+        _waveDim.Data.Freeze();
         if (_accHost != null && _waveHost != null && Fraction() is { } f) _accHost.Width = width * f;
         PlaceDot();
     }
@@ -345,6 +405,8 @@ public sealed class NowPlayingBarWidget : BarWidget
     /// <summary>再生中だけ波形・波線を動かす（1 秒に 10 回）。一時停止・停止中はタイマーを止めて、棒を低く薄くする。</summary>
     private void ApplyPlaying()
     {
+        if (_playGlyph != null) { _playGlyph.Text = _playing ? "" : ""; if (_playBtn != null) _playBtn.ToolTip = _playing ? L.T("一時停止") : L.T("再生"); }
+        if (_film != null) _film.Visibility = _playing ? Visibility.Visible : Visibility.Collapsed;
         if (_bars == null && _tWave == null) return;
         if (_playing && Card?.IsLoaded == true)
         {
@@ -355,7 +417,7 @@ public sealed class NowPlayingBarWidget : BarWidget
         else
         {
             _anim?.Stop();
-            if (_bars != null) foreach (var b in _bars) { ((ScaleTransform)b.RenderTransform).ScaleY = 0.35; b.Opacity = 0.55; }
+            if (_bars != null) foreach (var b in _bars) { ((ScaleTransform)b.RenderTransform).ScaleY = 0.35; b.Opacity = _film != null ? 1 : 0.55; }
         }
     }
 

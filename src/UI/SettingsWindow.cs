@@ -559,13 +559,16 @@ public sealed class SettingsWindow : Window
 
         bool np = on && _s.BarWidgets.Contains("nowplaying");
         Group(p, "", L.T("再生中の曲の見た目"), L.T("バーの「再生中の曲」の表示。縦のバーでは、幅に収まるよう、輪で囲んだサムネイルと小さな波形になります"),
-            DropDownRow(L.T("表示の形"), L.T("標準: サムネイル・曲名・波形・下線。リング: 再生位置の輪で囲んだ丸いサムネイル（文字なし）"),
+            DropDownRow(L.T("表示の形"), L.T("標準: サムネイル・曲名・再生ボタン・下線。リング: 再生位置の輪で囲んだ丸いサムネイル（文字なし）"),
                 new[] { ("Standard", L.T("標準")), ("Ring", L.T("リング")) }, _s.NowPlayingStyle.ToString(), v => _s.NowPlayingStyle = Enum.Parse<NowPlayingStyle>(v), np),
             ToggleRow(L.T("サムネイルを表示"), L.T("曲のジャケットや動画の画像を出します（無いときは音符のアイコン）"), _s.NowPlayingThumbnail, v => _s.NowPlayingThumbnail = v, np),
-            ToggleRow(L.T("再生中の波形"), L.T("再生中だけ動く棒を出します。一時停止で止まります"), _s.NowPlayingWave, v => _s.NowPlayingWave = v, np),
-            ToggleRow(L.T("再生位置を表示"), L.T("曲のどのあたりかを、下線（リングでは輪）で出します。ライブ配信では LIVE と出ます"), _s.NowPlayingProgress, v => _s.NowPlayingProgress = v, np),
-            DropDownRow(L.T("再生位置の線"), L.T("標準の形の下線。波線は、再生中に波がゆっくり流れます（一時停止で止まります）"),
-                new[] { ("Line", L.T("直線")), ("Wave", L.T("波線")) }, _s.NowPlayingProgressStyle.ToString(), v => _s.NowPlayingProgressStyle = Enum.Parse<NowPlayingProgressStyle>(v),
+            ToggleRow(L.T("再生中の波形"), L.T("再生中だけ動く棒を出します。一時停止中は止まります（サムネイル内のときは消えます）"), _s.NowPlayingWave, v => _s.NowPlayingWave = v, np),
+            DropDownRow(L.T("波形の位置"), L.T("右端: 再生ボタンの左にアクセント色で出します（絵が見分けやすい）。サムネイル内: 暗い膜の上に白い棒を出します（横幅の節約）"),
+                new[] { ("Right", L.T("右端（再生ボタンの左）")), ("Overlay", L.T("サムネイル内")) }, _s.NowPlayingWavePlacement.ToString(), v => _s.NowPlayingWavePlacement = Enum.Parse<NowPlayingWavePlacement>(v),
+                np && _s.NowPlayingWave && _s.NowPlayingStyle == NowPlayingStyle.Standard),
+            ToggleRow(L.T("再生位置を表示"), L.T("曲のどのあたりかを、下線（リングでは輪）で出します。再生中は流れる波線、一時停止中は直線になります。ライブ配信では LIVE と出ます"), _s.NowPlayingProgress, v => _s.NowPlayingProgress = v, np),
+            DropDownRow(L.T("再生位置の線"), L.T("標準の形の下線。波線: 再生済みが波になって流れ、これからは直線（一時停止中は直線）。直線: いつも直線"),
+                new[] { ("Wave", L.T("波線")), ("Line", L.T("直線")) }, _s.NowPlayingProgressStyle.ToString(), v => _s.NowPlayingProgressStyle = Enum.Parse<NowPlayingProgressStyle>(v),
                 np && _s.NowPlayingProgress && _s.NowPlayingStyle == NowPlayingStyle.Standard),
             NumberRow(L.T("曲名の最大幅"), L.T("標準の形の曲名・アーティストの幅の上限。超えた分は「…」で省略します（ウィジェットの横幅の上限になります）"),
                 80, 400, _s.NowPlayingTextWidth, "px", v => _s.NowPlayingTextWidth = (int)v, np && _s.NowPlayingStyle == NowPlayingStyle.Standard, step: 10, def: 220));
