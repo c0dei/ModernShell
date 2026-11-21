@@ -108,6 +108,7 @@ public sealed class BarSurface : Window
         {
             BarTintMode.Accent => Theme.Current.Accent,
             BarTintMode.Custom => Theme.ParseColor(_settings.TaskbarCustomColor),
+            BarTintMode.Wallpaper => MicaLike.WallpaperTint(Theme.Current.SolidColor),
             _ => null,
         };
         // 画面の端に密着した帯は枠線を描かない（枠線は半透明で、その下には背景が敷かれないため、画面の端に細い線として後ろのウィンドウが透けて見える）。

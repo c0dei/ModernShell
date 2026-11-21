@@ -36,6 +36,7 @@ public sealed partial class TaskbarController
 
     private void StopAutoHide()
     {
+        HideHairline();
         _autoHideWatch?.Stop(); _autoHideWatch = null;
         _autoHideAnim?.Stop(); _autoHideAnim = null;
         _barHidden = false;
@@ -86,12 +87,13 @@ public sealed partial class TaskbarController
     private void AutoHideTick()
     {
         if (_disposed || !AutoHideActive || _surfaces.Count == 0) return;
-        if (_reservation.IsFullscreenAppActive) return;
+        if (_reservation.IsFullscreenAppActive) { _hairline?.Hide(); return; }
         if (!Win32.GetCursorPos(out var p)) return;
 
         if (_barHidden)
         {
             if (CursorAtEdge(p)) RevealBar();
+            else HairlineTick();
             return;
         }
         bool keep = CursorOverBar(p) || FluentSurface.AnyOpen || _preview.IsOpen || _overflowPopup?.IsOpen == true || KeepBarVisible?.Invoke() == true;
@@ -101,6 +103,7 @@ public sealed partial class TaskbarController
 
     private void RevealBar()
     {
+        HideHairline();
         _barHidden = false;
         _leftBarAt = DateTime.Now;
         var (dx, dy) = FullOffset();
@@ -137,7 +140,7 @@ public sealed partial class TaskbarController
             if (t >= 1.0)
             {
                 _autoHideAnim?.Stop();
-                if (!_animShowing) foreach (var s in _surfaces) s.HideBar();
+                if (!_animShowing) { foreach (var s in _surfaces) s.HideBar(); ShowHairlineSoon(); }
             }
         }, _dispatcher);
         _autoHideAnim.Start();

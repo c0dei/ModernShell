@@ -25,6 +25,7 @@ public static class MicaLike
     private const int BlurRadius = 9; // 3 回の箱型ぼかし ≒ 画面幅の 1/12 程度のガウスぼかし
 
     private static BitmapSource? _image;
+    private static Color? _average;
     private static string _key = "";
     private static bool _loading;
     private static DispatcherTimer? _watch;
@@ -88,6 +89,7 @@ public static class MicaLike
                 _loading = false;
                 if (r.Exception != null) Log.Error("mica-like", r.Exception);
                 _image = r.Exception == null ? r.Result : null;
+                _average = _image == null ? null : Average(_image);
                 Log.Info($"timing: blur background built in {sw.ElapsedMilliseconds} ms ({System.IO.Path.GetFileName(wall ?? "-")})");
                 ChangedCore?.Invoke();
             });
@@ -160,6 +162,35 @@ public static class MicaLike
         var bmp = BitmapSource.Create(w, h, 96, 96, PixelFormats.Bgra32, null, px, w * 4);
         bmp.Freeze();
         return bmp;
+    }
+
+    /// <summary>壁紙（ぼかした画像）の平均色。壁紙が無い・まだ作っていないときは null。</summary>
+    public static Color? AverageColor => _average;
+
+    private static Color? Average(BitmapSource bmp)
+    {
+        try
+        {
+            int w = bmp.PixelWidth, h = bmp.PixelHeight;
+            var px = new byte[w * h * 4];
+            bmp.CopyPixels(px, w * 4, 0);
+            long r = 0, g = 0, b = 0;
+            for (int i = 0; i < px.Length; i += 4) { b += px[i]; g += px[i + 1]; r += px[i + 2]; }
+            int n = Math.Max(1, w * h);
+            return Color.FromRgb((byte)(r / n), (byte)(g / n), (byte)(b / n));
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// バーの色: 壁紙の平均色を、テーマの色（ライトなら白っぽく・ダークなら黒っぽい）と半分ずつ混ぜる。
+    /// 壁紙の色味は残しつつ、文字（テーマの色）が読める明るさは保つ。壁紙をまだ読んでいなければ null（＝テーマの色のまま）。
+    /// </summary>
+    public static Color? WallpaperTint(Color theme)
+    {
+        if (_average is not { } a) return null;
+        byte Mix(byte x, byte y) => (byte)Math.Round((x + y) / 2.0);
+        return Color.FromRgb(Mix(a.R, theme.R), Mix(a.G, theme.G), Mix(a.B, theme.B));
     }
 
     private static BitmapSource? Decode(string file, int decodeWidth)

@@ -27,7 +27,7 @@ public enum ClockTimeFormat { System, H24, H24Pad, H12 }
 /// <summary>日付の書式。System: Windows の地域設定（短い日付）に合わせる。</summary>
 public enum ClockDateFormat { System, YearMonthDay, MonthDay, WithWeekday, Hidden }
 /// <summary>タスクバーの背景に重ねる色（Theme: ライト/ダークの色 / Accent: アクセント色 / Custom: 好きな色）。</summary>
-public enum BarTintMode { Theme, Accent, Custom }
+public enum BarTintMode { Theme, Accent, Custom, Wallpaper }
 /// <summary>スタートのピン留めのフォルダー（Items はアプリの ID）。</summary>
 public sealed class PinnedFolder
 {
@@ -143,6 +143,10 @@ public sealed class Settings
     public bool ShowTaskbarLabels { get; set; } = false;
     /// <summary>アプリが付ける進捗バーとオーバーレイ アイコン（通知の数など）をボタンに表示する。</summary>
     public bool ShowTaskbarBadges { get; set; } = true;
+    /// <summary>同じアプリのウィンドウが複数あるとき、実行中の印を、ウィンドウの数（最大 3）だけ並べる。</summary>
+    public bool ShowWindowCountDots { get; set; } = true;
+    /// <summary>自動的に隠している間、画面の端に細い線（開いているアプリの数ぶんの区切り）を残す。</summary>
+    public bool AutoHideHairline { get; set; } = true;
     public bool ShowSeconds { get; set; } = false;
     /// <summary>タスクバーのボタンにカーソルを置くとウィンドウのプレビューを表示する。</summary>
     public bool ShowThumbnailPreview { get; set; } = true;

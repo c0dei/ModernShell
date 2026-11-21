@@ -394,11 +394,13 @@ public sealed class SettingsWindow : Window
         p.Children.Add(Section(L.T("ボタンと時計")));
         Group(p, "", L.T("ボタン"), L.T("タスクバーに並べるもの"),
             ToggleRow(L.T("タスクバーを自動的に隠す"), L.T("使わないときは画面の外に隠し、画面の端（タスクバーのある側）にカーソルを当てると出します。作業領域は確保しません"), _s.AutoHideTaskbar, v => _s.AutoHideTaskbar = v, on),
+            ToggleRow(L.T("隠している間、画面の端に細い線を残す"), L.T("線の区切りは開いているアプリです。前面のアプリはアクセント色。カーソルを端に当てるとバーが出ます。全画面のアプリの間は出しません"), _s.AutoHideHairline, v => _s.AutoHideHairline = v, on && _s.AutoHideTaskbar),
             ToggleRow(L.T("複数のモニターにタスクバーを表示"), L.T("メイン以外のモニターにもタスクバーを出し、そのモニターにあるウィンドウのボタンだけを並べます（時計付き）。メインのモニターには、メインにあるウィンドウだけが出ます"), _s.MultiMonitorTaskbar, v => _s.MultiMonitorTaskbar = v, on),
             ToggleRow(L.T("検索ボタンを表示"), "", _s.ShowSearchButton, v => _s.ShowSearchButton = v, on),
             ToggleRow(L.T("タスク ビュー ボタンを表示"), "", _s.ShowTaskViewButton, v => _s.ShowTaskViewButton = v, on),
             ToggleRow(L.T("同じアプリのボタンをまとめる"), L.T("複数のウィンドウは一覧で選べます"), _s.GroupTaskbarButtons, v => _s.GroupTaskbarButtons = v, on),
             ToggleRow(L.T("グループのあいだに区切り線を引く"), L.T("スタート・アプリ・ウィジェット・トレイのあいだに、細い線を引きます"), _s.ShowBarDividers, v => _s.ShowBarDividers = v, on),
+            ToggleRow(L.T("ウィンドウの数を点で表示"), L.T("同じアプリのウィンドウが複数あるとき、実行中の印をウィンドウの数（最大 3）だけ並べます"), _s.ShowWindowCountDots, v => _s.ShowWindowCountDots = v, on),
             ToggleRow(L.T("進捗とバッジを表示"), L.T("ダウンロードなどの進捗バーと、通知の数などの小さな印（アプリが付けるもの）をボタンに表示します"), _s.ShowTaskbarBadges, v => _s.ShowTaskbarBadges = v, on),
             ToggleRow(L.T("ボタンにウィンドウ名を表示"), "", _s.ShowTaskbarLabels, v => _s.ShowTaskbarLabels = v, on),
             ToggleRow(L.T("ホバー時にアイコンを拡大"), L.T("カーソルを置いたアプリのアイコンを少し大きくします"), _s.MagnifyOnHover, v => _s.MagnifyOnHover = v, on),
@@ -1272,6 +1274,8 @@ public sealed class SettingsWindow : Window
             () => { _s.TaskbarTint = BarTintMode.Theme; _barPickerOpen = false; Commit(); }));
         wrap.Children.Add(Make(new SolidColorBrush(T.Accent), L.T("アクセント"), _s.TaskbarTint == BarTintMode.Accent, L.T("Windows のアクセント カラー"),
             () => { _s.TaskbarTint = BarTintMode.Accent; _barPickerOpen = false; Commit(); }));
+        wrap.Children.Add(Make(new SolidColorBrush(MicaLike.AverageColor ?? System.Windows.Media.Color.FromRgb(0x80, 0x80, 0x80)), L.T("壁紙"), _s.TaskbarTint == BarTintMode.Wallpaper, L.T("壁紙の平均色に合わせる（壁紙を変えると自動で変わります）"),
+            () => { _s.TaskbarTint = BarTintMode.Wallpaper; _barPickerOpen = false; Commit(); }));
         foreach (var hex in colors)
         {
             bool sel = _s.TaskbarTint == BarTintMode.Custom && string.Equals(custom, hex, StringComparison.OrdinalIgnoreCase);

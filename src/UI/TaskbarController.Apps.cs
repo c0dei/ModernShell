@@ -224,21 +224,33 @@ public sealed partial class TaskbarController
         if (running)
         {
             var indicator = flashing ? new SolidColorBrush(Color.FromRgb(0xF7, 0xA4, 0x00)) : active ? t.AccentBrush : t.TextSecondary;
-            double len = active || flashing ? 16 : 6;
-            // 実行中の印は、バーのある画面の端の側に付ける（横のバーなら下/上の辺、縦のバーなら左/右の辺）
-            content.Children.Add(Vertical
-                ? new Border
+            // ウィンドウが複数あるときは、その数（最大 3）だけ並べる。1 つめは前面（または点滅）なら長い線、ほかは短い点
+            int count = _settings.ShowWindowCountDots ? Math.Clamp(g.Windows.Count, 1, 3) : 1;
+            bool lit = active || flashing;
+            var marks = new StackPanel { Orientation = Vertical ? Orientation.Vertical : Orientation.Horizontal };
+            for (int i = 0; i < count; i++)
+            {
+                double len = i > 0 ? 4 : lit ? (count > 1 ? 12 : 16) : (count > 1 ? 4 : 6);
+                marks.Children.Add(new Border
                 {
-                    Width = 3, Height = len, CornerRadius = new CornerRadius(1.5), Background = indicator,
-                    HorizontalAlignment = Edge == TaskbarEdge.Left ? HorizontalAlignment.Left : HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(Compact ? 0 : 2, 0, Compact ? 0 : 2, 0),
-                }
-                : new Border
-                {
-                    Height = 3, Width = len, CornerRadius = new CornerRadius(1.5), Background = indicator,
-                    VerticalAlignment = IsTop ? VerticalAlignment.Top : VerticalAlignment.Bottom,
-                    HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, Compact ? 0 : 2, 0, Compact ? 0 : 2),
+                    Width = Vertical ? 3 : len, Height = Vertical ? len : 3, CornerRadius = new CornerRadius(1.5), Background = indicator,
+                    Margin = i == 0 ? new Thickness(0) : Vertical ? new Thickness(0, 3, 0, 0) : new Thickness(3, 0, 0, 0),
                 });
+            }
+            // 実行中の印は、バーのある画面の端の側に付ける（横のバーなら下/上の辺、縦のバーなら左/右の辺）
+            if (Vertical)
+            {
+                marks.HorizontalAlignment = Edge == TaskbarEdge.Left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+                marks.VerticalAlignment = VerticalAlignment.Center;
+                marks.Margin = new Thickness(Compact ? 0 : 2, 0, Compact ? 0 : 2, 0);
+            }
+            else
+            {
+                marks.VerticalAlignment = IsTop ? VerticalAlignment.Top : VerticalAlignment.Bottom;
+                marks.HorizontalAlignment = HorizontalAlignment.Center;
+                marks.Margin = new Thickness(0, Compact ? 0 : 2, 0, Compact ? 0 : 2);
+            }
+            content.Children.Add(marks);
         }
 
         var tile = new Tile

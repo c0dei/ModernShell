@@ -282,6 +282,7 @@ public sealed partial class TaskbarController : IDisposable
     {
         StallDetector.Phase = "taskbar: rebuild";
         _layoutKey = LayoutKey();
+        SyncWallpaperWatch();
         StopAutoHide();
         foreach (var s in _surfaces) s.Close();
         _surfaces.Clear();
@@ -747,6 +748,7 @@ public sealed partial class TaskbarController : IDisposable
         _displayDebounce.Stop();
         DisposeSecondaries();
         _magnify?.Dispose();
+        StopWallpaperWatch();
         StopAutoHide();
         _sweep?.Stop();
         NetworkChange.NetworkAvailabilityChanged -= OnNetworkChanged;
