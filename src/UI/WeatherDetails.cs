@@ -93,54 +93,62 @@ public sealed class WeatherDetailsView : Border
         return l;
     }
 
-    /// <summary>「項目名 値」の一行（項目名は薄く、値はふつうの濃さ）。</summary>
-    private TextBlock Stat(string label, string value)
-    {
-        var t = new TextBlock { FontSize = 12, Margin = new Thickness(0, 0, 12, 0) };
-        t.Inlines.Add(new System.Windows.Documents.Run(label + " ") { Foreground = _t.TextSecondary });
-        t.Inlines.Add(new System.Windows.Documents.Run(value) { Foreground = _t.Text });
-        return t;
-    }
-
     private void Fill(Weather.Report? w)
     {
         _body.Children.Clear();
         if (w == null) { _body.Children.Add(Label(L.T("読み込み中…"), 13, _t.TextSecondary)); return; }
 
-        // ---- 見出し: 今の天気（1 主役）----
+        // ---- 見出し: 今の天気（1 主役）。アイコンは角丸のタイルに、更新ボタンは丸く ----
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var big = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        big.Children.Add(Sym(w.Code, 52, w.IsDay));
-        var temp = Label(Num(w.Temperature), 46, _t.Text, FontWeights.SemiBold);
-        temp.Margin = new Thickness(10, -4, 0, 0);
-        big.Children.Add(temp);
+        big.Children.Add(new Border { Width = 72, Height = 72, CornerRadius = _t.Corner(16), Background = _t.Surface, Child = Sym(w.Code, 52, w.IsDay) });
+        var tempRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, -4, 0, 0) };
+        tempRow.Children.Add(Label($"{w.Temperature:0}", 52, _t.Text, FontWeights.SemiBold));
+        var unit = Label("℃", 24, _t.TextSecondary); unit.VerticalAlignment = VerticalAlignment.Center; unit.Margin = new Thickness(1, 6, 0, 0);
+        tempRow.Children.Add(unit);
+        big.Children.Add(tempRow);
         head.Children.Add(big);
-        var info = new StackPanel { Margin = new Thickness(18, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        var info = new StackPanel { Margin = new Thickness(14, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
         var place = Label(w.Place, 15, _t.Text, FontWeights.SemiBold);
+        place.TextTrimming = TextTrimming.CharacterEllipsis;
         info.Children.Add(place);
-        var desc = new TextBlock { FontSize = 13, Margin = new Thickness(0, 1, 0, 4) };
-        desc.Inlines.Add(new System.Windows.Documents.Run(w.Description) { Foreground = _t.Text });
-        desc.Inlines.Add(new System.Windows.Documents.Run("　" + Num(w.Max)) { Foreground = _t.Text, FontWeight = FontWeights.SemiBold });
+        var desc = new TextBlock { FontSize = 13, Margin = new Thickness(0, 1, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
+        desc.Inlines.Add(new System.Windows.Documents.Run(w.Description) { Foreground = _t.TextSecondary });
+        desc.Inlines.Add(new System.Windows.Documents.Run("  " + Num(w.Max)) { Foreground = _t.Text, FontWeight = FontWeights.SemiBold });
         desc.Inlines.Add(new System.Windows.Documents.Run(" / " + Num(w.Min)) { Foreground = _t.TextSecondary });
         info.Children.Add(desc);
-        if (w.More is { } m)
-        {
-            var stats = new WrapPanel();
-            if (m.Feels is { } f) stats.Children.Add(Stat(L.T("体感"), Num(f)));
-            if (m.Humidity is { } hu) stats.Children.Add(Stat(L.T("湿度"), hu + "%"));
-            if (m.Wind is { } wd) stats.Children.Add(Stat(L.T("風"), $"{wd:0} km/h"));
-            info.Children.Add(stats);
-        }
         Grid.SetColumn(info, 1);
         head.Children.Add(info);
-        var refresh = new Tile { Width = 28, Height = 28, VerticalAlignment = VerticalAlignment.Top, CornerRadius = _t.Corner(4), Child = UiKit.Glyph("\uE72C", 12, _t.TextSecondary), ToolTip = L.T("今すぐ更新") };
+        var refresh = new Tile { Width = 36, Height = 36, VerticalAlignment = VerticalAlignment.Top, CornerRadius = new CornerRadius(18), Background = _t.Surface, Child = UiKit.Glyph("", 13, _t.TextSecondary), ToolTip = L.T("今すぐ更新") };
         refresh.Click += _ => { refresh.Opacity = 0.4; Refresh(); };
         Grid.SetColumn(refresh, 2);
         head.Children.Add(refresh);
         _body.Children.Add(head);
+
+        // ---- 体感・湿度・風: 3 枚のカード ----
+        if (w.More is { } sm)
+        {
+            var items = new System.Collections.Generic.List<(string label, string value)>();
+            if (sm.Feels is { } f) items.Add((L.T("体感"), Num(f)));
+            if (sm.Humidity is { } hu) items.Add((L.T("湿度"), hu + "%"));
+            if (sm.Wind is { } wd) items.Add((L.T("風"), $"{wd:0} km/h"));
+            if (items.Count > 0)
+            {
+                var stats = new UniformGrid { Columns = items.Count, Margin = new Thickness(0, 14, 0, 0) };
+                for (int i = 0; i < items.Count; i++)
+                {
+                    var card = new StackPanel();
+                    card.Children.Add(Label(items[i].label, 11, _t.TextSecondary));
+                    var val = Label(items[i].value, 15, _t.Text, FontWeights.SemiBold); val.Margin = new Thickness(0, 1, 0, 0);
+                    card.Children.Add(val);
+                    stats.Children.Add(new Border { Child = card, Padding = new Thickness(12, 8, 12, 9), CornerRadius = _t.Corner(8), Background = _t.Surface, Margin = new Thickness(i == 0 ? 0 : 4, 0, i == items.Count - 1 ? 0 : 4, 0) });
+                }
+                _body.Children.Add(stats);
+            }
+        }
 
         if (w.More == null) return;
         var more = w.More;
@@ -165,7 +173,7 @@ public sealed class WeatherDetailsView : Border
                 var rain = RainLabel(h.Rain, 10); rain.HorizontalAlignment = HorizontalAlignment.Center;
                 col.Children.Add(rain);
                 // 「今」の列は、薄い背景で目立たせる
-                row.Children.Add(new Border { Child = col, Padding = new Thickness(0, 6, 0, 6), Margin = new Thickness(1, 0, 1, 0), CornerRadius = _t.Corner(6), Background = now ? _t.Surface : Brushes.Transparent });
+                row.Children.Add(new Border { Child = col, Padding = new Thickness(0, 6, 0, 6), Margin = new Thickness(1, 0, 1, 0), CornerRadius = _t.Corner(6), Background = now ? _t.Surface : Brushes.Transparent, BorderBrush = now ? NowBorder() : Brushes.Transparent, BorderThickness = new Thickness(1) });
             }
             _body.Children.Add(row);
         }
@@ -212,16 +220,24 @@ public sealed class WeatherDetailsView : Border
             }
         }
 
-        // ---- 足元（4 控えめ）----
-        var foot = new System.Collections.Generic.List<string>();
-        if (more.Sunrise != null) foot.Add(L.F("日の出 {0}", more.Sunrise));
-        if (more.Sunset != null) foot.Add(L.F("日の入 {0}", more.Sunset));
-        foot.Add(L.F("{0} に更新", w.FetchedAt.ToString("H:mm")));
-        var footLabel = Label(string.Join("　", foot), 11, _t.TextSecondary);
-        footLabel.Opacity = 0.65;
-        footLabel.Margin = new Thickness(0, 12, 0, 0);
-        _body.Children.Add(footLabel);
+        // ---- 足元（4 控えめ）: 横線の下に、左に日の出・日の入、右に更新時刻 ----
+        var sun = new System.Collections.Generic.List<string>();
+        if (more.Sunrise != null) sun.Add(L.F("日の出 {0}", more.Sunrise));
+        if (more.Sunset != null) sun.Add(L.F("日の入 {0}", more.Sunset));
+        var foot = new Grid { Margin = new Thickness(0, 12, 0, 0), Opacity = 0.65 };
+        foot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        foot.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        foot.Children.Add(Label(string.Join("　", sun), 11, _t.TextSecondary));
+        var updated = Label(L.F("{0} に更新", w.FetchedAt.ToString("H:mm")), 11, _t.TextSecondary);
+        updated.HorizontalAlignment = HorizontalAlignment.Right;
+        Grid.SetColumn(updated, 1);
+        foot.Children.Add(updated);
+        _body.Children.Add(new Border { Height = 1, Background = _t.Stroke, Margin = new Thickness(0, 14, 0, 0) });
+        _body.Children.Add(foot);
     }
+
+    /// <summary>「今」の列の縁（アクセントカラーを薄く）。</summary>
+    private Brush NowBorder() => _t.AccentBrush is SolidColorBrush a ? Frozen(Color.FromArgb(0x90, a.Color.R, a.Color.G, a.Color.B)) : _t.Stroke;
 
     private TextBlock Heading(string text)
     {

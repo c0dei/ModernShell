@@ -334,7 +334,11 @@ public sealed class WeatherBarWidget : BarWidget
         row.Children.Add(_icon);
         if (!Vertical) row.Children.Add(text);
         Tick(0);
-        return row;
+        if (Vertical) return row;
+        // 音楽ウィジェットと同じ、薄い地と縁のある角丸のカード
+        row.Margin = new Thickness(8, 0, 8, 0);
+        PadOverride = new Thickness(0);
+        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = row };
     }
 
     private void Apply(Weather.Report w)
