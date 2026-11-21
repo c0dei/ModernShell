@@ -198,7 +198,7 @@ public sealed class NowPlayingBarWidget : BarWidget
         try
         {
             await MediaControl.EnsureAsync();
-            _session = MediaControl.Current;
+            _session = MediaControl.Pick(); // 再生中のものを優先
             string title = "", artist = "";
             bool playing = false;
             if (_session != null)
@@ -332,7 +332,11 @@ public sealed class NowPlayingBarWidget : BarWidget
     }
 
     /// <summary>クリックで、ジャケット・シークバー・操作ボタンのポップアップを開く（再生/一時停止はそこと右クリックのメニューで）。</summary>
-    public override FrameworkElement? BuildDetailsView() => _session == null ? null : new NowPlayingDetailsView(_session);
+    public override FrameworkElement? BuildDetailsView()
+    {
+        var list = MediaControl.ForPopup(); // 再生中のものが複数あれば、全部並べる
+        return list.Count == 0 ? null : new NowPlayingDetailsView(list);
+    }
 
     public override IEnumerable<MenuItemSpec> ExtraMenu() => new[]
     {

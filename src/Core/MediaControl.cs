@@ -32,6 +32,39 @@ internal static class MediaControl
         get { try { return _manager?.GetCurrentSession(); } catch { return null; } }
     }
 
+    /// <summary>Windows が持っているセッションすべて（ブラウザーは、タブが複数あっても 1 つにまとまる）。</summary>
+    public static System.Collections.Generic.List<WMC.GlobalSystemMediaTransportControlsSession> All()
+    {
+        try { return new(_manager?.GetSessions() ?? System.Linq.Enumerable.Empty<WMC.GlobalSystemMediaTransportControlsSession>()); }
+        catch { return new(); }
+    }
+
+    /// <summary>
+    /// バーに出すセッション: 再生中のものを優先する。Windows の「現在」が再生中ならそれ、そうでなければ別の再生中のもの、
+    /// どれも再生中でなければ「現在」（なければ最初の 1 つ）。一時停止中のものに引っ張られないようにする。
+    /// </summary>
+    public static WMC.GlobalSystemMediaTransportControlsSession? Pick()
+    {
+        var cur = Current;
+        if (cur != null && IsPlaying(cur)) return cur;
+        var all = All();
+        return all.Find(IsPlaying) ?? cur ?? (all.Count > 0 ? all[0] : null);
+    }
+
+    /// <summary>ポップアップに出すセッション: 再生中のもの全部（「現在」のものを先頭に）。再生中のものが無ければ、バーに出しているもの 1 つ。</summary>
+    public static System.Collections.Generic.List<WMC.GlobalSystemMediaTransportControlsSession> ForPopup()
+    {
+        var cur = Current;
+        var playing = All().FindAll(IsPlaying);
+        if (playing.Count == 0) return Pick() is { } one ? new() { one } : new();
+        if (cur != null)
+        {
+            int i = playing.FindIndex(s => s.SourceAppUserModelId == cur.SourceAppUserModelId);
+            if (i > 0) { var c = playing[i]; playing.RemoveAt(i); playing.Insert(0, c); }
+        }
+        return playing;
+    }
+
     /// <summary>
     /// このアプリ（ウィンドウの AUMID・実行ファイル）のセッション。ブラウザーのようにアプリ名しか持たないものも、実行ファイルの名前で突き合わせる。
     /// 見つからなければ null。

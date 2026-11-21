@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -49,11 +50,30 @@ internal static class MediaButtons
     }
 }
 
+/// <summary>再生中の曲のポップアップ。再生中のものが複数あれば、全部を縦に並べる（無ければ、バーに出しているもの 1 つ）。</summary>
+public sealed class NowPlayingDetailsView : Border
+{
+    internal NowPlayingDetailsView(IReadOnlyList<WMC.GlobalSystemMediaTransportControlsSession> sessions)
+    {
+        var t = Theme.Current;
+        Width = 320;
+        Padding = new Thickness(16, 14, 16, 12);
+        TextElement.SetForeground(this, t.Text);
+        var col = new StackPanel();
+        for (int i = 0; i < sessions.Count; i++)
+        {
+            if (i > 0) col.Children.Add(new Border { Height = 1, Background = t.Hover, Margin = new Thickness(0, 12, 0, 12) });
+            col.Children.Add(new NowPlayingCard(sessions[i]));
+        }
+        Child = col;
+    }
+}
+
 /// <summary>
-/// 再生中の曲のポップアップ（バーの「再生中の曲」をクリックしたとき）: ジャケット・曲名・アーティスト・シークバー・操作ボタン。
+/// 再生中の 1 つぶん: ジャケット・曲名・アーティスト・シークバー・操作ボタン。
 /// 開いている間だけ、曲や再生状態の変化を受け取り、1 秒ごとに再生位置を進める。
 /// </summary>
-public sealed class NowPlayingDetailsView : Border
+internal sealed class NowPlayingCard : Border
 {
     private readonly WMC.GlobalSystemMediaTransportControlsSession _s;
     private readonly Theme _t = Theme.Current;
@@ -65,12 +85,9 @@ public sealed class NowPlayingDetailsView : Border
     private TimeSpan _start, _end;
     private bool _playing;
 
-    public NowPlayingDetailsView(WMC.GlobalSystemMediaTransportControlsSession session)
+    public NowPlayingCard(WMC.GlobalSystemMediaTransportControlsSession session)
     {
         _s = session;
-        Width = 320;
-        Padding = new Thickness(16, 14, 16, 12);
-        TextElement.SetForeground(this, _t.Text);
 
         var note = UiKit.Glyph("", 22, _t.TextSecondary);
         note.HorizontalAlignment = HorizontalAlignment.Center;
