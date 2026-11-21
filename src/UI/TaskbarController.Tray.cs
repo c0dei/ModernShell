@@ -93,6 +93,7 @@ public sealed partial class TaskbarController
         // 横のバーでは、設定で日付を上にもできる
         if (_settings.ClockDateFirst && !Vertical) { clockStack.Children.Add(_date); clockStack.Children.Add(_time); }
         else { clockStack.Children.Add(_time); clockStack.Children.Add(_date); }
+        if (!Vertical && TimeHidden) _time.Visibility = Visibility.Collapsed;
         if (ClockStacked || (Vertical && !_dateFits) || (!Vertical && _settings.ClockDateFormat == ClockDateFormat.Hidden)) _date.Visibility = Visibility.Collapsed; // 低い・細いバーでは日付を省略（ツールチップで確認）
         var clock = new Tile
         {
@@ -560,6 +561,8 @@ public sealed partial class TaskbarController
     /// </summary>
     private bool _clockStacked, _dateFits = true;
     private bool ClockStacked => _clockStacked;
+    /// <summary>日付だけ表示する設定（時刻を隠す）。日付も隠すときは、空にならないよう時刻を出す。横のバーのみ。</summary>
+    private bool TimeHidden => _settings.ClockTimeFormat == ClockTimeFormat.Hidden && _settings.ClockDateFormat != ClockDateFormat.Hidden;
 
     private void MeasureClock()
     {
@@ -600,6 +603,7 @@ public sealed partial class TaskbarController
             ClockTimeFormat.H24 => now.ToString(sec ? "H:mm:ss" : "H:mm", L.Culture),
             ClockTimeFormat.H24Pad => now.ToString(sec ? "HH:mm:ss" : "HH:mm", L.Culture),
             ClockTimeFormat.H12 => now.ToString(sec ? "h:mm:ss tt" : "h:mm tt", L.Culture),
+            ClockTimeFormat.Hidden when TimeHidden => "",
             _ => now.ToString(sec ? "T" : "t", sys), // 標準の書式（t = 短い時刻 / T = 長い時刻）。地域設定の形になる
         };
     }

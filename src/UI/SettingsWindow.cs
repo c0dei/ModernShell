@@ -416,7 +416,7 @@ public sealed class SettingsWindow : Window
             DropDownRow(L.T("並び順"), "", new[] { ("Time", L.T("上が時刻、下が日付")), ("Date", L.T("上が日付、下が時刻")) },
                 _s.ClockDateFirst ? "Date" : "Time", v => _s.ClockDateFirst = v == "Date", on && !vertical),
             DropDownRow(L.T("時刻の形式"), L.T("「システム」は、Windows の地域設定（設定 → 時刻と言語 → 日付と時刻）の短い時刻の形です"),
-                new[] { ("System", L.T("システムに合わせる")), ("H24", L.T("24 時間（9:05）")), ("H24Pad", L.T("24 時間（09:05）")), ("H12", L.T("12 時間（午前/午後）")) },
+                new[] { ("System", L.T("システムに合わせる")), ("H24", L.T("24 時間（9:05）")), ("H24Pad", L.T("24 時間（09:05）")), ("H12", L.T("12 時間（午前/午後）")), ("Hidden", L.T("表示しない")) },
                 _s.ClockTimeFormat.ToString(), v => _s.ClockTimeFormat = Enum.Parse<ClockTimeFormat>(v), on && !vertical),
             DropDownRow(L.T("日付の形式"), L.T("「システム」は、Windows の地域設定の短い日付の形です"),
                 new[] { ("System", L.T("システムに合わせる")), ("YearMonthDay", "2026/11/16"), ("MonthDay", "11/16"), ("WithWeekday", L.T("11月16日 (月)")), ("Hidden", L.T("表示しない")) },

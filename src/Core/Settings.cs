@@ -28,7 +28,7 @@ public enum AnimationSpeed { Fast, Normal, Slow }
 /// <summary>時計の文字の揃え。</summary>
 public enum ClockAlign { Left, Center, Right }
 /// <summary>時刻の書式。System: Windows の地域設定（短い時刻）に合わせる。</summary>
-public enum ClockTimeFormat { System, H24, H24Pad, H12 }
+public enum ClockTimeFormat { System, H24, H24Pad, H12, Hidden }
 /// <summary>日付の書式。System: Windows の地域設定（短い日付）に合わせる。</summary>
 public enum ClockDateFormat { System, YearMonthDay, MonthDay, WithWeekday, Hidden }
 /// <summary>タスクバーの背景に重ねる色（Theme: ライト/ダークの色 / Accent: アクセント色 / Custom: 好きな色）。</summary>

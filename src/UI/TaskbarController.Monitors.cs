@@ -83,6 +83,7 @@ public sealed partial class TaskbarController
             time.TextAlignment = date.TextAlignment = TextAlignment.Center;
             clock.Children.Add(time);
             if (!Vertical) clock.Children.Add(date);
+            if (!Vertical && TimeHidden) time.Visibility = Visibility.Collapsed;
 
             var grid = new Grid();
             bool center = _settings.TaskbarAlignment == TaskbarAlignment.Center;
