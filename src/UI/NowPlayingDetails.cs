@@ -168,7 +168,6 @@ internal sealed class NowPlayingCard : Border
             _title.Text = props.Title ?? "";
             _artist.Text = props.Artist ?? "";
             _artist.Visibility = _artist.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-            ToolTip = null;
             await LoadCoverAsync(props);
         }
         catch (Exception ex) { Log.Error("now playing load", ex); }

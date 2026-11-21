@@ -37,7 +37,8 @@ public sealed class NowPlayingBarWidget : BarWidget
     private WMC.GlobalSystemMediaTransportControlsSession? _session;
     private string _titleText = "", _artistText = "", _trackKey = "", _lastLogged = "";
     private bool _playing, _busy, _live;
-    private bool _showThumb = true, _showProgress = true, _singleLine;
+    private bool _showThumb = true, _showProgress = true, _singleLine, _coverLoaded, _coverLoading;
+    private double _ringPct = -1;
     private TimeSpan _start, _end, _pos0;
     private DateTimeOffset _posAt;
     private DispatcherTimer? _anim;
@@ -220,12 +221,17 @@ public sealed class NowPlayingBarWidget : BarWidget
                 var tl = _session.GetTimelineProperties();
                 _start = tl.StartTime; _end = tl.EndTime; _pos0 = tl.Position; _posAt = tl.LastUpdatedTime;
                 string key = title + "|" + artist;
-                if (props != null && key != _trackKey) { _trackKey = key; if (_showThumb) _ = LoadCoverAsync(props); }
+                if (props != null)
+                {
+                    if (key != _trackKey) { _trackKey = key; _coverLoaded = false; if (_showThumb) ShowNote(); } // 曲が変わったら、前の曲のサムネイルを残さない
+                    // サムネイルは、曲名より遅れて届くことがある（YouTube など）。届いていて、まだ読めていなければ読む
+                    if (_showThumb && !_coverLoaded && !_coverLoading && props.Thumbnail != null) _ = LoadCoverAsync(props);
+                }
             }
             _titleText = title; _artistText = artist; _playing = playing;
             bool wasLive = _live;
             _live = _session != null && MediaControl.IsLive(title + "|" + artist, _start, _end, playing, _pos0);
-            if (_live != wasLive || title + "|" + artist != _lastLogged)
+            if (Log.Enabled && (_live != wasLive || title + "|" + artist != _lastLogged))
             {
                 _lastLogged = title + "|" + artist;
                 Log.Info($"now playing: source={_session?.SourceAppUserModelId} title=\"{title}\" playing={playing} start={_start} end={_end} pos={_pos0} live={_live}");
@@ -249,10 +255,25 @@ public sealed class NowPlayingBarWidget : BarWidget
     /// <summary>曲が変わったとき: サムネイルを読み直す（読めなければ音符に戻す）。</summary>
     private async System.Threading.Tasks.Task LoadCoverAsync(WMC.GlobalSystemMediaTransportControlsSessionMediaProperties props)
     {
-        var bmp = await MediaControl.LoadThumbnailAsync(props, 96); // 表示は 32〜38px（高 DPI でも足りる大きさ）
+        _coverLoading = true;
+        string forKey = _trackKey;
+        try
+        {
+            var bmp = await MediaControl.LoadThumbnailAsync(props, 96); // 表示は 32〜38px（高 DPI でも足りる大きさ）
+            if (_cover == null || forKey != _trackKey || bmp == null) return; // 読み込み中に曲が変わっていたら、捨てる
+            _cover.Child = null;
+            _cover.Background = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill };
+            _coverLoaded = true;
+        }
+        finally { _coverLoading = false; }
+    }
+
+    /// <summary>サムネイルを音符に戻す（曲が変わったとき・読めないとき）。</summary>
+    private void ShowNote()
+    {
         if (_cover == null) return;
-        if (bmp != null) { _cover.Child = null; _cover.Background = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill }; }
-        else { _cover.Background = T.Hover; _cover.Child = Note(); }
+        _cover.Background = T.Hover;
+        _cover.Child = Note();
     }
 
     /// <summary>再生位置（0〜1）。最後に報告された位置から、経過した分を足して出す。ライブ配信など長さが無いときは null。</summary>
@@ -274,7 +295,8 @@ public sealed class NowPlayingBarWidget : BarWidget
         // 位置は分からないが、薄い線だけは出して、バーが消えたように見えないようにする。ライブ配信は LIVE を出すので、線は出さない
         bool unknown = _showProgress && !f.HasValue && _session != null && _playing && !_live;
         bool show = f.HasValue || unknown;
-        _ring?.Set(f is { } v ? v * 100 : 0, "");
+        double pct = f is { } v ? v * 100 : 0;
+        if (_ring != null && Math.Abs(pct - _ringPct) >= 0.3) { _ring.Set(pct, ""); _ringPct = pct; } // 輪は、変わったときだけ描き直す
         if (_waveHost != null && _accHost != null)
         {
             _waveHost.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
@@ -339,7 +361,8 @@ public sealed class NowPlayingBarWidget : BarWidget
 
     private void Animate()
     {
-        if (Card is not { IsVisible: true }) return; // バーが隠れている間は動かさない
+        if (Card is not { IsLoaded: true }) { _anim?.Stop(); return; } // 画面から外れた（バーが作り直された）古いウィジェットは、タイマーごと止める
+        if (!Card.IsVisible) return;                                    // バーが隠れている間は動かさない
         _phase += 0.5;
         if (_bars != null)
             for (int i = 0; i < _bars.Length; i++)
