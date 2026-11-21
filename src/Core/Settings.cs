@@ -28,6 +28,10 @@ public enum ClockTimeFormat { System, H24, H24Pad, H12 }
 public enum ClockDateFormat { System, YearMonthDay, MonthDay, WithWeekday, Hidden }
 /// <summary>タスクバーの背景に重ねる色（Theme: ライト/ダークの色 / Accent: アクセント色 / Custom: 好きな色）。</summary>
 public enum BarTintMode { Theme, Accent, Custom, Wallpaper }
+/// <summary>バーの「再生中の曲」の見た目。Standard = サムネイル・曲名・波形・下線の再生位置 / Ring = 再生位置の輪で囲んだ丸いサムネイル（文字なし）。縦のバーは常に Ring。</summary>
+public enum NowPlayingStyle { Standard, Ring }
+/// <summary>「再生中の曲」の再生位置の線。Line = 直線 / Wave = 波線（再生中は波が流れる）。</summary>
+public enum NowPlayingProgressStyle { Line, Wave }
 /// <summary>スタートのピン留めのフォルダー（Items はアプリの ID）。</summary>
 public sealed class PinnedFolder
 {
@@ -150,6 +154,16 @@ public sealed class Settings
     public bool ShowSeconds { get; set; } = false;
     /// <summary>タスクバーのボタンにカーソルを置くとウィンドウのプレビューを表示する。</summary>
     public bool ShowThumbnailPreview { get; set; } = true;
+    /// <summary>音楽や動画を再生中のアプリのプレビューに、前の曲・再生/一時停止・次の曲のボタンを出す。</summary>
+    public bool ShowPreviewMediaControls { get; set; } = true;
+    public NowPlayingStyle NowPlayingStyle { get; set; } = NowPlayingStyle.Standard;
+    /// <summary>「再生中の曲」にジャケット・動画の画像を出す（オフは音符のアイコン）。</summary>
+    public bool NowPlayingThumbnail { get; set; } = true;
+    /// <summary>再生中だけ動く波形（棒）を出す。</summary>
+    public bool NowPlayingWave { get; set; } = true;
+    /// <summary>曲のどのあたりかを（下線または輪で）出す。</summary>
+    public bool NowPlayingProgress { get; set; } = true;
+    public NowPlayingProgressStyle NowPlayingProgressStyle { get; set; } = NowPlayingProgressStyle.Line;
     /// <summary>タスクビューボタンにカーソルを置くと仮想デスクトップの一覧を表示する。</summary>
     public bool ShowDesktopsOnTaskView { get; set; } = true;
     /// <summary>プレビューを表示するまでの待ち時間 (ミリ秒)。</summary>

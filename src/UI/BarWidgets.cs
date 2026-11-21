@@ -7,7 +7,6 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using ModernShell.Core;
 using Forms = System.Windows.Forms;
-using WMC = global::Windows.Media.Control;
 
 namespace ModernShell.UI;
 
@@ -20,7 +19,7 @@ public static class BarWidgetCatalog
     {
         new BarWidgetInfo("system", "システム", "CPU・メモリ", "CPU とメモリの使用率を円グラフで表示します。クリックで詳細", () => new SystemBarWidget()),
         new BarWidgetInfo("battery", "システム", "バッテリー", "バッテリー残量と充電中の表示（バッテリーの無い PC では表示されません）", () => new BatteryBarWidget()),
-        new BarWidgetInfo("nowplaying", "メディア", "再生中の曲", "再生中の曲名とアーティスト。クリックで再生/一時停止、右クリックで前後の曲へ", () => new NowPlayingBarWidget()),
+        new BarWidgetInfo("nowplaying", "メディア", "再生中の曲", "再生中の曲名とアーティスト。クリックでジャケット・シークバー・操作ボタン、右クリックで前後の曲へ", () => new NowPlayingBarWidget()),
         new BarWidgetInfo("weather", "天気", "天気", "今の天気（温度・天気）。クリックで時間ごと・週間の予報を表示。設定の天気の地点と更新間隔を使います", () => new WeatherBarWidget()),
         new BarWidgetInfo("pomodoro", "生産性", "ポモドーロ", "25 分の集中と 5 分の休憩を繰り返すタイマー。クリックで開始/一時停止", () => new PomodoroBarWidget()),
     };
@@ -242,83 +241,6 @@ public sealed class BatteryBarWidget : BarWidget
 }
 
 // ---------------------------------------------------------------------------
-
-/// <summary>再生中の曲（Windows のメディア セッション。ブラウザー・Spotify・音楽アプリなど、システムの音量パネルに出るもの）。</summary>
-public sealed class NowPlayingBarWidget : BarWidget
-{
-    public override string Id => "nowplaying";
-    private TextBlock? _title, _artist, _icon;
-    private WMC.GlobalSystemMediaTransportControlsSessionManager? _manager;
-    private WMC.GlobalSystemMediaTransportControlsSession? _session;
-    private string _titleText = "", _artistText = "";
-    private bool _playing, _busy;
-
-    protected override FrameworkElement BuildContent()
-    {
-        _icon = UiKit.Glyph("", 14, T.Text);
-        _title = UiKit.Label("", 12, T.Text, FontWeights.SemiBold);
-        _artist = UiKit.Label("", 11, T.TextSecondary);
-        _title.MaxWidth = _artist.MaxWidth = 160;
-        _title.TextTrimming = _artist.TextTrimming = TextTrimming.CharacterEllipsis;
-        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
-        text.Children.Add(_title);
-        text.Children.Add(_artist);
-        var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-        row.Children.Add(_icon);
-        if (!Vertical) row.Children.Add(text);
-        SetVisible(false);
-        _ = RefreshAsync();
-        return row;
-    }
-
-    public override void Tick(int count)
-    {
-        if (count % 2 == 0) _ = RefreshAsync();
-    }
-
-    private async System.Threading.Tasks.Task RefreshAsync()
-    {
-        if (_busy) return;
-        _busy = true;
-        try
-        {
-            _manager ??= await WMC.GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
-            _session = _manager.GetCurrentSession();
-            string title = "", artist = "";
-            bool playing = false;
-            if (_session != null)
-            {
-                var props = await _session.TryGetMediaPropertiesAsync();
-                title = props?.Title ?? "";
-                artist = props?.Artist ?? "";
-                playing = _session.GetPlaybackInfo()?.PlaybackStatus == WMC.GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
-            }
-            _titleText = title; _artistText = artist; _playing = playing;
-            if (_title != null) _title.Text = title;
-            if (_artist != null) { _artist.Text = artist; _artist.Visibility = artist.Length == 0 ? Visibility.Collapsed : Visibility.Visible; }
-            if (_icon != null) _icon.Text = playing ? "" : "";
-            if (Card != null) Card.ToolTip = artist.Length > 0 ? title + " - " + artist : title;
-            SetVisible(_session != null && title.Length > 0);
-        }
-        catch (Exception ex) { Log.Error("now playing", ex); SetVisible(false); }
-        finally { _busy = false; }
-    }
-
-    public override bool OnClick()
-    {
-        try { if (_session != null) _ = _session.TryTogglePlayPauseAsync(); } catch (Exception ex) { Log.Error("now playing toggle", ex); }
-        return true;
-    }
-
-    public override IEnumerable<MenuItemSpec> ExtraMenu() => new[]
-    {
-        MenuItemSpec.Header(_artistText.Length > 0 ? _titleText + " - " + _artistText : _titleText),
-        new MenuItemSpec("", L.T("前の曲"), () => { try { _ = _session?.TrySkipPreviousAsync(); } catch { } }),
-        new MenuItemSpec(_playing ? "" : "", _playing ? L.T("一時停止") : L.T("再生"), () => { try { _ = _session?.TryTogglePlayPauseAsync(); } catch { } }),
-        new MenuItemSpec("", L.T("次の曲"), () => { try { _ = _session?.TrySkipNextAsync(); } catch { } }),
-        MenuItemSpec.Separator,
-    };
-}
 
 // ---------------------------------------------------------------------------
 

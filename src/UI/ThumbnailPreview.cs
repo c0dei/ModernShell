@@ -113,6 +113,7 @@ public sealed class ThumbnailPreview
         var (maxW, maxH) = MaxSize;
 
         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
+        bool mediaAdded = false; // 同じアプリのウィンドウが複数あっても、メディア操作は 1 か所だけ
         foreach (var w in windows.Take(8))
         {
             // 見出し（アイコン・ウィンドウ名・閉じる）
@@ -137,6 +138,7 @@ public sealed class ThumbnailPreview
             var body = new StackPanel();
             body.Children.Add(head);
             body.Children.Add(slot);
+            if (!mediaAdded && MediaStrip(w, maxW, t) is { } media) { body.Children.Add(media); mediaAdded = true; }
             var card = new Tile { Padding = new Thickness(6), Margin = new Thickness(2), Child = body, Tag = slot };
             var win = w;
             card.Click += _ => { Cancel(); win.BringToFront(); };
@@ -160,6 +162,44 @@ public sealed class ThumbnailPreview
         _popup.Opened += (_, _) => RegisterThumbnails(row, session);
         _popup.Closed += (_, _) => Unregister(session);
         _popup.IsOpen = true;
+    }
+
+    /// <summary>
+    /// 音楽や動画を再生中のアプリなら、曲名と「前の曲・再生/一時停止・次の曲」。メディア セッションの一覧は最初に 1 度だけ取りに行くので、
+    /// 最初の 1 回は間に合わず出ないことがある（次のプレビューから出る）。
+    /// </summary>
+    private FrameworkElement? MediaStrip(ApplicationWindow w, double maxW, Theme t)
+    {
+        if (!_settings.ShowPreviewMediaControls) return null;
+        if (!MediaControl.Ready) { _ = MediaControl.EnsureAsync(); return null; }
+        try
+        {
+            var session = MediaControl.FindFor(string.IsNullOrEmpty(w.AppUserModelID) ? ProcessAumid.Get(w.Handle) : w.AppUserModelID, w.WinFileName);
+            if (session == null) return null;
+            var name = UiKit.Label("", 11, t.TextSecondary);
+            name.MaxWidth = maxW;
+            name.TextTrimming = TextTrimming.CharacterEllipsis;
+            name.HorizontalAlignment = HorizontalAlignment.Center;
+            name.Visibility = Visibility.Collapsed;
+            _ = FillTrackName(session, name);
+            var col = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+            col.Children.Add(name);
+            col.Children.Add(MediaButtons.Build(session, t));
+            return col;
+        }
+        catch (Exception ex) { Log.Error("preview media", ex); return null; }
+    }
+
+    private static async System.Threading.Tasks.Task FillTrackName(global::Windows.Media.Control.GlobalSystemMediaTransportControlsSession session, TextBlock label)
+    {
+        try
+        {
+            var p = await session.TryGetMediaPropertiesAsync();
+            string text = string.IsNullOrEmpty(p?.Artist) ? p?.Title ?? "" : p!.Title + " - " + p.Artist;
+            if (text.Length == 0) return;
+            label.Dispatcher.Invoke(() => { label.Text = text; label.Visibility = Visibility.Visible; });
+        }
+        catch { }
     }
 
     /// <summary>ポップアップが開いたら、各カードの位置に DWM サムネイルを登録する。</summary>

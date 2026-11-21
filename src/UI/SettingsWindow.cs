@@ -426,6 +426,8 @@ public sealed class SettingsWindow : Window
         Group(p, "", L.T("プレビュー"), L.T("カーソルを置いたときに出る一覧"),
             ToggleRow(L.T("ウィンドウのプレビューを表示"), L.T("実行中のアプリのボタンに置くと、ウィンドウの中身を縮小表示します。クリックで切り替え、× で閉じます。複数ウィンドウのボタンをクリックしたときもプレビューを出します（オフのときは、ウィンドウ名のリストを出します）"),
                 _s.ShowThumbnailPreview, v => _s.ShowThumbnailPreview = v, on),
+            ToggleRow(L.T("プレビューにメディア操作を表示"), L.T("音楽や動画を再生中のアプリのプレビューに、前の曲・再生/一時停止・次の曲のボタンを出します"),
+                _s.ShowPreviewMediaControls, v => _s.ShowPreviewMediaControls = v, on && _s.ShowThumbnailPreview),
             ToggleRow(L.T("タスク ビュー ボタンで仮想デスクトップを表示"), L.T("カーソルを置くとデスクトップの一覧を表示し、クリックで切り替え、＋ で追加します"),
                 _s.ShowDesktopsOnTaskView, v => _s.ShowDesktopsOnTaskView = v, on && _s.ShowTaskViewButton),
             NumberRow(L.T("表示までの待ち時間"), "", 0, 2000, _s.PreviewDelayMs, "ms", v => _s.PreviewDelayMs = (int)v, on && (_s.ShowThumbnailPreview || _s.ShowDesktopsOnTaskView), step: 50, def: 400),
@@ -554,6 +556,17 @@ public sealed class SettingsWindow : Window
                     _s.BarWidgetZones.GetValueOrDefault(w.Id) ?? "Tray", v => { if (v == "Tray") _s.BarWidgetZones.Remove(w.Id); else _s.BarWidgetZones[w.Id] = v; },
                     on && _s.BarWidgets.Contains(w.Id)),
             }).ToArray());
+
+        bool np = on && _s.BarWidgets.Contains("nowplaying");
+        Group(p, "", L.T("再生中の曲の見た目"), L.T("バーの「再生中の曲」の表示。縦のバーでは、幅に収まるよう、輪で囲んだサムネイルと小さな波形になります"),
+            DropDownRow(L.T("表示の形"), L.T("標準: サムネイル・曲名・波形・下線。リング: 再生位置の輪で囲んだ丸いサムネイル（文字なし）"),
+                new[] { ("Standard", L.T("標準")), ("Ring", L.T("リング")) }, _s.NowPlayingStyle.ToString(), v => _s.NowPlayingStyle = Enum.Parse<NowPlayingStyle>(v), np),
+            ToggleRow(L.T("サムネイルを表示"), L.T("曲のジャケットや動画の画像を出します（無いときは音符のアイコン）"), _s.NowPlayingThumbnail, v => _s.NowPlayingThumbnail = v, np),
+            ToggleRow(L.T("再生中の波形"), L.T("再生中だけ動く棒を出します。一時停止で止まります"), _s.NowPlayingWave, v => _s.NowPlayingWave = v, np),
+            ToggleRow(L.T("再生位置を表示"), L.T("曲のどのあたりかを、下線（リングでは輪）で出します。ライブ配信では LIVE と出ます"), _s.NowPlayingProgress, v => _s.NowPlayingProgress = v, np),
+            DropDownRow(L.T("再生位置の線"), L.T("標準の形の下線。波線は、再生中に波がゆっくり流れます（一時停止で止まります）"),
+                new[] { ("Line", L.T("直線")), ("Wave", L.T("波線")) }, _s.NowPlayingProgressStyle.ToString(), v => _s.NowPlayingProgressStyle = Enum.Parse<NowPlayingProgressStyle>(v),
+                np && _s.NowPlayingProgress && _s.NowPlayingStyle == NowPlayingStyle.Standard));
 
         // 区切り線とスペース: 何個でも足せる。置く場所と並び順は、ウィジェットと同じ（右クリックでも動かせる）
         var partRows = new List<Border>();
