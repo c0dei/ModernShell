@@ -566,7 +566,9 @@ public sealed class SettingsWindow : Window
             ToggleRow(L.T("再生位置を表示"), L.T("曲のどのあたりかを、下線（リングでは輪）で出します。ライブ配信では LIVE と出ます"), _s.NowPlayingProgress, v => _s.NowPlayingProgress = v, np),
             DropDownRow(L.T("再生位置の線"), L.T("標準の形の下線。波線は、再生中に波がゆっくり流れます（一時停止で止まります）"),
                 new[] { ("Line", L.T("直線")), ("Wave", L.T("波線")) }, _s.NowPlayingProgressStyle.ToString(), v => _s.NowPlayingProgressStyle = Enum.Parse<NowPlayingProgressStyle>(v),
-                np && _s.NowPlayingProgress && _s.NowPlayingStyle == NowPlayingStyle.Standard));
+                np && _s.NowPlayingProgress && _s.NowPlayingStyle == NowPlayingStyle.Standard),
+            NumberRow(L.T("曲名の最大幅"), L.T("標準の形の曲名・アーティストの幅の上限。超えた分は「…」で省略します（ウィジェットの横幅の上限になります）"),
+                80, 400, _s.NowPlayingTextWidth, "px", v => _s.NowPlayingTextWidth = (int)v, np && _s.NowPlayingStyle == NowPlayingStyle.Standard, step: 10, def: 220));
 
         // 区切り線とスペース: 何個でも足せる。置く場所と並び順は、ウィジェットと同じ（右クリックでも動かせる）
         var partRows = new List<Border>();

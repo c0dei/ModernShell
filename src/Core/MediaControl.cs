@@ -149,19 +149,34 @@ internal static class MediaControl
     /// ライブ配信か。長さが無い再生中のもののうち、同じ曲名で長さが報告されたことが無いもの。
     /// 呼ぶたびに「長さがあった曲名」を覚える（200 件を超えたら忘れる）。
     /// </summary>
-    public static bool IsLive(string trackKey, TimeSpan start, TimeSpan end, bool playing)
+    public static bool IsLive(string trackKey, TimeSpan start, TimeSpan end, bool playing, TimeSpan position)
     {
         bool none = HasNoDuration(start, end);
         lock (SeenWithDuration)
         {
-            if (!none && trackKey.Length > 1) // "|" = 曲名もアーティストも空
+            if (!none)
             {
-                if (SeenWithDuration.Count > 200) SeenWithDuration.Clear();
-                SeenWithDuration.Add(trackKey);
+                if (trackKey.Length > 1) // "|" = 曲名もアーティストも空
+                {
+                    if (SeenWithDuration.Count > 200) SeenWithDuration.Clear();
+                    SeenWithDuration.Add(trackKey);
+                }
+                NoDurationSince.Remove(trackKey);
+                return false;
             }
-            return playing && none && !SeenWithDuration.Contains(trackKey);
+            if (!playing || trackKey.Length <= 1 || SeenWithDuration.Contains(trackKey)) { NoDurationSince.Remove(trackKey); return false; }
+            // 動画の切り替わり直後は、ブラウザーが長さをまだ報告せず、数秒「長さなし」になる。本物のライブは、長さなしが続き、再生位置が進んでいる。
+            // 「長さなしが 6 秒以上続き、再生位置が 0 より大きい」ときだけ LIVE とする
+            if (!NoDurationSince.TryGetValue(trackKey, out var since))
+            {
+                if (NoDurationSince.Count > 200) NoDurationSince.Clear();
+                NoDurationSince[trackKey] = since = DateTime.UtcNow;
+            }
+            return position > TimeSpan.Zero && DateTime.UtcNow - since >= TimeSpan.FromSeconds(6);
         }
     }
+
+    private static readonly System.Collections.Generic.Dictionary<string, DateTime> NoDurationSince = new();
 
     public static bool IsPlaying(WMC.GlobalSystemMediaTransportControlsSession s)
     {

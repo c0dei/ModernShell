@@ -164,6 +164,8 @@ public sealed class Settings
     /// <summary>曲のどのあたりかを（下線または輪で）出す。</summary>
     public bool NowPlayingProgress { get; set; } = true;
     public NowPlayingProgressStyle NowPlayingProgressStyle { get; set; } = NowPlayingProgressStyle.Line;
+    /// <summary>標準の形の曲名・アーティストの最大の幅（px）。超えた分は「…」で省略する。</summary>
+    public int NowPlayingTextWidth { get; set; } = 220;
     /// <summary>タスクビューボタンにカーソルを置くと仮想デスクトップの一覧を表示する。</summary>
     public bool ShowDesktopsOnTaskView { get; set; } = true;
     /// <summary>プレビューを表示するまでの待ち時間 (ミリ秒)。</summary>

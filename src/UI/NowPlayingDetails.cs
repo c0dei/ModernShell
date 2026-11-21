@@ -193,7 +193,7 @@ internal sealed class NowPlayingCard : Border
             // ライブ配信など長さの無いものは、シークバーの代わりに LIVE を出す
             bool noDuration = MediaControl.HasNoDuration(_start, _end);
             _seekRow.Visibility = noDuration ? Visibility.Collapsed : Visibility.Visible;
-            _liveChip.Visibility = MediaControl.IsLive(_title.Text + "|" + _artist.Text, _start, _end, _playing) ? Visibility.Visible : Visibility.Collapsed;
+            _liveChip.Visibility = MediaControl.IsLive(_title.Text + "|" + _artist.Text, _start, _end, _playing, tl.Position) ? Visibility.Visible : Visibility.Collapsed;
             if (noDuration) return;
             var pos = tl.Position;
             if (_playing) pos += DateTimeOffset.Now - tl.LastUpdatedTime; // 最後に報告された位置から、経過した分だけ進める

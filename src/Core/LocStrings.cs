@@ -223,6 +223,8 @@ public static partial class L
         ["再生中の曲の見た目"] = "Now playing appearance",
         ["バーの「再生中の曲」の表示。縦のバーでは、幅に収まるよう、輪で囲んだサムネイルと小さな波形になります"] = "Look of the bar's Now Playing widget. On vertical bars it becomes a ring-wrapped thumbnail with a small waveform to fit the width",
         ["表示の形"] = "Style",
+        ["曲名の最大幅"] = "Max title width",
+        ["標準の形の曲名・アーティストの幅の上限。超えた分は「…」で省略します（ウィジェットの横幅の上限になります）"] = "Upper limit for the title/artist width in Standard style. Longer text is cut with … (this caps the widget width)",
         ["再生位置の線"] = "Position line",
         ["標準の形の下線。波線は、再生中に波がゆっくり流れます（一時停止で止まります）"] = "The underline in Standard style. Wavy flows slowly while playing (stops when paused)",
         ["直線"] = "Straight",

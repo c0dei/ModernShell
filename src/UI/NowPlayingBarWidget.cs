@@ -89,7 +89,7 @@ public sealed class NowPlayingBarWidget : BarWidget
         }
         else
         {
-            double cs = Math.Clamp(TileH, 20, 64);
+            double cs = Math.Clamp(TileH - 4, 20, 64); // バーの高さ - 上下 2px ずつの余白
             leadW = cs;
             coverSize = cs;
             _cover = new Border { Width = cs, Height = cs, CornerRadius = T.Corner(cs < 28 ? 6 : 8), Background = T.Hover, Child = Note(), ClipToBounds = true };
@@ -105,12 +105,11 @@ public sealed class NowPlayingBarWidget : BarWidget
         {
             _title = UiKit.Label("", 12, T.Text, FontWeights.SemiBold);
             _artist = UiKit.Label("", 11, T.TextSecondary);
-            _title.MaxWidth = _artist.MaxWidth = 150;
+            _title.MaxWidth = _artist.MaxWidth = Math.Clamp(s.NowPlayingTextWidth, 80, 400); // 設定の「曲名の最大幅」。超えた分は「…」
             _title.TextTrimming = _artist.TextTrimming = TextTrimming.CharacterEllipsis;
             var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, underline ? reserve : 0) }; // 下線の分だけ、文字を上げる
             text.Children.Add(_title);
             if (!_singleLine) text.Children.Add(_artist);
-            if (_singleLine) _title.MaxWidth = 220;
             row.Children.Add(text);
         }
 
@@ -225,7 +224,7 @@ public sealed class NowPlayingBarWidget : BarWidget
             }
             _titleText = title; _artistText = artist; _playing = playing;
             bool wasLive = _live;
-            _live = _session != null && MediaControl.IsLive(title + "|" + artist, _start, _end, playing);
+            _live = _session != null && MediaControl.IsLive(title + "|" + artist, _start, _end, playing, _pos0);
             if (_live != wasLive || title + "|" + artist != _lastLogged)
             {
                 _lastLogged = title + "|" + artist;
@@ -271,16 +270,22 @@ public sealed class NowPlayingBarWidget : BarWidget
     private void UpdateProgress()
     {
         var f = _showProgress ? Fraction() : null;
+        // 再生中なのに長さが取れないとき（ブラウザーが、動画の切り替わり後、一時停止・再生などの操作があるまで位置を報告しないことがある）:
+        // 位置は分からないが、薄い線だけは出して、バーが消えたように見えないようにする。ライブ配信は LIVE を出すので、線は出さない
+        bool unknown = _showProgress && !f.HasValue && _session != null && _playing && !_live;
+        bool show = f.HasValue || unknown;
         _ring?.Set(f is { } v ? v * 100 : 0, "");
         if (_waveHost != null && _accHost != null)
         {
-            _waveHost.Visibility = f.HasValue ? Visibility.Visible : Visibility.Collapsed;
-            if (f.HasValue) { _accHost.Width = Math.Max(0, _waveHost.ActualWidth * f.Value); PlaceDot(); }
+            _waveHost.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            _accHost.Width = f.HasValue ? Math.Max(0, _waveHost.ActualWidth * f.Value) : 0;
+            if (_dot != null) _dot.Visibility = f.HasValue ? Visibility.Visible : Visibility.Collapsed;
+            if (f.HasValue) PlaceDot();
         }
         if (_underline != null && _fill != null)
         {
-            _underline.Visibility = f.HasValue ? Visibility.Visible : Visibility.Collapsed;
-            if (f.HasValue) _fill.Width = Math.Max(0, _underline.ActualWidth * f.Value);
+            _underline.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            _fill.Width = f.HasValue ? Math.Max(0, _underline.ActualWidth * f.Value) : 0;
         }
     }
 
