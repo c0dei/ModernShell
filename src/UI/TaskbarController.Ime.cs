@@ -160,6 +160,8 @@ public sealed partial class TaskbarController
         return (int)(long)r;
     }
 
+    private static readonly Dictionary<int, string> _langCode = new();
+
     private void UpdateIme()
     {
         if (_imeText == null || _disposed) return;
@@ -168,7 +170,11 @@ public sealed partial class TaskbarController
         if (lang != 0 && lang != 0x0411)
         {
             // 日本語以外のキーボード: 言語の略号（EN など）
-            try { text = new CultureInfo(lang).TwoLetterISOLanguageName.ToUpperInvariant(); } catch { text = "--"; }
+            if (!_langCode.TryGetValue(lang, out text!))
+            {
+                try { text = new CultureInfo(lang).TwoLetterISOLanguageName.ToUpperInvariant(); } catch { text = "--"; }
+                _langCode[lang] = text; // 毎秒作り直さない
+            }
         }
         else
         {

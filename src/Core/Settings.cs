@@ -391,11 +391,15 @@ internal static class Log
     private static readonly object Gate = new();
     private static string PathName => System.IO.Path.Combine(Settings.Directory, "modernshell.log");
 
+    /// <summary>デバッグ ログがオンか。オフのときは、ログ用の重い調べもの（モジュール一覧など）を省くために使う。</summary>
+    public static bool Enabled => Settings.Current?.DebugLog == true;
+
     public static void Info(string msg) => Write("INFO ", msg);
 
     /// <summary>起動からの経過時間付きで記録する（どこで時間がかかっているかを調べるため）。</summary>
     public static void Timing(string phase)
     {
+        if (!Enabled) return;
         double ms;
         try { using var p = System.Diagnostics.Process.GetCurrentProcess(); ms = (DateTime.Now - p.StartTime).TotalMilliseconds; }
         catch { ms = -1; }

@@ -16,7 +16,14 @@ public static class MemoryHousekeeping
     private static bool _scheduled;
     private static System.Threading.Timer? _monitor;
 
-    /// <summary>常駐中の使用量を 30 分ごとにログに残す（少しずつ増えていないかを確かめるため。GC は強制しない）。</summary>
+    private static long _lastCompactPrivateMB;
+    private static int _periodicRuns;
+
+    /// <summary>
+    /// 常駐中の使用量を 10 分ごとにログに残し、あわせて自動で後片付けをする（超長時間の起動でもメモリが増え続けないように）。
+    /// 後片付けは、操作がしばらく無く（1 分以上）、前回の後片付けから使用量が 20 MB 以上増えているか 1 時間経っているときだけ。
+    /// 操作中に GC で引っかからないようにするため。GC を詰めたあと、ワーキング セットも OS に返す。
+    /// </summary>
     public static void StartMonitoring()
     {
         _monitor ??= new System.Threading.Timer(_ =>
@@ -24,12 +31,45 @@ public static class MemoryHousekeeping
             try
             {
                 using var p = Process.GetCurrentProcess();
-                Log.Info($"memory (periodic): task manager {TaskManagerMB(p)} MB, private {p.PrivateMemorySize64 / 1048576} MB, working set {p.WorkingSet64 / 1048576} MB, " +
-                         $"managed heap {GC.GetTotalMemory(false) / 1048576} MB, handles {p.HandleCount}, " +
-                         $"GDI {GetGuiResources(p.Handle, 0)}, USER {GetGuiResources(p.Handle, 1)}");
+                long priv = p.PrivateMemorySize64 / 1048576;
+                _periodicRuns++;
+                if (_periodicRuns % 3 == 0 && Log.Enabled) // ログは 30 分ごと
+                    Log.Info($"memory (periodic): task manager {TaskManagerMB(p)} MB, private {priv} MB, working set {p.WorkingSet64 / 1048576} MB, " +
+                             $"managed heap {GC.GetTotalMemory(false) / 1048576} MB, handles {p.HandleCount}, " +
+                             $"GDI {GetGuiResources(p.Handle, 0)}, USER {GetGuiResources(p.Handle, 1)}");
+                bool grown = priv - _lastCompactPrivateMB >= 20, hourly = _periodicRuns % 6 == 0;
+                if ((grown || hourly) && IdleSeconds() >= 60)
+                {
+                    Compact("idle");
+                    TrimWorkingSet();
+                    _lastCompactPrivateMB = Private();
+                }
             }
             catch { }
-        }, null, TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30));
+        }, null, TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(10));
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct LASTINPUTINFO { public uint cbSize, dwTime; }
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")] private static extern bool SetProcessWorkingSetSize(IntPtr process, IntPtr min, IntPtr max);
+
+    /// <summary>キーボード・マウスの操作が無い時間（秒）。取れなければ 0（＝操作中扱いで後片付けしない）。</summary>
+    private static uint IdleSeconds()
+    {
+        var li = new LASTINPUTINFO { cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<LASTINPUTINFO>() };
+        return GetLastInputInfo(ref li) ? ((uint)Environment.TickCount - li.dwTime) / 1000 : 0;
+    }
+
+    /// <summary>使っていないページを OS に返す（タスク マネージャーの数字が下がる。必要になれば自動で読み戻される）。</summary>
+    private static void TrimWorkingSet()
+    {
+        using var p = Process.GetCurrentProcess();
+        long before = Log.Enabled ? p.WorkingSet64 / 1048576 : 0;
+        SetProcessWorkingSetSize(p.Handle, (IntPtr)(-1), (IntPtr)(-1));
+        if (!Log.Enabled) return;
+        p.Refresh();
+        Log.Info($"memory (trim): working set {before} MB -> {p.WorkingSet64 / 1048576} MB");
     }
 
     /// <summary>少し待ってから（起動直後の処理が落ち着いてから）詰める。</summary>
@@ -48,7 +88,8 @@ public static class MemoryHousekeeping
             GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
             GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
             GC.WaitForPendingFinalizers();
-            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+            // Aggressive: 使っていない確保済みの領域（空きのリージョン）も OS に返す（通常の Forced では確保したまま残る）
+            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
             Log.Info($"memory ({reason}): private {before} MB -> {Private()} MB, managed heap {GC.GetTotalMemory(false) / 1048576} MB");
             LogBreakdown();
         }
@@ -82,6 +123,7 @@ public static class MemoryHousekeeping
     /// </summary>
     private static void LogBreakdown()
     {
+        if (!Log.Enabled) return; // モジュール一覧の取得は重いので、ログを書くときだけ
         using var p = Process.GetCurrentProcess();
         var info = GC.GetGCMemoryInfo();
         long modules = 0;

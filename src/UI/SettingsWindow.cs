@@ -66,7 +66,7 @@ public sealed class SettingsWindow : Window
         // Theme は全体で 1 つ（static）なので、閉じたら購読を外す。外さないと閉じた設定画面が丸ごとメモリに残り続ける
         Action onTheme = () => Dispatcher.BeginInvoke(() => { if (IsLoaded) Build(); });
         Theme.Changed += onTheme;
-        Closed += (_, _) => { Theme.Changed -= onTheme; Content = null; MemoryHousekeeping.Compact("settings closed"); };
+        Closed += (_, _) => { Theme.Changed -= onTheme; Content = null; MemoryHousekeeping.CompactLater("settings closed", 3000); }; // 3 秒待って、ウィンドウが片付いてから詰める
     }
 
     private Theme T => Theme.Current;
