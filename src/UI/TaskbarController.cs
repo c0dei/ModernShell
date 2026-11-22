@@ -503,6 +503,7 @@ public sealed partial class TaskbarController : IDisposable
             var popup = Flyout.Show(s, new[]
             {
                 new MenuItemSpec("\uE9D9", L.T("タスク マネージャー"), SystemActions.OpenTaskManager),
+                new MenuItemSpec("", L.T("ウィジェットを追加"), () => { }) { Children = WidgetToggleMenu },
                 MenuItemSpec.Separator,
                 new MenuItemSpec("\uE713", L.T("タスクバーの設定"), () => OpenSettingsRequested?.Invoke()),
             }, FlyoutPlacement);

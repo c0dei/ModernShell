@@ -191,6 +191,22 @@ public sealed partial class TaskbarController
         Flyout.ToggleGuard(popup, anchor);
     }
 
+    /// <summary>タスクバーの空き領域の右クリック → ウィジェットの追加／削除（チェック付きの一覧）。</summary>
+    private IEnumerable<MenuItemSpec> WidgetToggleMenu()
+    {
+        foreach (var info in BarWidgetCatalog.All)
+        {
+            string id = info.Id;
+            bool on = _settings.BarWidgets.Contains(id);
+            yield return new MenuItemSpec(on ? "" : "", L.T(info.Title), () =>
+            {
+                if (on) { _settings.BarWidgets.Remove(id); _settings.BarWidgetZones.Remove(id); }
+                else _settings.BarWidgets.Add(id);
+                _settings.Save();
+            });
+        }
+    }
+
     /// <summary>ウィジェットの右クリック: 位置・並べ替え・バーから外す。</summary>
     private IEnumerable<MenuItemSpec> BarWidgetMenu(string id)
     {
