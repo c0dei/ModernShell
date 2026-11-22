@@ -272,6 +272,25 @@ public sealed class SystemStats
         return (m.dwMemoryLoad, used, total);
     }
 
+    /// <summary>メモリの詳細（空き・コミット済み）。GB。</summary>
+    public static (double availGb, double commitUsedGb, double commitTotalGb) MemoryDetail()
+    {
+        var m = new MEMORYSTATUSEX { dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>() };
+        if (!GlobalMemoryStatusEx(ref m)) return (0, 0, 0);
+        return (m.ullAvailPhys / 1073741824.0, (m.ullTotalPageFile - m.ullAvailPageFile) / 1073741824.0, m.ullTotalPageFile / 1073741824.0);
+    }
+
+    /// <summary>CPU の名前と定格クロック（MHz。取れなければ 0）。</summary>
+    public static (string name, int mhz) CpuInfo()
+    {
+        try
+        {
+            using var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
+            return (((k?.GetValue("ProcessorNameString") as string) ?? "").Trim(), k?.GetValue("~MHz") is int mhz ? mhz : 0);
+        }
+        catch { return ("", 0); }
+    }
+
     /// <summary>内蔵・外付けの固定ドライブのルート（"C:\\" など）。システムドライブを先頭に。</summary>
     public static List<string> FixedDrives()
     {

@@ -125,6 +125,8 @@ public abstract class BarWidget
             Children.Add(_label);
         }
 
+        public void SetColor(Brush fg) => _arc.Stroke = fg;
+
         public void Set(double percent, string text)
         {
             percent = Math.Clamp(percent, 0, 100);
@@ -149,6 +151,7 @@ public sealed class SystemBarWidget : BarWidget
 {
     public override string Id => "system";
     private readonly SystemStats _stats = new();
+    private static readonly Brush MemBrush = new SolidColorBrush(Color.FromRgb(0x2E, 0xB8, 0x72));
     private Ring? _cpu, _mem;
     private double _cpuPct, _memPct, _memUsed, _memTotal;
 
@@ -156,15 +159,21 @@ public sealed class SystemBarWidget : BarWidget
     {
         double size = Vertical ? 22 : 26;
         _cpu = new Ring(size, 3, T.AccentBrush, Track, T.Text, 9);
-        _mem = new Ring(size, 3, new SolidColorBrush(Color.FromRgb(0x2E, 0xB8, 0x72)), Track, T.Text, 9);
+        _mem = new Ring(size, 3, MemBrush, Track, T.Text, 9);
         _stats.CpuPercent();
         var row = new StackPanel { Orientation = Vertical ? Orientation.Vertical : Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         _mem.Margin = Vertical ? new Thickness(0, 4, 0, 0) : new Thickness(6, 0, 0, 0);
         row.Children.Add(_cpu);
         row.Children.Add(_mem);
         Tick(0);
-        return row;
+        if (Vertical) return row;
+        // 音楽・天気ウィジェットと同じ、薄い地と縁のある角丸のカード
+        row.Margin = new Thickness(8, 0, 8, 0);
+        PadOverride = new Thickness(0);
+        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = row };
     }
+
+    private static readonly Brush HighBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x8A, 0x75));
 
     public override void Tick(int count)
     {
@@ -173,7 +182,13 @@ public sealed class SystemBarWidget : BarWidget
         (_memPct, _memUsed, _memTotal) = _stats.Memory();
         _cpu.Set(_cpuPct, $"{_cpuPct:0}");
         _mem.Set(_memPct, $"{_memPct:0}");
+        // 使用率が高いときは、リングの色を変える（ポップアップと同じ警告色）
+        _cpu.SetColor(_cpuPct >= SystemDetailsView.HighLoad ? HighBrush : T.AccentBrush);
+        _mem.SetColor(_memPct >= SystemDetailsView.HighLoad ? HighBrush : MemBrush);
+        SystemHistory.Push(_cpuPct, _memPct);
     }
+
+    public override FrameworkElement? BuildDetailsView() => new SystemDetailsView();
 
     public override IEnumerable<MenuItemSpec> Details() => new[]
     {
