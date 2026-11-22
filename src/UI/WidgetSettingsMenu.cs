@@ -14,15 +14,16 @@ internal static class WidgetSettingsMenu
     private const string Check = "";
 
     /// <summary>チェック付きのオン/オフ項目。</summary>
-    public static MenuItemSpec Toggle(string title, bool on, Action<Settings, bool> set) =>
-        new(on ? Check : "", title, () => Apply(s => set(s, !on)));
+    public static MenuItemSpec Toggle(string title, bool on, Action<Settings, bool> set, bool enabled = true) =>
+        new(on ? Check : "", title, () => Apply(s => set(s, !on))) { Enabled = enabled };
 
     /// <summary>選択肢から 1 つ選ぶ項目（開くと選択肢の一覧が出て、今の値にチェックが付く）。</summary>
-    public static MenuItemSpec Choice<T>(string glyph, string title, T current, IEnumerable<(T Value, string Label)> options, Action<Settings, T> set) where T : notnull
+    public static MenuItemSpec Choice<T>(string glyph, string title, T current, IEnumerable<(T Value, string Label)> options, Action<Settings, T> set, bool enabled = true) where T : notnull
     {
         var list = options.ToList();
         return new MenuItemSpec(glyph, title, () => { })
         {
+            Enabled = enabled,
             Children = () => list.Select(o => new MenuItemSpec(EqualityComparer<T>.Default.Equals(o.Value, current) ? Check : "", o.Label, () => Apply(s => set(s, o.Value)))).ToList(),
         };
     }

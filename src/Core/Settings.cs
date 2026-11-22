@@ -27,6 +27,8 @@ public enum SurfaceStyle { Solid, Transparent, Blur }
 public enum AnimationSpeed { Fast, Normal, Slow }
 /// <summary>時計の文字の揃え。</summary>
 public enum ClockAlign { Left, Center, Right }
+/// <summary>時計ウィジェットの表示スタイル（TwoLines = 時刻+日付の 2 行 / OneLine = 1 行 / DateTile = 日付タイル+時刻 / Progress = 時刻+日付+1 日の進み具合）。</summary>
+public enum ClockStyle { TwoLines, OneLine, DateTile, Progress }
 /// <summary>時刻の書式。System: Windows の地域設定（短い時刻）に合わせる。</summary>
 public enum ClockTimeFormat { System, H24, H24Pad, H12, Hidden }
 /// <summary>日付の書式。System: Windows の地域設定（短い日付）に合わせる。</summary>
@@ -153,8 +155,8 @@ public sealed class Settings
     public string TaskbarCustomColor { get; set; } = "";
     /// <summary>時計（横のバー）の文字の揃え。</summary>
     public ClockAlign ClockAlign { get; set; } = ClockAlign.Right;
-    /// <summary>時計で日付を上、時刻を下にする（既定は時刻が上）。</summary>
-    public bool ClockDateFirst { get; set; } = false;
+    /// <summary>時計ウィジェットの表示スタイル（横のバー）。</summary>
+    public ClockStyle ClockStyle { get; set; } = ClockStyle.TwoLines;
     public ClockTimeFormat ClockTimeFormat { get; set; } = ClockTimeFormat.System;
     public ClockDateFormat ClockDateFormat { get; set; } = ClockDateFormat.System;
     /// <summary>時計のウィジェットをクリックしたときに開くもの（既定: Windows の通知センター）。</summary>

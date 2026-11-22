@@ -41,12 +41,13 @@ internal static class ClockFormat
 
 /// <summary>
 /// 時計のウィジェット（時刻と日付）。オンにすると、バー標準の時計の代わりになる。
-/// 書式・揃え・日付を上にするかは、設定の時計の項目に従う。クリックで通知センター。
+/// 書式・揃え・表示スタイルは、右クリックのメニューで選ぶ。クリックで通知センター。
 /// </summary>
 public sealed class ClockBarWidget : BarWidget
 {
     public override string Id => "clock";
-    private TextBlock? _time, _date;
+    private TextBlock? _time, _date, _weekday, _dayNum;
+    private ColumnDefinition[]? _progressCols;
     private bool _stacked, _dateFits = true;
     private string _sig = "";
 
@@ -68,15 +69,87 @@ public sealed class ClockBarWidget : BarWidget
             tb.TextTrimming = TextTrimming.None;
         }
         var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-        if (s.ClockDateFirst && !Vertical) { stack.Children.Add(_date); stack.Children.Add(_time); }
-        else { stack.Children.Add(_time); stack.Children.Add(_date); }
+        _weekday = null; _dayNum = null; _progressCols = null;
+        var style = Vertical ? ClockStyle.TwoLines : s.ClockStyle;
+        FrameworkElement content = stack;
+        switch (style)
+        {
+            case ClockStyle.OneLine:
+            {
+                // 時刻と日付を 1 行に（低いタスクバー向き）
+                _date.FontSize = 12;
+                _date.Opacity = 0.75;
+                _date.Margin = new Thickness(8, 0, 0, 0);
+                _date.VerticalAlignment = _time.VerticalAlignment = VerticalAlignment.Center;
+                var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+                row.Children.Add(_time);
+                row.Children.Add(_date);
+                content = row;
+                break;
+            }
+            case ClockStyle.DateTile:
+            {
+                // 曜日（アクセント色の帯）と日にちのタイル + 時刻
+                _weekday = UiKit.Label("", 9, ImeLook.OnAccent(T), FontWeights.SemiBold);
+                _weekday.TextTrimming = TextTrimming.None; _weekday.HorizontalAlignment = HorizontalAlignment.Center;
+                _dayNum = UiKit.Label("", 14, T.Text, FontWeights.SemiBold);
+                _dayNum.TextTrimming = TextTrimming.None; _dayNum.HorizontalAlignment = HorizontalAlignment.Center;
+                var tile = new Border { Width = 30, Height = 32, CornerRadius = T.Corner(6), ClipToBounds = true, Background = T.Surface, VerticalAlignment = VerticalAlignment.Center };
+                var g = new Grid();
+                g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                g.RowDefinitions.Add(new RowDefinition());
+                var top = new Border { Background = T.AccentBrush, Child = _weekday };
+                Grid.SetRow(_dayNum, 1);
+                _dayNum.VerticalAlignment = VerticalAlignment.Center;
+                g.Children.Add(top);
+                g.Children.Add(_dayNum);
+                tile.Child = g;
+                _time.Margin = new Thickness(8, 0, 0, 0);
+                _time.VerticalAlignment = VerticalAlignment.Center;
+                var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+                row.Children.Add(tile);
+                row.Children.Add(_time);
+                content = row;
+                _date.Visibility = Visibility.Collapsed;
+                break;
+            }
+            case ClockStyle.Progress:
+            {
+                // 時刻 + 日付の下に、1 日の進み具合の細い線
+                _date.FontSize = 12;
+                _date.Opacity = 0.75;
+                _date.Margin = new Thickness(8, 0, 0, 0);
+                _date.VerticalAlignment = _time.VerticalAlignment = VerticalAlignment.Center;
+                var line = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+                line.Children.Add(_time);
+                line.Children.Add(_date);
+                var bar = new Grid { Height = 4, Margin = new Thickness(0, 3, 0, 0) };
+                _progressCols = new[] { new ColumnDefinition(), new ColumnDefinition() };
+                foreach (var c in _progressCols) bar.ColumnDefinitions.Add(c);
+                var fill = new Border { Background = T.AccentBrush, CornerRadius = new CornerRadius(2) };
+                var rest = new Border { Background = new SolidColorBrush(Color.FromArgb(0x40, 0x80, 0x80, 0x80)), CornerRadius = new CornerRadius(2) };
+                Grid.SetColumn(rest, 1);
+                bar.Children.Add(fill);
+                bar.Children.Add(rest);
+                var col = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+                col.Children.Add(line);
+                col.Children.Add(bar);
+                content = col;
+                break;
+            }
+            default:
+                stack.Children.Add(_time);
+                stack.Children.Add(_date);
+                break;
+        }
         if (!Vertical && ClockFormat.TimeHidden(s)) _time.Visibility = Visibility.Collapsed;
-        if (_stacked || (Vertical && !_dateFits) || (!Vertical && s.ClockDateFormat == ClockDateFormat.Hidden)) _date.Visibility = Visibility.Collapsed;
+        if (style != ClockStyle.DateTile && (_stacked || (Vertical && !_dateFits) || (!Vertical && s.ClockDateFormat == ClockDateFormat.Hidden))) _date.Visibility = Visibility.Collapsed;
 
         Tick(0);
         if (Vertical) return stack;
         // 音楽・天気ウィジェットと同じ、薄い地と縁のある角丸のカード
-        stack.Margin = new Thickness(12, 0, 12, 0);
+        stack = new StackPanel { Children = { content }, VerticalAlignment = VerticalAlignment.Center };
+        stack.Margin = new Thickness(style == ClockStyle.DateTile ? 6 : 12, 0, 12, 0);
         PadOverride = new Thickness(0);
         return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = stack };
     }
@@ -123,6 +196,15 @@ public sealed class ClockBarWidget : BarWidget
             : Vertical ? now.ToString("H:mm") : ClockFormat.Time(s, now);
         string date = Vertical ? now.ToString("M/d", L.Culture) : ClockFormat.Date(s, now);
         string sig = time + "|" + date;
+        // 1 日の進み具合（0:00 → 24:00）。時刻が変わるたびに合わせる
+        if (_progressCols != null && sig != _sig)
+        {
+            double p = Math.Clamp(now.TimeOfDay.TotalMinutes / 1440.0, 0.001, 0.999);
+            _progressCols[0].Width = new GridLength(p, GridUnitType.Star);
+            _progressCols[1].Width = new GridLength(1 - p, GridUnitType.Star);
+        }
+        if (_weekday != null) _weekday.Text = now.ToString(L.IsEnglish ? "ddd" : "ddd", L.Culture);
+        if (_dayNum != null) _dayNum.Text = now.Day.ToString();
         if (sig == _sig) return;
         _sig = sig;
         _time.Text = time;
@@ -146,6 +228,13 @@ public sealed class ClockBarWidget : BarWidget
         // 縦のバーでは、時刻と日付の形は幅に合わせて自動で決まるので、設定は出さない
         if (!Vertical)
         {
+            // 見た目によって効かない設定は、選べないようにする（日付タイルは自前の日付を出す。揃えは 2 行のときだけ効く）
+            bool dateOk = s.ClockStyle != ClockStyle.DateTile, alignOk = s.ClockStyle == ClockStyle.TwoLines;
+            items.Add(WidgetSettingsMenu.Choice("", L.T("表示スタイル"), s.ClockStyle, new[]
+            {
+                (ClockStyle.TwoLines, L.T("2 行（時刻 + 日付）")), (ClockStyle.OneLine, L.T("1 行（低いタスクバー向き）")),
+                (ClockStyle.DateTile, L.T("日付タイル + 時刻")), (ClockStyle.Progress, L.T("時刻 + 日付 + 1 日の進み具合")),
+            }, (c, v) => c.ClockStyle = v));
             items.Add(WidgetSettingsMenu.Choice("", L.T("時刻の形式"), s.ClockTimeFormat, new[]
             {
                 (ClockTimeFormat.System, L.T("システムに合わせる")), (ClockTimeFormat.H24, L.T("24 時間（9:05）")), (ClockTimeFormat.H24Pad, L.T("24 時間（09:05）")),
@@ -155,12 +244,11 @@ public sealed class ClockBarWidget : BarWidget
             {
                 (ClockDateFormat.System, L.T("システムに合わせる")), (ClockDateFormat.YearMonthDay, "2026/11/16"), (ClockDateFormat.MonthDay, "11/16"),
                 (ClockDateFormat.WithWeekday, L.T("11月16日 (月)")), (ClockDateFormat.Hidden, L.T("表示しない")),
-            }, (c, v) => c.ClockDateFormat = v));
+            }, (c, v) => c.ClockDateFormat = v, dateOk));
             items.Add(WidgetSettingsMenu.Choice("", L.T("文字の揃え"), s.ClockAlign, new[]
             {
                 (ClockAlign.Left, L.T("左揃え")), (ClockAlign.Center, L.T("中央揃え")), (ClockAlign.Right, L.T("右揃え")),
-            }, (c, v) => c.ClockAlign = v));
-            items.Add(WidgetSettingsMenu.Toggle(L.T("日付を上に表示"), s.ClockDateFirst, (c, v) => c.ClockDateFirst = v));
+            }, (c, v) => c.ClockAlign = v, alignOk));
             items.Add(WidgetSettingsMenu.Toggle(L.T("時計に秒を表示"), s.ShowSeconds, (c, v) => c.ShowSeconds = v));
         }
         items.Add(MenuItemSpec.Separator);

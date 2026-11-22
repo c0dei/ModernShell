@@ -92,9 +92,8 @@ public sealed partial class TaskbarController
             _time.TextAlignment = _date.TextAlignment = TextAlignment.Center;
         }
         var clockStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-        // 横のバーでは、設定で日付を上にもできる
-        if (_settings.ClockDateFirst && !Vertical) { clockStack.Children.Add(_date); clockStack.Children.Add(_time); }
-        else { clockStack.Children.Add(_time); clockStack.Children.Add(_date); }
+        clockStack.Children.Add(_time);
+        clockStack.Children.Add(_date);
         if (!Vertical && TimeHidden) _time.Visibility = Visibility.Collapsed;
         if (ClockStacked || (Vertical && !_dateFits) || (!Vertical && _settings.ClockDateFormat == ClockDateFormat.Hidden)) _date.Visibility = Visibility.Collapsed; // 低い・細いバーでは日付を省略（ツールチップで確認）
         var clock = new Tile
