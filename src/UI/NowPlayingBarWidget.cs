@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ModernShell.Core;
+using ModernShell.Native;
 using WMC = global::Windows.Media.Control;
 
 namespace ModernShell.UI;
@@ -137,13 +138,16 @@ public sealed class NowPlayingBarWidget : BarWidget
         {
             int n = Freq.Length;
             double h = ringStyle || overlay ? Math.Clamp(coverSize * 0.45, 7, 16) : Math.Clamp(room * 0.4, 8, 16);
-            var eq = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var eq = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, UseLayoutRounding = true, SnapsToDevicePixels = true };
             _bars = new Border[n];
+            // 棒の幅と間隔は、物理ピクセルの整数にそろえる（端数だと、棒ごとに間隔が 1px 広い・狭いとずれて見える）
+            double scale = Win32.GetDpiForSystem() is var dpiSys and > 0 ? dpiSys / 96.0 : 1.0;
+            double barW = Math.Max(2, Math.Round((coverSize < 26 ? 2.5 : 3) * scale)) / scale, gapW = Math.Max(1, Math.Round(2 * scale)) / scale;
             for (int i = 0; i < n; i++)
             {
                 _bars[i] = new Border
                 {
-                    Width = coverSize < 26 ? 2.5 : 3, Height = h, CornerRadius = new CornerRadius(1.5), Background = ringStyle || overlay ? Brushes.White : T.AccentBrush, Margin = new Thickness(i == 0 ? 0 : 2, 0, 0, 0),
+                    Width = barW, Height = h, CornerRadius = new CornerRadius(1.5), UseLayoutRounding = true, SnapsToDevicePixels = true, Background = ringStyle || overlay ? Brushes.White : T.AccentBrush, Margin = new Thickness(i == 0 ? 0 : gapW, 0, 0, 0),
                     RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(1, 0.2),
                 };
                 eq.Children.Add(_bars[i]);
