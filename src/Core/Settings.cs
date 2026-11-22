@@ -37,8 +37,8 @@ public enum ClockDateFormat { System, YearMonthDay, MonthDay, WithWeekday, Hidde
 public enum ClickOpens { Windows, App }
 /// <summary>タスクバーの背景に重ねる色（Theme: ライト/ダークの色 / Accent: アクセント色 / Custom: 好きな色）。</summary>
 public enum BarTintMode { Theme, Accent, Custom, Wallpaper }
-/// <summary>バーの「再生中の曲」の見た目。Standard = サムネイル・曲名・波形・下線の再生位置 / Ring = 再生位置の輪で囲んだ丸いサムネイル（文字なし）。縦のバーは常に Ring。</summary>
-public enum NowPlayingStyle { Standard, Ring }
+/// <summary>バーの「再生中の曲」の見た目。Standard = サムネイル・曲名・波形・下線の再生位置（幅 250px 固定）/ Compact = サムネイルと再生ボタンだけ。縦のバーは常に Compact。Ring は廃止（古い設定ファイルを読めるよう、値だけ残す。Compact として扱う）。</summary>
+public enum NowPlayingStyle { Standard, Compact, Ring }
 /// <summary>「再生中の曲」の再生位置の線。Wave = 波線（再生済みが波で流れ、これからは直線。一時停止中は直線）/ Line = 常に直線。</summary>
 public enum NowPlayingProgressStyle { Wave, Line }
 /// <summary>「再生中の曲」の波形の置き場所。Right = 曲名の右（アクセント色）/ Overlay = サムネイルに重ねる（暗い膜と白い棒。横幅の節約）。</summary>
@@ -185,11 +185,13 @@ public sealed class Settings
     public bool NowPlayingThumbnail { get; set; } = true;
     /// <summary>再生中だけ動く波形（棒）を出す。</summary>
     public bool NowPlayingWave { get; set; } = true;
+    /// <summary>標準の形で、曲名・アーティストが入りきらないとき横へスクロールする（オフは「…」で省略）。</summary>
+    public bool NowPlayingScroll { get; set; } = true;
     public NowPlayingProgressStyle NowPlayingProgressStyle { get; set; } = NowPlayingProgressStyle.Wave;
     public NowPlayingWavePlacement NowPlayingWavePlacement { get; set; } = NowPlayingWavePlacement.Right;
     /// <summary>曲のどのあたりかを（下線または輪で）出す。</summary>
     public bool NowPlayingProgress { get; set; } = true;
-    /// <summary>標準の形の曲名・アーティストの最大の幅（px）。超えた分は「…」で省略する。</summary>
+    /// <summary>（廃止: 標準の形は幅 250px 固定で、入りきらない文字はスクロールする。古い設定ファイルのために残す）</summary>
     public int NowPlayingTextWidth { get; set; } = 220;
     /// <summary>タスクビューボタンにカーソルを置くと仮想デスクトップの一覧を表示する。</summary>
     public bool ShowDesktopsOnTaskView { get; set; } = true;
