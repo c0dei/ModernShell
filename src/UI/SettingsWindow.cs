@@ -545,64 +545,152 @@ public sealed class SettingsWindow : Window
         bool on = _s.UseCustomTaskbar;
         p.Children.Add(Section(L.T("タスクバーのウィジェット")));
         if (!on && !_flat) p.Children.Add(Note(L.T("「タスク バー」ページで ModernShell のタスクバーを使うと、ここで選んだウィジェットが並びます。")));
-        Group(p, "", L.T("バーのウィジェット"), L.T("タスクバーの右側に並べる小さなカード。クリックで詳細、右クリックで並べ替え・外す"),
-            BarWidgetCatalog.All.SelectMany(w =>
-            {
-                bool added = _s.BarWidgets.Contains(w.Id);
-                var rows = new List<Border>
-                {
-                    ToggleRow(L.T(w.Title), L.T(w.Description), added,
-                        v => { if (v) { if (!_s.BarWidgets.Contains(w.Id)) _s.BarWidgets.Add(w.Id); } else { _s.BarWidgets.Remove(w.Id); _s.BarWidgetZones.Remove(w.Id); } }, on),
-                    DropDownRow("      " + L.T("表示位置"), "",
-                        new[] { ("Edge", L.T("バーの左端")), ("Left", L.T("スタートボタンの隣")), ("Apps", L.T("アプリの右隣")), ("Tray", L.T("右側（トレイの手前）")), ("End", L.T("バーの右端")) },
-                        _s.BarWidgetZones.GetValueOrDefault(w.Id) ?? "Tray", v => { if (v == "Tray") _s.BarWidgetZones.Remove(w.Id); else _s.BarWidgetZones[w.Id] = v; },
-                        on && added),
-                };
-                // 時計・カレンダーは、クリックで開くものを選べる
-                if (w.Id is "clock" or "calendar")
-                {
-                    bool isClock = w.Id == "clock";
-                    rows.Add(DropDownRow("      " + L.T("クリックで開く"),
-                        L.T("Windows の通知センター: 通知と Windows のカレンダー。アプリのカレンダー: 月のカレンダーと予定（通知は右クリックから開けます）"),
-                        new[] { ("Windows", L.T("Windows の通知センター")), ("App", L.T("アプリのカレンダー")) },
-                        (isClock ? _s.ClockWidgetOpens : _s.CalendarWidgetOpens).ToString(),
-                        v => { var o = Enum.Parse<ClickOpens>(v); if (isClock) _s.ClockWidgetOpens = o; else _s.CalendarWidgetOpens = o; },
-                        on && added));
-                }
-                return rows;
-            }).ToArray());
+        p.Children.Add(Note(L.T("ウィジェットをクリックすると、タスクバーに追加／削除できます。位置はバー上でドラッグして変えられます。")));
+        var wrap = new WrapPanel { Margin = new Thickness(-4, 4, -4, 0), IsEnabled = on, Opacity = on ? 1 : 0.45 };
+        foreach (var w in BarWidgetCatalog.All) wrap.Children.Add(WidgetPreviewCard(w));
+        p.Children.Add(wrap);
 
-        bool np = on && _s.BarWidgets.Contains("nowplaying");
-        Group(p, "", L.T("再生中の曲の見た目"), L.T("バーの「再生中の曲」の表示。縦のバーでは、幅に収まるよう、輪で囲んだサムネイルと小さな波形になります"),
-            DropDownRow(L.T("表示の形"), L.T("標準: サムネイル・曲名・再生ボタン・下線。リング: 再生位置の輪で囲んだ丸いサムネイル（文字なし）"),
-                new[] { ("Standard", L.T("標準")), ("Ring", L.T("リング")) }, _s.NowPlayingStyle.ToString(), v => _s.NowPlayingStyle = Enum.Parse<NowPlayingStyle>(v), np),
-            ToggleRow(L.T("サムネイルを表示"), L.T("曲のジャケットや動画の画像を出します（無いときは音符のアイコン）"), _s.NowPlayingThumbnail, v => _s.NowPlayingThumbnail = v, np),
-            ToggleRow(L.T("再生中の波形"), L.T("再生中だけ動く棒を出します。一時停止中は止まります（サムネイル内のときは消えます）"), _s.NowPlayingWave, v => _s.NowPlayingWave = v, np),
-            DropDownRow(L.T("波形の位置"), L.T("右端: 再生ボタンの左にアクセント色で出します（絵が見分けやすい）。サムネイル内: 暗い膜の上に白い棒を出します（横幅の節約）"),
-                new[] { ("Right", L.T("右端（再生ボタンの左）")), ("Overlay", L.T("サムネイル内")) }, _s.NowPlayingWavePlacement.ToString(), v => _s.NowPlayingWavePlacement = Enum.Parse<NowPlayingWavePlacement>(v),
-                np && _s.NowPlayingWave && _s.NowPlayingStyle == NowPlayingStyle.Standard),
-            ToggleRow(L.T("再生位置を表示"), L.T("曲のどのあたりかを、下線（リングでは輪）で出します。再生中は流れる波線、一時停止中は直線になります。ライブ配信では LIVE と出ます"), _s.NowPlayingProgress, v => _s.NowPlayingProgress = v, np),
-            DropDownRow(L.T("再生位置の線"), L.T("標準の形の下線。波線: 再生済みが波になって流れ、これからは直線（一時停止中は直線）。直線: いつも直線"),
-                new[] { ("Wave", L.T("波線")), ("Line", L.T("直線")) }, _s.NowPlayingProgressStyle.ToString(), v => _s.NowPlayingProgressStyle = Enum.Parse<NowPlayingProgressStyle>(v),
-                np && _s.NowPlayingProgress && _s.NowPlayingStyle == NowPlayingStyle.Standard),
-            NumberRow(L.T("曲名の最大幅"), L.T("標準の形の曲名・アーティストの幅の上限。超えた分は「…」で省略します（ウィジェットの横幅の上限になります）"),
-                80, 400, _s.NowPlayingTextWidth, "px", v => _s.NowPlayingTextWidth = (int)v, np && _s.NowPlayingStyle == NowPlayingStyle.Standard, step: 10, def: 220));
-
-        // 区切り線とスペース: 何個でも足せる。置く場所と並び順は、ウィジェットと同じ（右クリックでも動かせる）
+        // 区切り線とスペース: 何個でも足せる
         var partRows = new List<Border>();
         foreach (var pid in _s.BarWidgets.Where(BarWidgetCatalog.IsPart).ToList())
         {
             var info = BarWidgetCatalog.Find(pid);
             if (info == null) continue;
             string id = pid;
-            partRows.Add(DropDownRow(L.T(info.Title), L.T(info.Description),
-                new[] { ("Edge", L.T("バーの左端")), ("Left", L.T("スタートボタンの隣")), ("Apps", L.T("アプリの右隣")), ("Tray", L.T("右側（トレイの手前）")), ("End", L.T("バーの右端")) },
-                _s.BarWidgetZones.GetValueOrDefault(id) ?? "Tray", v => { if (v == "Tray") _s.BarWidgetZones.Remove(id); else _s.BarWidgetZones[id] = v; }, on));
-            partRows.Add(ButtonRow("      " + L.T("このパーツを削除"), "", L.T("削除"), () => { _s.BarWidgets.Remove(id); _s.BarWidgetZones.Remove(id); _s.Save(); }, enabled: on));
+            partRows.Add(ButtonRow(L.T(info.Title), L.T(info.Description), L.T("削除"), () => { _s.BarWidgets.Remove(id); _s.BarWidgetZones.Remove(id); Commit(); }, enabled: on));
         }
-        partRows.Add(ButtonRow(L.T("区切り線を追加"), L.T("グループのあいだに細い線を入れます"), L.T("追加"), () => { _s.BarWidgets.Add(BarWidgetCatalog.NewPartId("divider")); _s.Save(); }, enabled: on));
-        partRows.Add(ButtonRow(L.T("スペースを追加"), L.T("ウィジェットやボタンのあいだに空きを入れます"), L.T("追加"), () => { _s.BarWidgets.Add(BarWidgetCatalog.NewPartId("spacer")); _s.Save(); }, enabled: on));
-        Group(p, "", L.T("バーのパーツ"), L.T("区切り線とスペースを自由に足して、並びを整えられます"), partRows.ToArray());
+        partRows.Add(ButtonRow(L.T("区切り線を追加"), L.T("グループのあいだに細い線を入れます"), L.T("追加"), () => { _s.BarWidgets.Add(BarWidgetCatalog.NewPartId("divider")); Commit(); }, enabled: on));
+        partRows.Add(ButtonRow(L.T("スペースを追加"), L.T("ウィジェットやボタンのあいだに空きを入れます"), L.T("追加"), () => { _s.BarWidgets.Add(BarWidgetCatalog.NewPartId("spacer")); Commit(); }, enabled: on));
+        Group(p, "", L.T("バーのパーツ"), L.T("区切り線とスペースを足して、並びを整えられます"), partRows.ToArray());
+    }
+
+    /// <summary>ウィジェットの見た目を表す静的な絵（サンプルの値）。実物のウィジェットと同じ寸法・配色にそろえてある。</summary>
+    private FrameworkElement StaticPreview(string id)
+    {
+        TextBlock Txt(string s, double size, Brush? fg = null, FontWeight? fw = null) { var t = UiKit.Label(s, size, fg ?? T.Text, fw ?? FontWeights.SemiBold); t.TextTrimming = TextTrimming.None; return t; }
+        Brush track = new SolidColorBrush(Color.FromArgb(0x40, 0x80, 0x80, 0x80));
+        var green = new SolidColorBrush(Color.FromRgb(0x2E, 0xB8, 0x72));
+        // 円グラフ（実物の Ring と同じ: 太さ 3、中に数字かアイコン）
+        FrameworkElement Ring(double size, Brush color, double pct, string text, string? glyph = null)
+        {
+            var g = new Grid { Width = size, Height = size };
+            g.Children.Add(new Ellipse { Stroke = track, StrokeThickness = 3, Width = size - 3, Height = size - 3 });
+            double r = (size - 3) / 2, c = size / 2, a = Math.Min(359.9, pct / 100 * 360) * Math.PI / 180;
+            var fig = new PathFigure { StartPoint = new Point(c, c - r) };
+            fig.Segments.Add(new ArcSegment(new Point(c + r * Math.Sin(a), c - r * Math.Cos(a)), new Size(r, r), 0, a > Math.PI, SweepDirection.Clockwise, true));
+            g.Children.Add(new System.Windows.Shapes.Path { Data = new PathGeometry(new[] { fig }), Stroke = color, StrokeThickness = 3, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round });
+            if (glyph != null) g.Children.Add(UiKit.Glyph(glyph, size * 0.4, color));
+            else g.Children.Add(Center(Txt(text, 9)));
+            return g;
+        }
+        static FrameworkElement Pad(FrameworkElement e, double left) { e.Margin = new Thickness(left, 0, 0, 0); return e; }
+        static FrameworkElement Center(FrameworkElement e, double bottom = 0) { e.HorizontalAlignment = HorizontalAlignment.Center; e.Margin = new Thickness(0, 0, 0, bottom); return e; }
+        StackPanel Row(params UIElement[] c)
+        {
+            var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            foreach (var x in c) sp.Children.Add(x);
+            return sp;
+        }
+        StackPanel Col(double left, params UIElement[] c)
+        {
+            var sp = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(left, 0, 0, 0) };
+            foreach (var x in c) sp.Children.Add(x);
+            return sp;
+        }
+        // 他のウィジェットと同じ、薄い地と縁のある角丸のカード
+        Border Card(FrameworkElement child, double padX) { child.Margin = new Thickness(padX, 0, padX, 0); return new Border { Height = 38, Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = child }; }
+        FrameworkElement VolBar(double pct, double left)
+        {
+            var fill = new Border { CornerRadius = new CornerRadius(3), Background = T.AccentBrush, VerticalAlignment = VerticalAlignment.Bottom, Height = 22 * pct / 100 };
+            return new Border { Width = 6, Height = 22, CornerRadius = new CornerRadius(3), Background = track, Child = fill, Margin = new Thickness(left, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        }
+        var dim = T.TextSecondary;
+        return id switch
+        {
+            "system" => Card(Row(Ring(26, T.AccentBrush, 23, "23"), Pad(Ring(26, green, 58, "58"), 6)), 8),
+            "network" => Card(Row(UiKit.Glyph("", 18), Pad(Txt("イーサネット", 12), 8)), 10),
+            "netspeed" => Card(Row(
+                Ring(30, new SolidColorBrush(NetSpeedColors.Down), 40, "", NetSpeedColors.DownGlyph), Col(6, Txt("156", 13), Txt("Kbps", 10, dim, FontWeights.Normal)),
+                Pad(Ring(30, new SolidColorBrush(NetSpeedColors.Up), 25, "", NetSpeedColors.UpGlyph), 8), Col(6, Txt("74", 13), Txt("Kbps", 10, dim, FontWeights.Normal))), 10),
+            "volume" => Card(Row(UiKit.Glyph(VolumeGlyph.For(50, false), 16), VolBar(60, 6)), 10),
+            "quicksettings" => Card(Row(UiKit.Glyph("", 17), Pad(UiKit.Glyph(VolumeGlyph.For(50, false), 17), 12), VolBar(60, 8)), 10),
+            "ime" => Card(new Border { Width = 32, Height = 32, CornerRadius = T.Corner(8), Background = T.AccentBrush, Child = Center(Txt("あ", 16, ImeLook.OnAccent(T))) }, 8),
+            "battery" => Row(Ring(28, green, 87, "87"), Pad(UiKit.Glyph("", 10), 4)),
+            "nowplaying" => NowPlayingPreview(track),
+            "weather" => Card(Row(WeatherSymbols.Create(0, true, 30), Col(8, Txt("18°", 13), Txt("横浜市  快晴", 11, dim, FontWeights.Normal))), 8),
+            "calendar" => Card(Row(
+                new Border
+                {
+                    Width = 30, Height = 32, CornerRadius = T.Corner(6), Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center,
+                    Child = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { Center(Txt("月", 8.5, T.AccentBrush), -2), Center(Txt("23", 14)) } },
+                },
+                Col(8, Txt("11月23日(月)", 13), Txt("勤労感謝の日", 11, dim, FontWeights.Normal))), 6),
+            "clock" => Card(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { Center(Txt("12:34", 15)), Center(Txt("11月23日(月)", 12, T.Text, FontWeights.Normal)) } }, 12),
+            "pomodoro" => new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { Center(Txt("Focus 1/4", 10, dim, FontWeights.Normal)), Center(Txt("25:00", 15)) } },
+            _ => Txt(id, 13),
+        };
+    }
+
+    /// <summary>「再生中の曲」の絵: ジャケット・曲名とアーティスト・再生ボタン・再生位置の下線。</summary>
+    private FrameworkElement NowPlayingPreview(Brush track)
+    {
+        var cover = new Border { Width = 28, Height = 28, CornerRadius = T.Corner(6), Background = T.Hover, VerticalAlignment = VerticalAlignment.Center, Child = UiKit.Glyph("", 14, T.TextSecondary) };
+        var title = UiKit.Label("曲名", 13, T.Text, FontWeights.Medium); title.TextTrimming = TextTrimming.None;
+        var artist = UiKit.Label("アーティスト", 11, T.TextSecondary); artist.TextTrimming = TextTrimming.None;
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0), Children = { title, artist } };
+        var play = new Border { Width = 28, Height = 28, CornerRadius = new CornerRadius(14), Background = T.Hover, Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = UiKit.Glyph("", 12) };
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 0, 6, 3), HorizontalAlignment = HorizontalAlignment.Left, Children = { cover, text, play } };
+        var line = new Border { Height = 2, Background = track, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6, 0, 6, 3), CornerRadius = new CornerRadius(1) };
+        line.Child = new Border { Width = 40, Height = 2, HorizontalAlignment = HorizontalAlignment.Left, Background = T.AccentBrush, CornerRadius = new CornerRadius(1) };
+        return new Border { Height = 38, Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = new Grid { Children = { row, line } } };
+    }
+
+    /// <summary>ウィジェットの絵を載せた、クリックで追加／削除するカード。</summary>
+    private Tile WidgetPreviewCard(BarWidgetInfo w)
+    {
+        bool added = _s.BarWidgets.Contains(w.Id);
+        var preview = StaticPreview(w.Id);
+        preview.IsHitTestVisible = false;
+        preview.HorizontalAlignment = HorizontalAlignment.Center;
+        preview.VerticalAlignment = VerticalAlignment.Center;
+
+        var stage = new Border
+        {
+            Height = 64, Background = T.SolidBackground, CornerRadius = T.Corner(6), Margin = new Thickness(0, 0, 0, 8),
+            Child = new Grid { Children = { preview }, ClipToBounds = true }, ClipToBounds = true,
+        };
+        var title = UiKit.Label(L.T(w.Title), 13);
+        title.HorizontalAlignment = HorizontalAlignment.Center;
+        var mark = UiKit.Glyph(added ? "" : "", 12, added ? T.AccentBrush : T.TextSecondary);
+        mark.Margin = new Thickness(0, 0, 6, 0);
+        var line = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+        line.Children.Add(mark);
+        line.Children.Add(title);
+
+        var body = new StackPanel { Margin = new Thickness(10) };
+        body.Children.Add(stage);
+        body.Children.Add(line);
+        var card = new Tile
+        {
+            Width = 236, Margin = new Thickness(4), Child = body, CornerRadius = T.Corner(8), Background = T.Surface,
+            BorderThickness = new Thickness(added ? 2 : 1), BorderBrush = added ? T.AccentBrush : T.Stroke,
+            ToolTip = L.T(w.Description), Tag = L.T(w.Title) + " " + L.T(w.Description),
+        };
+        // Tile は、マウスが離れると背景と枠を透明に戻してしまうので、カードの見た目をここで保つ
+        var normalBorder = card.BorderBrush;
+        void Restore() { card.Background = card.IsMouseOver ? T.Hover : T.Surface; card.BorderBrush = normalBorder; }
+        card.MouseEnter += (_, _) => Restore();
+        card.MouseLeave += (_, _) => Restore();
+        card.MouseLeftButtonDown += (_, _) => Restore();
+        card.GotKeyboardFocus += (_, _) => Restore();
+        card.LostKeyboardFocus += (_, _) => Restore();
+        card.Click += _ =>
+        {
+            if (added) { _s.BarWidgets.Remove(w.Id); _s.BarWidgetZones.Remove(w.Id); }
+            else _s.BarWidgets.Add(w.Id);
+            Commit();
+        };
+        return card;
     }
 
     private void LookPage(StackPanel p)

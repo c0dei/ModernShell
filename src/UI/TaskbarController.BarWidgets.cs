@@ -280,32 +280,7 @@ public sealed partial class TaskbarController
     private IEnumerable<MenuItemSpec> BarWidgetMenu(string id)
     {
         var list = _settings.BarWidgets;
-        string zone = ZoneOf(id);
-        var sameZone = list.Where(x => ZoneOf(x) == zone).ToList();
-        int i = sameZone.IndexOf(id);
-        void Swap(string other)
-        {
-            int a = list.IndexOf(id), b = list.IndexOf(other);
-            (list[a], list[b]) = (list[b], list[a]);
-            _settings.Save();
-        }
-        void Move(string z) { if (z == "Tray") _settings.BarWidgetZones.Remove(id); else _settings.BarWidgetZones[id] = z; _settings.Save(); }
-        var items = new List<MenuItemSpec>
-        {
-            new("\uE8A7", L.T("表示位置"), () => { })
-            {
-                Children = () => new[]
-                {
-                    new MenuItemSpec(zone == "Edge" ? "\uE73E" : "", L.T("バーの左端"), () => Move("Edge")),
-                    new MenuItemSpec(zone == "Left" ? "\uE73E" : "", L.T("スタートボタンの隣"), () => Move("Left")),
-                    new MenuItemSpec(zone == "Apps" ? "\uE73E" : "", L.T("アプリの右隣"), () => Move("Apps")),
-                    new MenuItemSpec(zone == "Tray" ? "\uE73E" : "", L.T("右側（トレイの手前）"), () => Move("Tray")),
-                    new MenuItemSpec(zone == "End" ? "\uE73E" : "", L.T("バーの右端"), () => Move("End")),
-                },
-            },
-        };
-        if (i > 0) items.Add(new("\uE76B", L.T("前へ移動"), () => Swap(sameZone[i - 1])));
-        if (i >= 0 && i < sameZone.Count - 1) items.Add(new("\uE76C", L.T("後ろへ移動"), () => Swap(sameZone[i + 1])));
+        var items = new List<MenuItemSpec>();
         items.Add(new("\uE74D", L.T("バーから外す"), () => { list.Remove(id); _settings.BarWidgetZones.Remove(id); _settings.Save(); }));
         return items;
     }
