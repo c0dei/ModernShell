@@ -18,6 +18,59 @@ using ModernShell.Core;
 namespace ModernShell.UI;
 
 /// <summary>
+/// 閉じる前に動きを挟める Popup。IsOpen=false（外側クリックでの自動クローズを含む）を一度止め、
+/// <see cref="CloseAnimator"/> の動きが終わってから実際に閉じる。
+/// </summary>
+public sealed class FluentPopup : Popup
+{
+    /// <summary>閉じる動き。終わったら引数の done を呼ぶ。null なら即閉じる。</summary>
+    public Action<Action>? CloseAnimator;
+    /// <summary>閉じる動きの途中で開き直されたとき、動きを取り消す。</summary>
+    public Action? CloseCancelled;
+    private bool _closing, _force;
+
+    static FluentPopup()
+    {
+        var baseMeta = IsOpenProperty.GetMetadata(typeof(Popup));
+        var baseCoerce = baseMeta.CoerceValueCallback;
+        IsOpenProperty.OverrideMetadata(typeof(FluentPopup), new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.None, null,
+            (d, v) =>
+            {
+                var value = baseCoerce != null ? baseCoerce(d, v) : v;
+                if (d is FluentPopup p && value is bool b) return p.CoerceOpen(b);
+                return value;
+            }));
+    }
+
+    private object CoerceOpen(bool wantOpen)
+    {
+        if (wantOpen)
+        {
+            if (_closing) { _closing = false; CloseCancelled?.Invoke(); }
+            return true;
+        }
+        if (_force || CloseAnimator == null || !IsOpen) return false;
+        if (_closing) return true; // 動いている最中。終わるまで開いたまま
+        _closing = true;
+        CloseAnimator(() =>
+        {
+            if (!_closing) return; // 開き直されて取り消された
+            _closing = false;
+            _force = true;
+            try
+            {
+                // 外側クリックの自動クローズは SetCurrentValue(false) で来るため、元の値が既に false のことがある。
+                // その場合 CoerceValue だけでは閉じ切らないので、一度 true にしてから false へ確実に変える
+                IsOpen = true;
+                IsOpen = false;
+            }
+            finally { _force = false; }
+        });
+        return true;
+    }
+}
+
+/// <summary>
 /// ポップアップ（メニュー・ドロップダウン一覧）を Windows 11 と同じ見た目にする。
 /// 背景・角丸・枠線は <see cref="SurfacePaint"/> で自分で描く（GPU が無い PC でも同じ見た目）。
 /// </summary>
@@ -35,7 +88,7 @@ public static class FluentSurface
     /// </summary>
     public static Popup Create(UIElement content, UIElement target, PlacementMode placement)
     {
-        var popup = new Popup
+        var popup = new FluentPopup
         {
             AllowsTransparency = true,
             StaysOpen = false,
@@ -194,9 +247,45 @@ public static class FluentSurface
         };
     }
 
+    /// <summary>
+    /// 閉じるときの動き: 開いたときと逆向きに、少しスライドしながらフェードアウトしてから実際に閉じる。
+    /// prop は動かす Popup のオフセット、delta は元の位置からのずらし幅。
+    /// </summary>
+    private static void SetSlideOut(Popup popup, DependencyProperty prop, double delta)
+    {
+        if (popup is not FluentPopup fp) return;
+        fp.CloseAnimator = done =>
+        {
+            double baseOffset = (double)popup.GetValue(prop);
+            var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
+            var slide = new DoubleAnimation(baseOffset, baseOffset + delta, Anim.Ms(140)) { EasingFunction = ease, FillBehavior = FillBehavior.HoldEnd };
+            slide.Completed += (_, _) =>
+            {
+                // 動きを外して元の位置・不透明度へ戻す（次に開くときのため）。閉じるのは最後
+                popup.BeginAnimation(prop, null);
+                popup.SetValue(prop, baseOffset);
+                if (popup.Child is UIElement c) { c.BeginAnimation(UIElement.OpacityProperty, null); c.Opacity = 1; }
+                done();
+            };
+            popup.BeginAnimation(prop, slide);
+            if (popup.Child is UIElement child)
+                child.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, 0, Anim.Ms(120)) { FillBehavior = FillBehavior.HoldEnd });
+        };
+        fp.CloseCancelled = () =>
+        {
+            popup.BeginAnimation(prop, null);
+            if (popup.Child is UIElement c) { c.BeginAnimation(UIElement.OpacityProperty, null); c.Opacity = 1; }
+        };
+    }
+
     /// <summary>タスクバーのある端から、画面の内側へ向かってスライドして現れる。</summary>
     public static void SlideIn(Popup popup, TaskbarEdge edge, double distance = 24)
     {
+        {
+            bool v = edge is TaskbarEdge.Left or TaskbarEdge.Right;
+            SetSlideOut(popup, v ? Popup.HorizontalOffsetProperty : Popup.VerticalOffsetProperty,
+                edge is TaskbarEdge.Bottom or TaskbarEdge.Right ? distance : -distance);
+        }
         popup.Opened += (_, _) =>
         {
             var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
@@ -206,10 +295,20 @@ public static class FluentSurface
             double baseOffset = vertical ? popup.HorizontalOffset : popup.VerticalOffset;
             // 画面の端の側から出てくる: 下のバーなら下から（+）、上なら上から（-）、左なら左から（-）、右なら右から（+）
             double from = edge is TaskbarEdge.Bottom or TaskbarEdge.Right ? distance : -distance;
-            popup.BeginAnimation(prop, new DoubleAnimation(baseOffset + from, baseOffset, Anim.Ms(220))
-                { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
-            if (popup.Child is UIElement child)
-                child.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Anim.Ms(140)));
+            // 中身が重い（天気など）と、開いた直後の最初の描画に時間がかかり、その間にアニメーションが進んでカクつく。
+            // そこで、始まりの位置・透明で止めておき、最初の描画が終わってから動かし始める
+            var child = popup.Child as UIElement;
+            popup.SetValue(prop, baseOffset + from);
+            if (child != null) child.Opacity = 0;
+            popup.Dispatcher.BeginInvoke(() =>
+            {
+                popup.SetValue(prop, baseOffset);
+                if (!popup.IsOpen) { if (child != null) child.Opacity = 1; return; }
+                popup.BeginAnimation(prop, new DoubleAnimation(baseOffset + from, baseOffset, Anim.Ms(220))
+                    { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
+                if (child != null)
+                    child.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Anim.Ms(140)));
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
         };
     }
 
@@ -219,6 +318,7 @@ public static class FluentSurface
     /// </summary>
     public static void SlideIn(Popup popup, bool fromBelow, double distance = 24)
     {
+        SetSlideOut(popup, Popup.VerticalOffsetProperty, fromBelow ? distance : -distance);
         popup.Opened += (_, _) =>
         {
             double baseOffset = popup.VerticalOffset;
