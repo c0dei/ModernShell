@@ -31,6 +31,8 @@ public enum ClockAlign { Left, Center, Right }
 public enum ClockTimeFormat { System, H24, H24Pad, H12, Hidden }
 /// <summary>日付の書式。System: Windows の地域設定（短い日付）に合わせる。</summary>
 public enum ClockDateFormat { System, YearMonthDay, MonthDay, WithWeekday, Hidden }
+/// <summary>時計・カレンダーのウィジェットをクリックしたときに開くもの。</summary>
+public enum ClickOpens { Windows, App }
 /// <summary>タスクバーの背景に重ねる色（Theme: ライト/ダークの色 / Accent: アクセント色 / Custom: 好きな色）。</summary>
 public enum BarTintMode { Theme, Accent, Custom, Wallpaper }
 /// <summary>バーの「再生中の曲」の見た目。Standard = サムネイル・曲名・波形・下線の再生位置 / Ring = 再生位置の輪で囲んだ丸いサムネイル（文字なし）。縦のバーは常に Ring。</summary>
@@ -140,7 +142,7 @@ public sealed class Settings
     public bool AutoHideTaskbar { get; set; } = false;
     /// <summary>タスクバーに並べるウィジェット（ID の並び順がそのまま表示順）。</summary>
     public List<string> BarWidgets { get; set; } = new();
-    /// <summary>ウィジェットごとの表示位置（"Left" = スタートボタンの隣 / "Apps" = アプリの右隣 / 既定 "Tray" = トレイの手前）。</summary>
+    /// <summary>ウィジェットごとの表示位置（"Left" = スタートボタンの隣 / "Apps" = アプリの右隣 / "End" = バーの右端（時計の右）/ 既定 "Tray" = トレイの手前）。</summary>
     public Dictionary<string, string> BarWidgetZones { get; set; } = new();
     /// <summary>バーの角をピル型にする（高さの半分まで丸める）。</summary>
     public bool TaskbarPill { get; set; } = false;
@@ -156,6 +158,10 @@ public sealed class Settings
     public bool ClockDateFirst { get; set; } = false;
     public ClockTimeFormat ClockTimeFormat { get; set; } = ClockTimeFormat.System;
     public ClockDateFormat ClockDateFormat { get; set; } = ClockDateFormat.System;
+    /// <summary>時計のウィジェットをクリックしたときに開くもの（既定: Windows の通知センター）。</summary>
+    public ClickOpens ClockWidgetOpens { get; set; } = ClickOpens.Windows;
+    /// <summary>カレンダーのウィジェットをクリックしたときに開くもの（既定: アプリのカレンダー）。</summary>
+    public ClickOpens CalendarWidgetOpens { get; set; } = ClickOpens.App;
     public bool GroupTaskbarButtons { get; set; } = true;
     public bool ShowTaskbarLabels { get; set; } = false;
     /// <summary>アプリが付ける進捗バーとオーバーレイ アイコン（通知の数など）をボタンに表示する。</summary>

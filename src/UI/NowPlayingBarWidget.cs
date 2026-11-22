@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
@@ -496,7 +497,9 @@ public sealed class NowPlayingBarWidget : BarWidget
         return list.Count == 0 ? null : new NowPlayingDetailsView(list);
     }
 
-    public override IEnumerable<MenuItemSpec> ExtraMenu() => new[]
+    public override IEnumerable<MenuItemSpec> ExtraMenu() => PlayerMenu().Concat(SettingsMenu());
+
+    private IEnumerable<MenuItemSpec> PlayerMenu() => new[]
     {
         MenuItemSpec.Header(_artistText.Length > 0 ? _titleText + " - " + _artistText : _titleText),
         new MenuItemSpec("", L.T("前の曲"), () => { try { _ = _session?.TrySkipPreviousAsync(); } catch { } }),
@@ -504,4 +507,18 @@ public sealed class NowPlayingBarWidget : BarWidget
         new MenuItemSpec("", L.T("次の曲"), () => { try { _ = _session?.TrySkipNextAsync(); } catch { } }),
         MenuItemSpec.Separator,
     };
+
+    /// <summary>右クリックから、このウィジェットの見た目の設定を変える（設定画面を開かなくてよい）。</summary>
+    private static IEnumerable<MenuItemSpec> SettingsMenu()
+    {
+        var s = Settings.Current ?? new Settings();
+        return new[]
+        {
+            WidgetSettingsMenu.Choice("", L.T("表示の形"), s.NowPlayingStyle, new[] { (NowPlayingStyle.Standard, L.T("標準")), (NowPlayingStyle.Ring, L.T("リング")) }, (c, v) => c.NowPlayingStyle = v),
+            WidgetSettingsMenu.Toggle(L.T("サムネイルを表示"), s.NowPlayingThumbnail, (c, v) => c.NowPlayingThumbnail = v),
+            WidgetSettingsMenu.Toggle(L.T("再生中の波形"), s.NowPlayingWave, (c, v) => c.NowPlayingWave = v),
+            WidgetSettingsMenu.Toggle(L.T("再生位置を表示"), s.NowPlayingProgress, (c, v) => c.NowPlayingProgress = v),
+            MenuItemSpec.Separator,
+        };
+    }
 }

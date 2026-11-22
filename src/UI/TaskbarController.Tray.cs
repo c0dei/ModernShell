@@ -77,6 +77,7 @@ public sealed partial class TaskbarController
         quick.Click += x => { TakeForeground(x); SystemActions.QuickSettings(); };
         if (_settings.ShowImeIndicator) p.Children.Add(ImeTile());
         p.Children.Add(quick);
+        _trayTailEl = quick;
 
         MeasureClock();
         _time = UiKit.Label("", 12);
@@ -104,7 +105,8 @@ public sealed partial class TaskbarController
         };
         if (Vertical) clock.Width = TileH; else clock.Height = TileH;
         clock.Click += x => { TakeForeground(x); SystemActions.NotificationCenter(); };
-        p.Children.Add(clock);
+        if (!_settings.BarWidgets.Contains("clock")) p.Children.Add(clock); // 時計のウィジェットがオンなら、そちらを使う
+        if (_barHosts.TryGetValue("End", out var endWidgets)) p.Children.Add(endWidgets); // バーの右端（時計よりも右）
         return p;
     }
 

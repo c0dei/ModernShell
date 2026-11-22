@@ -14,8 +14,10 @@ public sealed partial class TaskbarController
 
     private readonly Dictionary<string, FrameworkElement> _barHosts = new();
     private readonly Dictionary<string, LiveReorder> _widgetReorders = new();
+    /// <summary>トレイの右の端にあるクイック設定のボタン（これより右へ落とすと「バーの右端」）。</summary>
+    private FrameworkElement? _trayTailEl;
 
-    private string ZoneOf(string id) => _settings.BarWidgetZones.TryGetValue(id, out var z) && z is "Left" or "Edge" or "Apps" ? z : "Tray";
+    private string ZoneOf(string id) => _settings.BarWidgetZones.TryGetValue(id, out var z) && z is "Left" or "Edge" or "Apps" or "End" ? z : "Tray";
 
     /// <summary>設定の並び順で、位置（Left / Apps / Tray）ごとのウィジェットの入れ物を作る。</summary>
     private void BuildBarWidgetHosts()
@@ -121,7 +123,7 @@ public sealed partial class TaskbarController
         double size = Vertical ? item.ActualHeight + item.Margin.Top + item.Margin.Bottom : item.ActualWidth + item.Margin.Left + item.Margin.Right;
         foreach (var (z, r) in _widgetReorders)
         {
-            if (z == target) r.ShowGap(index, size, shiftBefore: z == "Tray"); // トレイ側は右寄せ: 前を左へずらして、右のトレイにはみ出さないようにする
+            if (z == target) r.ShowGap(index, size, shiftBefore: z is "Tray" or "End"); // トレイ側は右寄せ: 前を左へずらして、右のトレイにはみ出さないようにする
             else r.ClearGap();
         }
     }
@@ -133,7 +135,7 @@ public sealed partial class TaskbarController
     {
         target = ""; index = 0; others = new List<string>();
         string? found = null;
-        foreach (var z in new[] { "Edge", "Left", "Apps", "Tray" })
+        foreach (var z in new[] { "Edge", "Left", "Apps", "End", "Tray" })
             if (_barHosts.TryGetValue(z, out var h) && ScreenRect(h) is { IsEmpty: false } r && r.Contains(screen)) { found = z; break; }
         if (found == null)
         {
@@ -143,7 +145,12 @@ public sealed partial class TaskbarController
             double a(Point p) => Vertical ? p.Y : p.X;
             if (!start.IsEmpty && start.Contains(screen)) found = "Left";
             else if (!apps.IsEmpty && apps.Contains(screen)) found = "Apps";
-            else if (!tray.IsEmpty && tray.Contains(screen)) found = "Tray";
+            else if (!tray.IsEmpty && tray.Contains(screen))
+            {
+                // クイック設定（と時計）より先へ落とすと「右端」、それより手前なら「トレイの手前」
+                var tail = _trayTailEl != null ? ScreenRect(_trayTailEl) : Rect.Empty;
+                found = !tail.IsEmpty && a(screen) >= (Vertical ? tail.Top : tail.Left) ? "End" : "Tray";
+            }
             else if (!start.IsEmpty && a(screen) < (Vertical ? start.Top : start.Left)) found = "Edge";
             else
             {
@@ -231,6 +238,7 @@ public sealed partial class TaskbarController
                     new MenuItemSpec(zone == "Left" ? "\uE73E" : "", L.T("スタートボタンの隣"), () => Move("Left")),
                     new MenuItemSpec(zone == "Apps" ? "\uE73E" : "", L.T("アプリの右隣"), () => Move("Apps")),
                     new MenuItemSpec(zone == "Tray" ? "\uE73E" : "", L.T("右側（トレイの手前）"), () => Move("Tray")),
+                    new MenuItemSpec(zone == "End" ? "\uE73E" : "", L.T("バーの右端"), () => Move("End")),
                 },
             },
         };

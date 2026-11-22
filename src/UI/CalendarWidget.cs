@@ -88,7 +88,14 @@ public sealed class CalendarBarWidget : BarWidget
         if (Card != null) Card.ToolTip = _title.Text + "\n" + line2;
     }
 
-    public override FrameworkElement? BuildDetailsView() => new CalendarDetailsView();
+    private static ClickOpens Opens => (Settings.Current ?? new Settings()).CalendarWidgetOpens;
+
+    public override bool OnClick() => ClickTarget.OpenWindowsIfChosen(Opens, Outer);
+
+    public override FrameworkElement? BuildDetailsView() => Opens == ClickOpens.App ? new CalendarDetailsView() : null;
+
+    public override IEnumerable<MenuItemSpec> ExtraMenu() =>
+        ClickTarget.Menu(Opens, v => { if (Settings.Current is { } s) { s.CalendarWidgetOpens = v; s.Save(); } }, Outer);
 }
 
 // ---------------------------------------------------------------------------

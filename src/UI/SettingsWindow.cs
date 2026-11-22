@@ -547,14 +547,30 @@ public sealed class SettingsWindow : Window
         p.Children.Add(Section(L.T("タスクバーのウィジェット")));
         if (!on && !_flat) p.Children.Add(Note(L.T("「タスク バー」ページで ModernShell のタスクバーを使うと、ここで選んだウィジェットが並びます。")));
         Group(p, "", L.T("バーのウィジェット"), L.T("タスクバーの右側に並べる小さなカード。クリックで詳細、右クリックで並べ替え・外す"),
-            BarWidgetCatalog.All.SelectMany(w => new[]
+            BarWidgetCatalog.All.SelectMany(w =>
             {
-                ToggleRow(L.T(w.Title), L.T(w.Description), _s.BarWidgets.Contains(w.Id),
-                    v => { if (v) { if (!_s.BarWidgets.Contains(w.Id)) _s.BarWidgets.Add(w.Id); } else { _s.BarWidgets.Remove(w.Id); _s.BarWidgetZones.Remove(w.Id); } }, on),
-                DropDownRow("      " + L.T("表示位置"), "",
-                    new[] { ("Edge", L.T("バーの左端")), ("Left", L.T("スタートボタンの隣")), ("Apps", L.T("アプリの右隣")), ("Tray", L.T("右側（トレイの手前）")) },
-                    _s.BarWidgetZones.GetValueOrDefault(w.Id) ?? "Tray", v => { if (v == "Tray") _s.BarWidgetZones.Remove(w.Id); else _s.BarWidgetZones[w.Id] = v; },
-                    on && _s.BarWidgets.Contains(w.Id)),
+                bool added = _s.BarWidgets.Contains(w.Id);
+                var rows = new List<Border>
+                {
+                    ToggleRow(L.T(w.Title), L.T(w.Description), added,
+                        v => { if (v) { if (!_s.BarWidgets.Contains(w.Id)) _s.BarWidgets.Add(w.Id); } else { _s.BarWidgets.Remove(w.Id); _s.BarWidgetZones.Remove(w.Id); } }, on),
+                    DropDownRow("      " + L.T("表示位置"), "",
+                        new[] { ("Edge", L.T("バーの左端")), ("Left", L.T("スタートボタンの隣")), ("Apps", L.T("アプリの右隣")), ("Tray", L.T("右側（トレイの手前）")), ("End", L.T("バーの右端")) },
+                        _s.BarWidgetZones.GetValueOrDefault(w.Id) ?? "Tray", v => { if (v == "Tray") _s.BarWidgetZones.Remove(w.Id); else _s.BarWidgetZones[w.Id] = v; },
+                        on && added),
+                };
+                // 時計・カレンダーは、クリックで開くものを選べる
+                if (w.Id is "clock" or "calendar")
+                {
+                    bool isClock = w.Id == "clock";
+                    rows.Add(DropDownRow("      " + L.T("クリックで開く"),
+                        L.T("Windows の通知センター: 通知と Windows のカレンダー。アプリのカレンダー: 月のカレンダーと予定（通知は右クリックから開けます）"),
+                        new[] { ("Windows", L.T("Windows の通知センター")), ("App", L.T("アプリのカレンダー")) },
+                        (isClock ? _s.ClockWidgetOpens : _s.CalendarWidgetOpens).ToString(),
+                        v => { var o = Enum.Parse<ClickOpens>(v); if (isClock) _s.ClockWidgetOpens = o; else _s.CalendarWidgetOpens = o; },
+                        on && added));
+                }
+                return rows;
             }).ToArray());
 
         bool np = on && _s.BarWidgets.Contains("nowplaying");
@@ -581,7 +597,7 @@ public sealed class SettingsWindow : Window
             if (info == null) continue;
             string id = pid;
             partRows.Add(DropDownRow(L.T(info.Title), L.T(info.Description),
-                new[] { ("Edge", L.T("バーの左端")), ("Left", L.T("スタートボタンの隣")), ("Apps", L.T("アプリの右隣")), ("Tray", L.T("右側（トレイの手前）")) },
+                new[] { ("Edge", L.T("バーの左端")), ("Left", L.T("スタートボタンの隣")), ("Apps", L.T("アプリの右隣")), ("Tray", L.T("右側（トレイの手前）")), ("End", L.T("バーの右端")) },
                 _s.BarWidgetZones.GetValueOrDefault(id) ?? "Tray", v => { if (v == "Tray") _s.BarWidgetZones.Remove(id); else _s.BarWidgetZones[id] = v; }, on));
             partRows.Add(ButtonRow("      " + L.T("このパーツを削除"), "", L.T("削除"), () => { _s.BarWidgets.Remove(id); _s.BarWidgetZones.Remove(id); _s.Save(); }, enabled: on));
         }
