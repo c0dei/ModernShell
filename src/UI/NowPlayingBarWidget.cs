@@ -37,11 +37,12 @@ public sealed class NowPlayingBarWidget : BarWidget
     private TextBlock? _title, _artist;
     private WMC.GlobalSystemMediaTransportControlsSession? _session;
     private string _titleText = "", _artistText = "", _trackKey = "", _lastLogged = "";
-    private bool _playing, _busy, _live;
+    private bool _playing, _busy, _live, _again;
     private bool _showThumb = true, _showProgress = true, _singleLine, _coverLoaded, _coverLoading;
     private double _ringPct = -1;
     private TimeSpan _start, _end, _pos0;
     private DateTimeOffset _posAt;
+    private string _goodKey = ""; // 長さが取れていた曲（title|artist）。シーク中の一時的な「長さなし」を無視するのに使う
     private DispatcherTimer? _anim;
     private double _phase;
     // 棒 3 本の動き。ゆっくり（約 0.4〜0.6 回/秒）・位相をずらして、落ち着いた見た目にする
@@ -253,26 +254,68 @@ public sealed class NowPlayingBarWidget : BarWidget
 
         // バーを作り直すと古いウィジェットは捨てられる。波形のタイマーが残らないよう、画面から外れたら止める
         root.Loaded += (_, _) => ApplyPlaying();
-        root.Unloaded += (_, _) => _anim?.Stop();
+        root.Unloaded += (_, _) => { _anim?.Stop(); Unsubscribe(true); };
         SetVisible(false);
         _ = RefreshAsync();
         return result;
     }
 
+    // OS からのイベントで更新する（ポーリングは、イベントを出さないブラウザーへの保険）
+    private WMC.GlobalSystemMediaTransportControlsSession? _subscribed;
+    private bool _managerHooked;
+
+    private void OnOsEvent()
+    {
+        try { Application.Current?.Dispatcher.BeginInvoke(new Action(() => _ = RefreshAsync())); } catch { }
+    }
+
+    private void Subscribe(WMC.GlobalSystemMediaTransportControlsSession? s)
+    {
+        if (!_managerHooked) { _managerHooked = true; MediaControl.SessionsChanged += OnOsEvent; }
+        if (ReferenceEquals(s, _subscribed)) return;
+        Unsubscribe(false);
+        _subscribed = s;
+        if (s == null) return;
+        try
+        {
+            s.TimelinePropertiesChanged += OnSessionEvent;
+            s.PlaybackInfoChanged += OnSessionEvent;
+            s.MediaPropertiesChanged += OnSessionEvent;
+        }
+        catch (Exception ex) { Log.Error("now playing subscribe", ex); }
+    }
+
+    private void OnSessionEvent(WMC.GlobalSystemMediaTransportControlsSession sender, object args) => OnOsEvent();
+
+    private void Unsubscribe(bool manager)
+    {
+        if (manager && _managerHooked) { MediaControl.SessionsChanged -= OnOsEvent; _managerHooked = false; }
+        var s = _subscribed; _subscribed = null;
+        if (s == null) return;
+        try
+        {
+            s.TimelinePropertiesChanged -= OnSessionEvent;
+            s.PlaybackInfoChanged -= OnSessionEvent;
+            s.MediaPropertiesChanged -= OnSessionEvent;
+        }
+        catch { }
+    }
+
     public override void Tick(int count)
     {
-        if (count % 2 == 0) _ = RefreshAsync();
+        if (count % 5 == 0) _ = RefreshAsync();
         UpdateProgress();
     }
 
     private async System.Threading.Tasks.Task RefreshAsync()
     {
-        if (_busy) return;
+        if (_busy) { _again = true; return; } // 処理中にイベントが来たら、終わった後にもう一度
         _busy = true;
         try
         {
             await MediaControl.EnsureAsync();
             _session = MediaControl.Pick(); // 再生中のものを優先
+            Subscribe(_session);
             string title = "", artist = "";
             bool playing = false;
             if (_session != null)
@@ -282,8 +325,18 @@ public sealed class NowPlayingBarWidget : BarWidget
                 artist = props?.Artist ?? "";
                 playing = MediaControl.IsPlaying(_session);
                 var tl = _session.GetTimelineProperties();
-                _start = tl.StartTime; _end = tl.EndTime; _pos0 = tl.Position; _posAt = tl.LastUpdatedTime;
                 string key = title + "|" + artist;
+                // ブラウザーで再生位置をドラッグ（シーク）している間などは、長さが一時的に 0 で報告される。
+                // 同じ曲で、直前まで長さが取れていたなら、その値を保ち、位置は経過時間で進め続ける（グレーの状態にしない）
+                if (MediaControl.HasNoDuration(tl.StartTime, tl.EndTime) && key == _goodKey && _goodKey.Length > 1)
+                {
+                    // _start/_end/_pos0/_posAt は更新しない
+                }
+                else
+                {
+                    _start = tl.StartTime; _end = tl.EndTime; _pos0 = tl.Position; _posAt = tl.LastUpdatedTime;
+                    if (!MediaControl.HasNoDuration(_start, _end)) _goodKey = key; else if (key != _goodKey) _goodKey = "";
+                }
                 if (props != null)
                 {
                     if (key != _trackKey) { _trackKey = key; _coverLoaded = false; if (_showThumb) ShowNote(); } // 曲が変わったら、前の曲のサムネイルを残さない
@@ -312,7 +365,7 @@ public sealed class NowPlayingBarWidget : BarWidget
             UpdateProgress();
         }
         catch (Exception ex) { Log.Error("now playing", ex); SetVisible(false); }
-        finally { _busy = false; }
+        finally { _busy = false; if (_again) { _again = false; _ = RefreshAsync(); } }
     }
 
     /// <summary>曲が変わったとき: サムネイルを読み直す（読めなければ音符に戻す）。</summary>

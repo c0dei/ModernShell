@@ -22,9 +22,17 @@ internal static class MediaControl
 
     private static async Task InitAsync()
     {
-        try { _manager = await WMC.GlobalSystemMediaTransportControlsSessionManager.RequestAsync(); }
+        try
+        {
+            _manager = await WMC.GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+            _manager.CurrentSessionChanged += (_, _) => SessionsChanged?.Invoke();
+            _manager.SessionsChanged += (_, _) => SessionsChanged?.Invoke();
+        }
         catch (Exception ex) { Log.Error("media manager", ex); _init = null; }
     }
+
+    /// <summary>セッションの増減・「現在」の切り替わり（OS から届く。呼ばれるスレッドは UI とは限らない）。</summary>
+    public static event Action? SessionsChanged;
 
     /// <summary>いま Windows が「メイン」としているセッション。</summary>
     public static WMC.GlobalSystemMediaTransportControlsSession? Current
