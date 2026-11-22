@@ -395,7 +395,7 @@ public sealed class SettingsWindow : Window
         Group(p, "", L.T("ボタン"), L.T("タスクバーに並べるもの"),
             ToggleRow(L.T("タスクバーを自動的に隠す"), L.T("使わないときは画面の外に隠し、画面の端（タスクバーのある側）にカーソルを当てると出します。作業領域は確保しません"), _s.AutoHideTaskbar, v => _s.AutoHideTaskbar = v, on),
             ToggleRow(L.T("隠している間、画面の端に細い線を残す"), L.T("線の区切りは開いているアプリです。前面のアプリはアクセント色。カーソルを端に当てるとバーが出ます。全画面のアプリの間は出しません"), _s.AutoHideHairline, v => _s.AutoHideHairline = v, on && _s.AutoHideTaskbar),
-            ToggleRow(L.T("複数のモニターにタスクバーを表示"), L.T("メイン以外のモニターにもタスクバーを出し、そのモニターにあるウィンドウのボタンだけを並べます（時計付き）。メインのモニターには、メインにあるウィンドウだけが出ます"), _s.MultiMonitorTaskbar, v => _s.MultiMonitorTaskbar = v, on),
+            ToggleRow(L.T("複数のモニターにタスクバーを表示"), L.T("メイン以外のモニターにもタスクバーを出し、起動中のアプリのボタンをすべてのモニターに並べます（時計付き）"), _s.MultiMonitorTaskbar, v => _s.MultiMonitorTaskbar = v, on),
             ToggleRow(L.T("検索ボタンを表示"), "", _s.ShowSearchButton, v => _s.ShowSearchButton = v, on),
             ToggleRow(L.T("タスク ビュー ボタンを表示"), "", _s.ShowTaskViewButton, v => _s.ShowTaskViewButton = v, on),
             ToggleRow(L.T("同じアプリのボタンをまとめる"), L.T("複数のウィンドウは一覧で選べます"), _s.GroupTaskbarButtons, v => _s.GroupTaskbarButtons = v, on),
@@ -408,16 +408,6 @@ public sealed class SettingsWindow : Window
             ToggleRow(L.T("両隣のアイコンも拡大"), L.T("Mac のドックのように、カーソルの下を最大に、両隣も距離に応じてなめらかに拡大します。オフのときは、カーソルの下のアイコンだけ"),
                 _s.MagnifyNeighbors, v => _s.MagnifyNeighbors = v, on && _s.MagnifyOnHover),
             ToggleRow(L.T("時計に秒を表示"), "", _s.ShowSeconds, v => _s.ShowSeconds = v, on));
-
-        Group(p, "", L.T("時計"), L.T("右端の日時の表示（縦のバーでは、幅に合わせて自動で短くします）"),
-            DropDownRow(L.T("文字の揃え"), "", new[] { ("Left", L.T("左揃え")), ("Center", L.T("中央揃え")), ("Right", L.T("右揃え")) },
-                _s.ClockAlign.ToString(), v => _s.ClockAlign = Enum.Parse<ClockAlign>(v), on && !vertical),
-            DropDownRow(L.T("時刻の形式"), L.T("「システム」は、Windows の地域設定（設定 → 時刻と言語 → 日付と時刻）の短い時刻の形です"),
-                new[] { ("System", L.T("システムに合わせる")), ("H24", L.T("24 時間（9:05）")), ("H24Pad", L.T("24 時間（09:05）")), ("H12", L.T("12 時間（午前/午後）")), ("Hidden", L.T("表示しない")) },
-                _s.ClockTimeFormat.ToString(), v => _s.ClockTimeFormat = Enum.Parse<ClockTimeFormat>(v), on && !vertical),
-            DropDownRow(L.T("日付の形式"), L.T("「システム」は、Windows の地域設定の短い日付の形です"),
-                new[] { ("System", L.T("システムに合わせる")), ("YearMonthDay", "2026/11/16"), ("MonthDay", "11/16"), ("WithWeekday", L.T("11月16日 (月)")), ("Hidden", L.T("表示しない")) },
-                _s.ClockDateFormat.ToString(), v => _s.ClockDateFormat = Enum.Parse<ClockDateFormat>(v), on && !vertical));
 
         p.Children.Add(Section(L.T("ポップアップ")));
         Group(p, "", L.T("プレビュー"), L.T("カーソルを置いたときに出る一覧"),

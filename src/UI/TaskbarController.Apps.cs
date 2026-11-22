@@ -119,9 +119,8 @@ public sealed partial class TaskbarController
         if (_apps == null) return;
         // メニューを開いている間に作り直すと、メニューの基準のボタンが消えて画面左上に飛んでしまうので後回しにする
         if (FluentSurface.AnyOpen) { Kick(_appsDebounce); return; }
-        // 複数モニター表示のときは、メインのモニターにあるウィンドウだけ（ほかはそのモニターのバーに出す）
-        var windows = MultiMonitorActive ? TaskWindows().Where(w => ScreenNameOf(w) == PrimaryScreenName) : TaskWindows();
-        var groups = BuildGroups(windows, withPins: true);
+        // 複数モニター表示のときも、起動中のアプリはすべてのモニターのバーに出す
+        var groups = BuildGroups(TaskWindows(), withPins: true);
 
         foreach (var g in groups.Where(x => x.Pinned == null && !_order.Contains(x.Key))) _order.Add(g.Key);
         _order.RemoveAll(k => groups.All(g => g.Key != k));

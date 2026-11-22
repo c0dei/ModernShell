@@ -14,7 +14,7 @@ namespace ModernShell.UI;
 
 /// <summary>
 /// 複数モニター: メイン以外のモニターにも（簡易の）タスクバーを出す。
-/// そのモニターにあるウィンドウのボタンだけを並べ、右端に時計を置く。メインのモニターのタスクバーにも、メインのモニターにあるウィンドウだけを出す。
+/// 起動中のアプリのボタンはメインと同じようにすべて並べ、右端に時計を置く。
 /// 設定「複数のモニターにタスクバーを表示」がオンで、モニターが 2 つ以上のときだけ動く。
 /// </summary>
 public sealed partial class TaskbarController
@@ -30,8 +30,6 @@ public sealed partial class TaskbarController
     }
 
     private readonly List<SecondaryBar> _secondaries = new();
-    private DispatcherTimer? _monitorWatch;
-    private string _windowScreens = "";
 
     /// <summary>複数モニター表示が有効か（設定がオンで、モニターが 2 つ以上）。</summary>
     private bool MultiMonitorActive => _settings.MultiMonitorTaskbar && Forms.Screen.AllScreens.Length > 1;
@@ -111,15 +109,12 @@ public sealed partial class TaskbarController
             Log.Info($"secondary bar: {name} {BoundsOf(name).Left},{BoundsOf(name).Top} scale={ScaleOf(name)}");
         }
 
-        _monitorWatch ??= new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => WatchWindowMonitors(), _dispatcher);
-        _monitorWatch.Start();
         RebuildSecondaryApps();
         UpdateSecondaryClocks(DateTime.Now);
     }
 
     private void DisposeSecondaries()
     {
-        _monitorWatch?.Stop();
         foreach (var s in _secondaries)
         {
             try { s.Magnify?.Dispose(); } catch { }
@@ -127,7 +122,6 @@ public sealed partial class TaskbarController
             try { s.Reservation.Dispose(); } catch { }
         }
         _secondaries.Clear();
-        _windowScreens = "";
     }
 
     private void ArrangeSecondary(SecondaryBar bar)
@@ -146,12 +140,16 @@ public sealed partial class TaskbarController
             bar.Apps.Children.Clear();
             bar.Magnify?.Dispose();
             _currentMag = bar.Magnify = NewMagnify(bar.Apps);
-            var groups = BuildGroups(TaskWindows().Where(w => ScreenNameOf(w) == bar.Screen), withPins: false);
-            foreach (var g in groups.Where(x => !_order.Contains(x.Key))) _order.Add(g.Key);
-            foreach (var g in groups.OrderBy(x => _order.IndexOf(x.Key)))
+            // メインと同じ並び: ピン留め（ピン留めの順）→ そうでないもの（_order の順）
+            var groups = BuildGroups(TaskWindows(), withPins: true);
+            foreach (var g in groups.Where(x => x.Pinned == null && !_order.Contains(x.Key))) _order.Add(g.Key);
+            // 起動していないピン留めはサブには出さない
+            var ordered = groups.Where(g => g.Pinned != null && g.Windows.Count > 0)
+                .Concat(groups.Where(g => g.Pinned == null).OrderBy(g => _order.IndexOf(g.Key)));
+            foreach (var g in ordered)
             {
                 var tile = AppButton(g);
-                foreach (var w in g.Windows) _buttonFor[w.Handle] = tile;
+                foreach (var w in g.Windows) _buttonFor.TryAdd(w.Handle, tile);
                 bar.Apps.Children.Add(tile);
             }
             bar.Apps.Visibility = bar.Apps.Children.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
@@ -166,17 +164,6 @@ public sealed partial class TaskbarController
             bar.Time.Text = ClockStacked ? now.Hour + "\n" + now.ToString("mm") : Vertical ? now.ToString("H:mm") : FormatTime(now);
             bar.Date.Text = Vertical ? now.ToString("M/d", L.Culture) : FormatDate(now);
         }
-    }
-
-    /// <summary>ウィンドウが別のモニターへ動いたら、ボタンを付け替える（動いたことを知らせるイベントが無いので、1 秒ごとに確かめる）。</summary>
-    private void WatchWindowMonitors()
-    {
-        if (_disposed || !MultiMonitorActive) return;
-        var sig = string.Join(",", TaskWindows().Select(w => w.Handle.ToString("X") + ScreenNameOf(w)));
-        if (sig == _windowScreens) return;
-        bool first = _windowScreens == "";
-        _windowScreens = sig;
-        if (!first) Kick(_appsDebounce);
     }
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e) => _dispatcher.BeginInvoke(() =>
