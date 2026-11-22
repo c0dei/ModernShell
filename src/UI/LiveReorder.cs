@@ -99,11 +99,16 @@ public sealed class LiveReorder
         return v;
     }
 
-    public void Add(FrameworkElement item)
+    /// <param name="canStart">押した場所からドラッグを始めてよいか（中に、自分でドラッグを扱う子要素があるとき、その上では始めない）。</param>
+    public void Add(FrameworkElement item, Func<MouseButtonEventArgs, bool>? canStart = null)
     {
         _items.Add(item);
         item.RenderTransform = new TranslateTransform();
-        item.PreviewMouseLeftButtonDown += (_, e) => { _pending = item; _start = e.GetPosition(_panel); _justDragged = false; };
+        item.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (canStart != null && !canStart(e)) { _pending = null; return; }
+            _pending = item; _start = e.GetPosition(_panel); _justDragged = false;
+        };
         item.PreviewMouseMove += (_, e) =>
         {
             if (_drag == item) { Move(e); return; }

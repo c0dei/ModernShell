@@ -611,6 +611,7 @@ public sealed class SettingsWindow : Window
                 Ring(30, new SolidColorBrush(NetSpeedColors.Down), 40, "", NetSpeedColors.DownGlyph), Col(6, Txt("156", 13), Txt("Kbps", 10, dim, FontWeights.Normal)),
                 Pad(Ring(30, new SolidColorBrush(NetSpeedColors.Up), 25, "", NetSpeedColors.UpGlyph), 8), Col(6, Txt("74", 13), Txt("Kbps", 10, dim, FontWeights.Normal))), 10),
             "volume" => Card(Row(UiKit.Glyph(VolumeGlyph.For(50, false), 16), VolBar(60, 6)), 10),
+            "tray" => Card(Row(UiKit.Glyph("", 12), Pad(UiKit.Glyph("", 16), 10), Pad(UiKit.Glyph("", 16), 10), Pad(UiKit.Glyph("", 16), 10)), 10),
             "quicksettings" => Card(Row(UiKit.Glyph("", 17), Pad(UiKit.Glyph(VolumeGlyph.For(50, false), 17), 12), VolBar(60, 8)), 10),
             "ime" => Card(new Border { Width = 32, Height = 32, CornerRadius = T.Corner(8), Background = T.AccentBrush, Child = Center(Txt("あ", 16, ImeLook.OnAccent(T))) }, 8),
             "battery" => Row(Ring(28, green, 87, "87"), Pad(UiKit.Glyph("", 10), 4)),

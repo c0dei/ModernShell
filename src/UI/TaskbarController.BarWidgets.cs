@@ -25,6 +25,7 @@ public sealed partial class TaskbarController
     {
         _barWidgets.Clear();
         _barHosts.Clear();
+        _trayIcons = null; _overflowButton = null; // トレイのウィジェットがオフなら、作られない（前のレイアウトの要素を触らないように）
         // 同じ位置（ゾーン）のウィジェットは、アプリのボタンと同じようにドラッグで並べ替えられる
         var reorders = _widgetReorders;
         reorders.Clear();
@@ -35,19 +36,33 @@ public sealed partial class TaskbarController
             if (info == null) continue;
             try
             {
-                var w = info.Create();
-                var card = w.Build(Vertical, TileH);
-                var tile = new Tile { Child = card, Margin = Gap, Padding = new Thickness(0), Tag = id };
-                w.Outer = tile;
-                // ポップアップ（詳細・メニュー）を開いている間は、そのウィジェットの枠を強調する
-                tile.Click += x =>
+                BarWidget? w = null;
+                FrameworkElement tile;
+                Func<System.Windows.Input.MouseButtonEventArgs, bool>? canStart = null;
+                if (id == "tray")
                 {
-                    if (w.OnClick()) { if (w.OpensSystemPanel) HighlightSystemPanel(tile); return; }
-                    if (w.BuildDetailsView() is { } view) { Highlight(tile, ShowBarPopup(x, view)); return; }
-                    var details = w.Details().ToList();
-                    if (details.Count > 0) Highlight(tile, ShowIconMenuPopup(x, details));
-                };
-                tile.RightClick += x => Highlight(tile, ShowIconMenuPopup(x, w.ExtraMenu().Concat(BarWidgetMenu(id)).ToList()));
+                    // トレイは、アイコン自身がクリックやドラッグを扱うので、カードで包まない。
+                    // 「^」と余白からは、ウィジェットごと動かせる（アイコンの上は、アイコンの並べ替え）
+                    tile = TrayWidgetElement();
+                    canStart = e => e.OriginalSource is not DependencyObject d || _trayIcons == null || !IsInside(d, _trayIcons);
+                }
+                else
+                {
+                    w = info.Create();
+                    var card = w.Build(Vertical, TileH);
+                    var t = new Tile { Child = card, Margin = Gap, Padding = new Thickness(0), Tag = id };
+                    tile = t;
+                    w.Outer = t;
+                    // ポップアップ（詳細・メニュー）を開いている間は、そのウィジェットの枠を強調する
+                    t.Click += x =>
+                    {
+                        if (w.OnClick()) { if (w.OpensSystemPanel) HighlightSystemPanel(t); return; }
+                        if (w.BuildDetailsView() is { } view) { Highlight(t, ShowBarPopup(x, view)); return; }
+                        var details = w.Details().ToList();
+                        if (details.Count > 0) Highlight(t, ShowIconMenuPopup(x, details));
+                    };
+                    t.RightClick += x => Highlight(t, ShowIconMenuPopup(x, w.ExtraMenu().Concat(BarWidgetMenu(id)).ToList()));
+                }
                 string zone = ZoneOf(id);
                 if (!_barHosts.TryGetValue(zone, out var host))
                     _barHosts[zone] = host = new System.Windows.Controls.StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
@@ -63,8 +78,8 @@ public sealed partial class TaskbarController
                     };
                 }
                 zoneIds[zone].Add(id);
-                reorder.Add(tile);
-                _barWidgets.Add(w);
+                reorder.Add(tile, canStart);
+                if (w != null) _barWidgets.Add(w);
             }
             catch (Exception ex) { Log.Error("bar widget " + id, ex); }
         }

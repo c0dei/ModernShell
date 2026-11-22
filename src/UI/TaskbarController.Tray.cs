@@ -27,9 +27,14 @@ public sealed partial class TaskbarController
     // ------------------------------------------------------------------
     // 右側（トレイアイコン / クイック設定 / 時計）
 
-    private StackPanel TrayGroup(Theme t)
+    /// <summary>トレイアイコンのウィジェットの中身: 「^」ボタンと、常に表示するアイコン。アイコンの扱い（ドラッグ・ピン留め・アプリへの転送）は今までどおり。</summary>
+    private FrameworkElement TrayWidgetElement()
     {
-        var p = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        var p = new StackPanel
+        {
+            Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
+            Background = Brushes.Transparent,
+        };
 
         // 「^」ボタン: 開く向き（画面の内側）を指す山形
         // 下のバーと同じ「上向きの山形」を回して使う（左右専用のグリフに頼らない）
@@ -41,18 +46,37 @@ public sealed partial class TaskbarController
         chevronGlyph.RenderTransform = _chevronRotate;
         _overflowButton = new Tile
         {
-            Width = Vertical ? TileH : 28, Height = Vertical ? 28 : TileH, Margin = Vertical ? new Thickness(0, 2, 0, 0) : new Thickness(2, 0, 0, 0),
+            Width = Vertical ? TileH - 4 : 28, Height = Vertical ? 28 : TileH - 4,
             Child = chevronGlyph, ToolTip = L.T("隠れているインジケーターを表示"),
         };
         _overflowButton.Click += ShowOverflow;
         _overflowButton.RightClick += ShowOverflowMenu;
         MakeOverflowDropTarget(_overflowButton); // 「^」の上に落としてもしまえる
-        if (_barHosts.TryGetValue("Tray", out var barWidgets)) { p.Children.Add(barWidgets); if (Divider() is { } d) p.Children.Add(d); }
         p.Children.Add(_overflowButton);
 
         _trayIcons = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         p.Children.Add(_trayIcons);
         MakeTrayDropTarget(p);
+
+        // ほかのウィジェットと同じ二重の作り: 内側のカード（薄い背景と縁）と、外側のタイル（ホバーで濃く・ポップアップ中は枠線）
+        var t = Theme.Current;
+        var card = new Border
+        {
+            Background = t.Hover, BorderBrush = t.Stroke, BorderThickness = new Thickness(1), CornerRadius = t.Corner(6), Child = p,
+            Padding = Vertical ? new Thickness(0, 2, 0, 2) : new Thickness(2, 0, 2, 0),
+        };
+        if (Vertical) card.Width = TileH; else card.Height = TileH;
+        _trayWidgetTile = new Tile { Child = card, Margin = Gap, Padding = new Thickness(0), Tag = "tray" };
+        return _trayWidgetTile;
+    }
+
+    private Tile? _trayWidgetTile;
+
+    /// <summary>タスクバー右側: トレイのウィジェット（バーのウィジェットの位置）、クイック設定、時計。</summary>
+    private StackPanel TrayGroup(Theme t)
+    {
+        var p = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        if (_barHosts.TryGetValue("Tray", out var barWidgets)) p.Children.Add(barWidgets);
 
         _network = UiKit.Glyph("", 15);
         _battery = UiKit.Glyph("", 15);
@@ -77,7 +101,7 @@ public sealed partial class TaskbarController
         quick.Click += x => { TakeForeground(x); SystemActions.QuickSettings(); };
         bool quickWidget = _settings.BarWidgets.Contains("quicksettings"); // クイック設定のウィジェットがオンなら、そちらを使う
         if (!quickWidget) p.Children.Add(quick);
-        _trayTailEl = quickWidget ? p.Children[^1] as FrameworkElement : quick; // ここより右へ落とすと「バーの右端」
+        _trayTailEl = quickWidget ? barWidgets : quick; // ここより右へ落とすと「バーの右端」
 
         MeasureClock();
         _time = UiKit.Label("", 12);
@@ -148,6 +172,7 @@ public sealed partial class TaskbarController
         }
         StallDetector.Phase = "taskbar: tray overflow";
         _overflowButton.Visibility = Icons(_shell.Tray?.UnpinnedIcons).Any() || _trayEditMode ? Visibility.Visible : Visibility.Collapsed;
+        if (_trayWidgetTile != null) _trayWidgetTile.Visibility = pinned.Count > 0 || _overflowButton.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed; // 何もないときは、空のカードを出さない
         if (Vertical) Log.Info($"tray: pinned={pinned.Count} unpinned={Icons(_shell.Tray?.UnpinnedIcons).Count()} overflowButton={_overflowButton.Visibility}");
         if (_overflowPopup?.IsOpen == true) FillOverflow();
         PruneWatched();
@@ -167,7 +192,7 @@ public sealed partial class TaskbarController
                 Background = icon.IsPinned ? Theme.Current.AccentBrush : Theme.Current.TextSecondary, Margin = new Thickness(0, -4, -6, 0),
             });
         }
-        double iconLong = 32, iconShort = Math.Min(36, TileH);
+        double iconLong = 32, iconShort = Math.Min(36, TileH - 4);
         var tile = new Tile
         {
             Width = Vertical ? iconShort : iconLong, Height = Vertical ? iconLong : iconShort,
@@ -467,6 +492,7 @@ public sealed partial class TaskbarController
             _trayEditMode
                 ? new MenuItemSpec("", L.T("完了"), () => SetTrayEdit(anchor, false))
                 : new MenuItemSpec("", L.T("表示するアイコンを選ぶ"), () => SetTrayEdit(anchor, true)),
+            new MenuItemSpec("", L.T("バーから外す"), () => { _settings.BarWidgets.Remove("tray"); _settings.BarWidgetZones.Remove("tray"); _settings.Save(); }),
         }, FlyoutPlacement);
     }
 
@@ -506,7 +532,10 @@ public sealed partial class TaskbarController
         _overflowPopup.StaysOpen = true;
         // Windows と同じく「^」ボタンを基準に左右中央へ出す（画面端では自動で内側にずれる）
         FluentSurface.PlaceAligned(_overflowPopup, anchor, Edge, _settings.TrayOverflowAlign);
-        _overflowPopup.Closed += (_, _) => { RotateChevron(false); if (_trayEditMode) { _trayEditMode = false; RebuildTray(); } };
+        FluentSurface.UseTaskbarLook(_overflowPopup); // ほかのウィジェットのポップアップと同じ地・枠
+        var widgetTile = _trayWidgetTile;
+        if (widgetTile != null) widgetTile.IsActive = true; // 開いている間は、ほかのウィジェットと同じく枠を強調する
+        _overflowPopup.Closed += (_, _) => { if (widgetTile != null) widgetTile.IsActive = false; RotateChevron(false); if (_trayEditMode) { _trayEditMode = false; RebuildTray(); } };
         FillOverflow();
         if (_settings.AnimateTrayOverflow) FluentSurface.SlideIn(_overflowPopup, Edge);
         _overflowPopup.IsOpen = true;

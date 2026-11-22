@@ -142,7 +142,9 @@ public sealed class Settings
     /// <summary>タスクバーを自動的に隠す（画面の端にカーソルを当てると出る）。</summary>
     public bool AutoHideTaskbar { get; set; } = false;
     /// <summary>タスクバーに並べるウィジェット（ID の並び順がそのまま表示順）。</summary>
-    public List<string> BarWidgets { get; set; } = new();
+    public List<string> BarWidgets { get; set; } = new() { "tray" };
+    /// <summary>トレイアイコンがウィジェットになったときの移行済みの印（保存ファイルにこの項目がなければ、移行する）。</summary>
+    public bool TrayWidgetAdded { get; set; } = true;
     /// <summary>ウィジェットごとの表示位置（"Left" = スタートボタンの隣 / "Apps" = アプリの右隣 / "End" = バーの右端（時計の右）/ 既定 "Tray" = トレイの手前）。</summary>
     public Dictionary<string, string> BarWidgetZones { get; set; } = new();
     /// <summary>バーの角をピル型にする（高さの半分まで丸める）。</summary>
@@ -384,6 +386,10 @@ public sealed class Settings
             // （この項目は次の保存で消えるので、あとでウィジェットを外しても、また追加されることはない）
             if (root.TryGetProperty("ShowImeIndicator", out var ime) && ime.ValueKind == JsonValueKind.True && !s.BarWidgets.Contains("ime"))
                 s.BarWidgets.Add("ime");
+            // トレイアイコン（「^」と常に表示のアイコン）はウィジェットになった。これまで見えていた人には、ウィジェットを追加する
+            // （次の保存でこの項目が書かれるので、あとでウィジェットを外しても、また追加されることはない）
+            if (!root.TryGetProperty(nameof(TrayWidgetAdded), out _) && !s.BarWidgets.Contains("tray"))
+                s.BarWidgets.Add("tray");
             if (!root.TryGetProperty(nameof(StartMenuBackground), out _))
             {
                 if (Old("Backdrop") == "Solid") s.StartMenuBackground = SurfaceStyle.Solid;
