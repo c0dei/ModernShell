@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using ModernShell.Core;
 using ModernShell.Native;
 
@@ -63,6 +64,71 @@ public static class SurfacePaint
     /// content を背景で包む。opacity は重ねるテーマ色の濃さ (0–100)。
     /// 透過・ぼかしでも、クリックが裏へ抜けないようにごく薄く色を残す。
     /// </summary>
+    /// <summary>設定の「タスクバーの背景に重ねる色」。テーマ色のとき（既定）は null。バーとそこから開くポップアップで共通。</summary>
+    public static Color? TaskbarTintColor(Settings s) => s.TaskbarTint switch
+    {
+        BarTintMode.Accent => Theme.Current.Accent,
+        BarTintMode.Custom => Theme.ParseColor(s.TaskbarCustomColor),
+        BarTintMode.Wallpaper => MicaLike.WallpaperTint(Theme.Current.SolidColor),
+        _ => null,
+    };
+
+    private static Geometry RoundedRect(Rect r, double tl, double tr, double br, double bl)
+    {
+        var g = new StreamGeometry();
+        using (var ctx = g.Open())
+        {
+            void Arc(Point to, double rad) { if (rad > 0) ctx.ArcTo(to, new Size(rad, rad), 0, false, SweepDirection.Clockwise, true, false); }
+            ctx.BeginFigure(new Point(r.Left + tl, r.Top), true, true);
+            ctx.LineTo(new Point(r.Right - tr, r.Top), true, false);
+            Arc(new Point(r.Right, r.Top + tr), tr);
+            ctx.LineTo(new Point(r.Right, r.Bottom - br), true, false);
+            Arc(new Point(r.Right - br, r.Bottom), br);
+            ctx.LineTo(new Point(r.Left + bl, r.Bottom), true, false);
+            Arc(new Point(r.Left, r.Bottom - bl), bl);
+            ctx.LineTo(new Point(r.Left, r.Top + tl), true, false);
+            Arc(new Point(r.Left + tl, r.Top), tl);
+        }
+        g.Freeze();
+        return g;
+    }
+
+    /// <summary>
+    /// 角丸の四角形のマスク画像（形の内側が不透明、外側が透明）。ring &gt; 0 のときは縁の輪（太さ ring DIP）だけ。
+    /// 4 倍の大きさで描いてから縮めて、縁をなめらかにする。実際のピクセル数（dpi 倍）で作るので、拡大縮小のにじみもない。
+    /// </summary>
+    private static ImageSource? RoundedMask(Size size, CornerRadius c, double dpi, double ring)
+    {
+        try
+        {
+            int w = Math.Max(1, (int)Math.Round(size.Width * dpi)), h = Math.Max(1, (int)Math.Round(size.Height * dpi));
+            int ss = Math.Max(1, Math.Min(4, 12000 / Math.Max(w, h))); // 大きな画面では倍率を下げる（画像の大きさの上限）
+            double k = dpi * ss, W = w * ss, H = h * ss;
+            Geometry geo = RoundedRect(new Rect(0, 0, W, H), c.TopLeft * k, c.TopRight * k, c.BottomRight * k, c.BottomLeft * k);
+            if (ring > 0)
+            {
+                double e = ring * k;
+                var inner = RoundedRect(new Rect(e, e, Math.Max(1, W - 2 * e), Math.Max(1, H - 2 * e)),
+                    Math.Max(0, c.TopLeft - ring) * k, Math.Max(0, c.TopRight - ring) * k, Math.Max(0, c.BottomRight - ring) * k, Math.Max(0, c.BottomLeft - ring) * k);
+                geo = Geometry.Combine(geo, inner, GeometryCombineMode.Exclude, null);
+            }
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen()) dc.DrawGeometry(Brushes.Black, null, geo);
+            var big = new RenderTargetBitmap((int)W, (int)H, 96, 96, PixelFormats.Pbgra32);
+            big.Render(dv);
+            big.Freeze();
+            if (ss == 1) return big;
+            var dv2 = new DrawingVisual();
+            RenderOptions.SetBitmapScalingMode(dv2, BitmapScalingMode.Fant);
+            using (var dc = dv2.RenderOpen()) dc.DrawImage(big, new Rect(0, 0, w, h));
+            var small = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+            small.Render(dv2);
+            small.Freeze();
+            return small;
+        }
+        catch (Exception ex) { Log.Error("rounded mask", ex); return null; }
+    }
+
     public static Painted Wrap(FrameworkElement content, SurfaceStyle style, int opacity, CornerRadius corner, bool border = true, bool shadow = false, Color? tintColor = null)
     {
         var t = Theme.Current;
@@ -72,7 +138,6 @@ public static class SurfacePaint
         tint.Freeze();
 
         ImageBrush? blur = null;
-        FrameworkElement inner = content;
         Brush background;
         switch (style)
         {
@@ -86,29 +151,64 @@ public static class SurfacePaint
             default:
                 // 下: 壁紙を強くぼかした画像（自分の位置の部分）/ 上: テーマ色。画像ができるまでは単色
                 blur = new ImageBrush { ViewboxUnits = BrushMappingMode.Absolute, Stretch = Stretch.Fill, ImageSource = MicaLike.Image };
-                inner = new Border { Background = blur, CornerRadius = corner, Child = new Border { Background = tint, CornerRadius = corner, Child = content } };
                 background = t.SolidBackground;
                 MicaLike.Refresh();
                 break;
         }
 
-        var root = new Border
+        // 飾り（背景・ぼかし・縁取り）と中身を別の層にする（中身だけを角丸のマスクで切り抜くため）。
+        double edge = border ? 1 : 0;
+        bool rounded = corner.TopLeft > 0 || corner.TopRight > 0 || corner.BottomRight > 0 || corner.BottomLeft > 0;
+        var innerCorner = new CornerRadius(Math.Max(0, corner.TopLeft - edge), Math.Max(0, corner.TopRight - edge), Math.Max(0, corner.BottomRight - edge), Math.Max(0, corner.BottomLeft - edge));
+        var root = new Grid();
+        var host = new Border { Child = content, Margin = new Thickness(edge) };
+
+        if (!rounded)
         {
-            CornerRadius = corner, Background = background, Child = inner,
-            BorderBrush = border ? t.Stroke : null, BorderThickness = new Thickness(border ? 1 : 0),
-        };
-        // 中身（背景の帯など）も角丸からはみ出さないように切り抜く
-        if (corner.TopLeft > 0 || corner.BottomRight > 0)
-            root.SizeChanged += (_, e) => root.Clip = new RectangleGeometry(new Rect(e.NewSize), corner.TopLeft, corner.TopLeft);
+            // 角が丸くない（画面端に密着した帯など）: 切り抜きは要らない
+            var plain = new Border { Background = background, BorderBrush = border ? t.Stroke : null, BorderThickness = new Thickness(edge) };
+            if (blur != null) plain.Child = new Border { Background = blur, Child = new Border { Background = tint } };
+            root.Children.Add(plain);
+            root.Children.Add(host);
+        }
+        else
+        {
+            // 角丸の縁は、WPF の標準だと 1 倍の解像度でしか描かれず、角が荒く見える。
+            // 角丸の形（塗り・縁取りの輪）を 4 倍の大きさで描いて縮めたマスク画像で、背景と縁取りを切り抜く（縁の濃淡の段階が増えて、なめらかになる）
+            var fill = new Border { Background = background };
+            if (blur != null) fill.Child = new Border { Background = blur, Child = new Border { Background = tint } };
+            var fillMask = new ImageBrush { Stretch = Stretch.Fill };
+            fill.OpacityMask = fillMask;
+            root.Children.Add(fill);
+
+            ImageBrush? ringMask = null;
+            if (border)
+            {
+                ringMask = new ImageBrush { Stretch = Stretch.Fill };
+                root.Children.Add(new Border { Background = t.Stroke, OpacityMask = ringMask, IsHitTestVisible = false });
+            }
+            root.Children.Add(host);
+
+            // 中身（背景の帯など）も角丸からはみ出さないように切り抜く（Clip は縁にアンチエイリアスがかからないので使わない）
+            var hostMask = new ImageBrush { Stretch = Stretch.Fill };
+            host.OpacityMask = hostMask;
+            root.SizeChanged += (_, e) =>
+            {
+                double dpi = VisualTreeHelper.GetDpi(root).DpiScaleX;
+                fillMask.ImageSource = RoundedMask(e.NewSize, corner, dpi, 0);
+                if (ringMask != null) ringMask.ImageSource = RoundedMask(e.NewSize, corner, dpi, edge);
+                hostMask.ImageSource = RoundedMask(new Size(Math.Max(1, e.NewSize.Width - 2 * edge), Math.Max(1, e.NewSize.Height - 2 * edge)), innerCorner, dpi, 0);
+            };
+        }
         if (!shadow) return new Painted { Root = root, Blur = blur };
 
         // 影: Windows のメニューと同じく、周りに薄く広がる影で手前に浮いて見せる。
         // 透過・ぼかしの背景の下に塗りつぶしを置くと透けて見えてしまうので、背景の外側だけにグラデーションで描く
         // （辺は直線のグラデーション、角は円形のグラデーション）。ぼかし効果（DropShadowEffect）は CPU で描くと重いので使わない
-        var host = BuildShadow(corner.TopLeft, t.IsDark ? 0.30 : 0.14);
+        var shadowHost = BuildShadow(corner.TopLeft, t.IsDark ? 0.30 : 0.14);
         root.Margin = new Thickness(ShadowPad);
         var outer = new Grid();
-        outer.Children.Add(host);
+        outer.Children.Add(shadowHost);
         outer.Children.Add(root);
         return new Painted { Root = outer, Blur = blur, Inset = ShadowPad };
     }
@@ -132,14 +232,18 @@ public static class SurfacePaint
         GradientStopCollection Stops(double start, bool reverse)
         {
             var stops = new GradientStopCollection();
+            // 円形（四隅）は、丸みの縁で「透明 → 最大の濃さ」へ一気に変えると、段差がギザギザになり、
+            // 背景の縁の下に黒い輪が透けて見える。縁をまたいで数 px かけてなだらかに立ち上げる
+            double ramp = start > 0 ? Math.Min(start, 1.5 / Math.Max(1, size)) : 0;
+            double from = start + ramp;
             for (int i = 0; i <= 6; i++)
             {
                 double t = i / 6.0;
                 byte a = (byte)Math.Round(strength * Math.Pow(1 - t, 2) * 255);
-                double offset = start + (1 - start) * t;
+                double offset = from + (1 - from) * t;
                 stops.Add(new GradientStop(Color.FromArgb(a, 0, 0, 0), reverse ? 1 - offset : offset));
             }
-            if (start > 0) stops.Add(new GradientStop(Colors.Transparent, Math.Max(0, start - 0.001))); // 背景の内側は描かない
+            if (start > 0) stops.Add(new GradientStop(Color.FromArgb(0, 0, 0, 0), Math.Max(0, start - ramp))); // 背景の内側は描かない（Colors.Transparent は「透明な白」で、黒との補間で縁に明るい線が出る）
             return stops;
         }
 

@@ -112,12 +112,12 @@ public static class FluentSurface
         public bool Taskbar;
     }
 
-    private static void Paint(Popup popup, LookState state, SurfaceStyle style, int opacity)
+    private static void Paint(Popup popup, LookState state, SurfaceStyle style, int opacity, Color? tint = null)
     {
         // 前の背景から中身を外して包み直す
         if (state.Content.Parent is Border old) old.Child = null;
         popup.Child = null;
-        state.Painted = SurfacePaint.Wrap(state.Content, style, opacity, new CornerRadius(Math.Max(0, Theme.Current.Radius)), shadow: true);
+        state.Painted = SurfacePaint.Wrap(state.Content, style, opacity, new CornerRadius(Math.Max(0, Theme.Current.Radius)), shadow: true, tintColor: tint);
         if (state.Font != null) TextElement.SetFontFamily(state.Painted.Root, state.Font);
         popup.Child = state.Painted.Root;
     }
@@ -132,7 +132,7 @@ public static class FluentSurface
     {
         if (Settings.Current is not { } s || !_looks.TryGetValue(popup, out var state) || state.Taskbar) return;
         state.Taskbar = true;
-        Paint(popup, state, s.TaskbarBackground, s.TaskbarOpacity);
+        Paint(popup, state, s.TaskbarBackground, s.TaskbarOpacity, SurfacePaint.TaskbarTintColor(s)); // バーと同じ「重ねる色」
     }
 
     /// <summary>ぼかしの画像を、ポップアップの位置に合わせ続ける（スライドして現れる間も）。</summary>

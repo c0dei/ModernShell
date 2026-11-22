@@ -104,13 +104,7 @@ public sealed class BarSurface : Window
         bool pill = _settings.TaskbarPill;
         bool flush = !pill && Placement == Anchor.Fill && _settings.BandMarginX <= 0 && _settings.BandMarginY <= 0; // 画面端に密着した帯は角を丸めない
         var corner = flush ? new CornerRadius(0) : pill ? new CornerRadius(Math.Max(1, _thickness / 2)) : new CornerRadius(Math.Max(0, _settings.CornerRadius));
-        System.Windows.Media.Color? tint = _settings.TaskbarTint switch
-        {
-            BarTintMode.Accent => Theme.Current.Accent,
-            BarTintMode.Custom => Theme.ParseColor(_settings.TaskbarCustomColor),
-            BarTintMode.Wallpaper => MicaLike.WallpaperTint(Theme.Current.SolidColor),
-            _ => null,
-        };
+        var tint = SurfacePaint.TaskbarTintColor(_settings);
         // 画面の端に密着した帯は枠線を描かない（枠線は半透明で、その下には背景が敷かれないため、画面の端に細い線として後ろのウィンドウが透けて見える）。
         // 作業領域側の区切り線は TaskbarController が別に引く
         _painted = SurfacePaint.Wrap(content, _settings.TaskbarBackground, _settings.TaskbarOpacity, corner, border: !flush, tintColor: tint);
