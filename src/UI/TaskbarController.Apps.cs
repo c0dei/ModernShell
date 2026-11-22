@@ -113,12 +113,12 @@ public sealed partial class TaskbarController
         return groups;
     }
 
-    private void RebuildApps()
+    private void RebuildApps(bool force = false)
     {
         StallDetector.Phase = "taskbar: apps";
         if (_apps == null) return;
         // メニューを開いている間に作り直すと、メニューの基準のボタンが消えて画面左上に飛んでしまうので後回しにする
-        if (FluentSurface.AnyOpen) { Kick(_appsDebounce); return; }
+        if (!force && FluentSurface.AnyOpen) { Kick(_appsDebounce); return; }
         // 複数モニター表示のときも、起動中のアプリはすべてのモニターのバーに出す
         var groups = BuildGroups(TaskWindows(), withPins: true);
 

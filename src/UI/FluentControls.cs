@@ -79,7 +79,14 @@ public static class FluentSurface
     private static readonly List<Popup> _openList = new();
     private static int _open => _openList.Count;
     /// <summary>いずれかのメニュー/一覧が開いているか（開いている間はタスクバーのボタンを作り直さない）。</summary>
-    public static bool AnyOpen => _open > 0;
+    public static bool AnyOpen
+    {
+        get
+        {
+            _openList.RemoveAll(p => !p.IsOpen); // 持ち主のウィンドウごと閉じられて Closed が来なかったものを掃除する
+            return _open > 0;
+        }
+    }
 
     /// <summary>
     /// Popup を Fluent 表面として構成する。中身（Child）は背景なしの要素を渡すこと。

@@ -355,7 +355,7 @@ public static partial class L
         ["クイック設定"] = "Quick settings",
         ["クイック設定を開く"] = "Open quick settings",
         ["機内モード"] = "Airplane mode",
-        ["ネットワーク（Wi-Fi・有線・機内モード）・Bluetooth・音量をひとつにまとめた表示。オンにすると、バー標準のクイック設定の代わりになります。クリックで Windows のクイック設定、ホイールで音量"] = "Network (Wi-Fi, wired, airplane mode), Bluetooth and volume in one card. When on, it replaces the bar's built-in quick settings button. Click for Windows quick settings, scroll for volume",
+        ["ネットワーク（Wi-Fi・有線・機内モード）・Bluetooth・音量をひとつにまとめた表示。クリックで Windows のクイック設定、ホイールで音量"] = "Network (Wi-Fi, wired, airplane mode), Bluetooth and volume in one card. Click for Windows quick settings, scroll for volume",
         ["クリックで開く"] = "Open on click",
         ["Windows の通知センター"] = "Windows notification center",
         ["アプリのカレンダー"] = "App calendar",

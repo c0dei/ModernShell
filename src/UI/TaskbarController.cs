@@ -45,7 +45,7 @@ public sealed partial class TaskbarController : IDisposable
     private Tile? _overflowButton;
     private FrameworkElement? _trayHost;
     private FrameworkElement? _startGroupEl;
-    private TextBlock? _time, _date, _network, _battery;
+    private TextBlock? _time, _date;
     private Popup? _overflowPopup;
     private bool _trayEditMode;
 
@@ -108,7 +108,7 @@ public sealed partial class TaskbarController : IDisposable
 
         _clock = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Normal, (_, _) => UpdateClock(), dispatcher);
         _status = new DispatcherTimer(TimeSpan.FromSeconds(10), DispatcherPriority.Background, (_, _) => UpdateStatus(), dispatcher);
-        _appsDebounce = Debouncer(RebuildApps);
+        _appsDebounce = Debouncer(() => RebuildApps());
         // ウィンドウのタイトル・状態が変わっただけのときの作り直し。カーソルがアプリのボタンの上にある間は後回しにする
         // （作り直すとカーソルの下のボタンが新しくなり、ホバーの拡大がやり直しになって拡大・縮小を繰り返して見えるため）
         _appsSoftDebounce = Debouncer(() =>
@@ -413,7 +413,7 @@ public sealed partial class TaskbarController : IDisposable
         }
 
         // どれかの処理が失敗しても、バーのウィンドウは必ず表示する（途中で止まると、領域だけ確保されて何も見えなくなる）
-        Safe("apps", RebuildApps);
+        Safe("apps", () => RebuildApps(true)); // 作り直した直後の _apps は空なので、メニューが開いていても後回しにしない
         Safe("tray", RebuildTray);
         StallDetector.Phase = "taskbar: clock";
         Safe("clock", UpdateClock);

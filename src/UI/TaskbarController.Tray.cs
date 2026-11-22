@@ -78,30 +78,7 @@ public sealed partial class TaskbarController
         var p = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         if (_barHosts.TryGetValue("Tray", out var barWidgets)) p.Children.Add(barWidgets);
 
-        _network = UiKit.Glyph("", 15);
-        _battery = UiKit.Glyph("", 15);
-        var volume = UiKit.Glyph("", 15);
-        // 横のバーでは 3 つのアイコンを横に、縦のバーでは縦に並べる
-        Thickness between = Vertical ? new Thickness(0, 6, 0, 0) : new Thickness(10, 0, 0, 0);
-        _battery.Margin = between;
-        volume.Margin = between;
-        var icons = new StackPanel { Orientation = Flow, HorizontalAlignment = HorizontalAlignment.Center };
-        icons.Children.Add(_network);
-        icons.Children.Add(volume);
-        icons.Children.Add(_battery);
-        var quick = new Tile
-        {
-            Padding = Vertical ? new Thickness(0, 8, 0, 8) : new Thickness(10, 0, 10, 0), Margin = Vertical ? new Thickness(0, 2, 0, 0) : new Thickness(2, 0, 0, 0),
-            VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
-            Child = icons, ToolTip = L.T("クイック設定 (Win+A)"),
-        };
-        if (Vertical) quick.Width = TileH; else quick.Height = TileH;
-        // Win+A / Win+N のキー操作で開く。管理者として動くアプリ（タスク マネージャーなど）が前面だと、
-        // Windows は他のアプリからのキー操作をそこへ届けない（UIPI）ので、先にタスクバーが前面になってから送る
-        quick.Click += x => { TakeForeground(x); SystemActions.QuickSettings(); };
-        bool quickWidget = _settings.BarWidgets.Contains("quicksettings"); // クイック設定のウィジェットがオンなら、そちらを使う
-        if (!quickWidget) p.Children.Add(quick);
-        _trayTailEl = quickWidget ? barWidgets : quick; // ここより右へ落とすと「バーの右端」
+        _trayTailEl = barWidgets; // ここより右へ落とすと「バーの右端」
 
         MeasureClock();
         _time = UiKit.Label("", 12);
@@ -688,28 +665,5 @@ public sealed partial class TaskbarController
     {
         StallDetector.Phase = "taskbar: status";
         RefreshNetworkAsync();
-        if (_network == null || _battery == null) return;
-        var t = Theme.Current;
-        bool online = _online;
-        _network.Foreground = online ? t.Text : t.TextSecondary;
-        _network.Opacity = online ? 1 : 0.5;
-
-        try
-        {
-            var ps = Forms.SystemInformation.PowerStatus;
-            if (ps.BatteryChargeStatus.HasFlag(Forms.BatteryChargeStatus.NoSystemBattery))
-            {
-                _battery.Visibility = Visibility.Collapsed; // デスクトップ PC
-                return;
-            }
-            _battery.Visibility = Visibility.Visible;
-            int level = (int)Math.Round(Math.Clamp(ps.BatteryLifePercent, 0f, 1f) * 10);
-            bool charging = ps.PowerLineStatus == Forms.PowerLineStatus.Online;
-            // Segoe Fluent Icons: Battery0–9 = E850–E859, Battery10 = E83F, 充電中 0–10 = EBAB–EBB5
-            _battery.Text = charging ? ((char)(0xEBAB + level)).ToString()
-                          : level >= 10 ? "" : ((char)(0xE850 + level)).ToString();
-            _battery.ToolTip = L.F("バッテリー {0:P0}", ps.BatteryLifePercent) + (charging ? L.T("（充電中）") : "");
-        }
-        catch { _battery.Visibility = Visibility.Collapsed; }
     }
 }

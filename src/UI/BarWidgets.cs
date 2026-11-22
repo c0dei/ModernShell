@@ -22,7 +22,7 @@ public static class BarWidgetCatalog
         new BarWidgetInfo("netspeed", "システム", "通信速度", "ダウンロード・アップロードの今の速さを円グラフで表示します。クリックで直近 30 秒の推移", () => new NetSpeedBarWidget()),
         new BarWidgetInfo("volume", "メディア", "音量", "今の音量。ホイールで音量を変え、クリックで出力デバイスの切り替え・アプリごとの音量", () => new VolumeBarWidget()),
         new BarWidgetInfo("tray", "システム", "トレイアイコン", "アプリが置くアイコン（「^」の一覧と、常に表示するアイコン）。オフにするとトレイアイコンは表示されません。ドラッグで常に表示/しまうを切り替え、「^」の右クリックで表示するアイコンを選べます", () => new TrayBarWidget()),
-        new BarWidgetInfo("quicksettings", "システム", "クイック設定", "ネットワーク（Wi-Fi・有線・機内モード）・Bluetooth・音量をひとつにまとめた表示。オンにすると、バー標準のクイック設定の代わりになります。クリックで Windows のクイック設定、ホイールで音量", () => new QuickSettingsBarWidget()),
+        new BarWidgetInfo("quicksettings", "システム", "クイック設定", "ネットワーク（Wi-Fi・有線・機内モード）・Bluetooth・音量をひとつにまとめた表示。クリックで Windows のクイック設定、ホイールで音量", () => new QuickSettingsBarWidget()),
         new BarWidgetInfo("ime", "システム", "IME（日本語入力）", "日本語入力の状態（あ / A など）を表示します。オンにすると、バー標準の IME 表示の代わりになります。クリックで入力モード（ひらがな・カタカナ・英数）", () => new ImeBarWidget()),
         new BarWidgetInfo("notification", "システム", "通知", "ベルのアイコンと通知の数。クリックでアプリの通知ポップアップ（通知の一覧・応答不可の切り替え・Windows の通知設定）か Windows の通知センターを開きます", () => new NotificationBarWidget()),
         new BarWidgetInfo("battery","システム", "バッテリー", "バッテリー残量と充電中の表示（バッテリーの無い PC では表示されません）", () => new BatteryBarWidget()),
