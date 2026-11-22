@@ -16,29 +16,45 @@ internal static class VolumeGlyph
         muted ? "" : volume <= 0 ? "" : volume < 34 ? "" : volume < 67 ? "" : "";
 }
 
-/// <summary>バーの音量のカード: スピーカーのアイコンと音量。ホイールで音量を変え、クリックで詳細（出力デバイス・アプリごとの音量）。</summary>
+/// <summary>バーの音量のカード: スピーカーのアイコンと縦の音量バー。ホイールで音量を変え、クリックで詳細（出力デバイス・アプリごとの音量）。</summary>
 public sealed class VolumeBarWidget : BarWidget
 {
     public override string Id => "volume";
-    private TextBlock? _icon, _value;
+    private TextBlock? _icon;
+    private Border? _fill;
+    private const double BarLen = 22, BarThick = 6;
 
     protected override FrameworkElement BuildContent()
     {
         _icon = UiKit.Glyph("", Vertical ? 14 : 16, T.Text);
-        _value = UiKit.Label("0", Vertical ? 10 : 13, T.Text, FontWeights.SemiBold);
-        _value.TextTrimming = TextTrimming.None;
-        _value.HorizontalAlignment = HorizontalAlignment.Center;
+        // 音量バー: 細い丸みのあるトラックを、下から（縦のバーでは左から）アクセント色で満たす
+        _fill = new Border
+        {
+            CornerRadius = new CornerRadius(BarThick / 2), Background = T.AccentBrush,
+            VerticalAlignment = Vertical ? VerticalAlignment.Stretch : VerticalAlignment.Bottom,
+            HorizontalAlignment = Vertical ? HorizontalAlignment.Left : HorizontalAlignment.Stretch,
+        };
+        var bar = new Border
+        {
+            CornerRadius = new CornerRadius(BarThick / 2), Background = Track, Child = _fill,
+            Width = Vertical ? 20 : BarThick, Height = Vertical ? BarThick : BarLen,
+            VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
+        };
         var row = new StackPanel
         {
             Orientation = Vertical ? Orientation.Vertical : Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
         };
-        _value.Margin = Vertical ? new Thickness(0, 2, 0, 0) : new Thickness(6, 0, 0, 0);
+        bar.Margin = Vertical ? new Thickness(0, 4, 0, 0) : new Thickness(6, 0, 0, 0);
         row.Children.Add(_icon);
-        row.Children.Add(_value);
+        row.Children.Add(bar);
         // 外側のカード全体でホイールを受ける（Card は Build のあとに作られるので、表示されてから付ける）
         row.Loaded += (_, _) => { if (Card != null) { Card.MouseWheel -= OnWheel; Card.MouseWheel += OnWheel; } Apply(); };
-        return row;
+        // 通信速度などと同じ、背景色と枠のあるカードにする（縦のバーは幅が狭いので付けない）
+        if (Vertical) return row;
+        row.Margin = new Thickness(10, 0, 10, 0);
+        PadOverride = new Thickness(0);
+        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = row };
     }
 
     private void OnWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
@@ -55,13 +71,15 @@ public sealed class VolumeBarWidget : BarWidget
 
     private void Apply()
     {
-        if (_icon == null || _value == null) return;
+        if (_icon == null || _fill == null) return;
         bool avail = AudioControl.Available;
         SetVisible(true);
         int v = avail ? AudioControl.GetVolume() : 0;
         bool m = avail && AudioControl.GetMuted();
         _icon.Text = avail ? VolumeGlyph.For(v, m) : "";
-        _value.Text = m || !avail ? "–" : v.ToString();
+        double len = (Vertical ? 20 : BarLen) * (m || !avail ? 0 : v) / 100.0;
+        if (Vertical) _fill.Width = len; else _fill.Height = len;
+        _fill.Opacity = len <= 0 ? 0 : 1;
         if (Card != null) Card.ToolTip = m ? L.T("ミュート中") : L.F("音量: {0}%", v);
     }
 
@@ -90,7 +108,17 @@ internal sealed class VolumeDetailsView : Border
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private string _appsSig = "\0";
 
-    private sealed record AppRow(uint Pid, FluentSlider Slider, TextBlock Value);
+    private sealed record AppRow(uint Pid, FluentSlider Slider, TextBlock Value, TextBlock MuteGlyph)
+    {
+        public bool Muted { get; private set; }
+        public int Volume { get; set; }
+        public void Show(int volume, bool muted)
+        {
+            Volume = volume; Muted = muted;
+            MuteGlyph.Text = VolumeGlyph.For(volume, muted);
+            Value.Opacity = Slider.Opacity = muted ? 0.45 : 1;
+        }
+    }
 
     public VolumeDetailsView()
     {
@@ -219,6 +247,7 @@ internal sealed class VolumeDetailsView : Border
             if (r == null) continue;
             if (!r.Slider.IsMouseCaptured) r.Slider.SetValue(a.Volume);
             r.Value.Text = a.Volume.ToString();
+            r.Show(a.Volume, a.Muted);
         }
     }
 
@@ -226,9 +255,10 @@ internal sealed class VolumeDetailsView : Border
     {
         var g = new Grid { Margin = new Thickness(0, 4, 0, 4) };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(108) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         FrameworkElement icon;
         ImageSource? src = null;
@@ -250,16 +280,29 @@ internal sealed class VolumeDetailsView : Border
         val.TextTrimming = TextTrimming.None;
         val.HorizontalAlignment = HorizontalAlignment.Right;
         uint pid = a.Pid;
+        var glyph = UiKit.Glyph(VolumeGlyph.For(a.Volume, a.Muted), 16, _t.Text);
+        var row = new AppRow(pid, slider, val, glyph);
+        var mute = new Tile { Width = 32, Height = 32, Child = glyph, ToolTip = L.T("ミュート") };
+        mute.Click += _ =>
+        {
+            AudioControl.SetAppMuted(pid, !row.Muted);
+            row.Show(row.Volume, !row.Muted);
+        };
+        Grid.SetColumn(mute, 4);
+        g.Children.Add(mute);
         slider.ValueChanged += v =>
         {
+            if (row.Muted) AudioControl.SetAppMuted(pid, false);
             AudioControl.SetAppVolume(pid, (int)v);
             val.Text = ((int)v).ToString();
+            row.Show((int)v, false);
         };
         Grid.SetColumn(slider, 2);
         g.Children.Add(slider);
         Grid.SetColumn(val, 3);
         g.Children.Add(val);
-        _rows.Add(new AppRow(pid, slider, val));
+        row.Show(a.Volume, a.Muted);
+        _rows.Add(row);
         return g;
     }
 
