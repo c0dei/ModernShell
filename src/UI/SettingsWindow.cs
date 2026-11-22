@@ -1395,7 +1395,9 @@ public sealed class ToggleSwitch : StackPanel
     private readonly TextBlock _label;
     public event Action<bool>? Toggled;
 
-    public ToggleSwitch(bool on)
+    public bool IsOn { get => _on; set { _on = value; Refresh(); } }
+
+    public ToggleSwitch(bool on, bool showLabel = true)
     {
         _on = on;
         Orientation = Orientation.Horizontal;
@@ -1408,7 +1410,7 @@ public sealed class ToggleSwitch : StackPanel
         _label.Margin = new Thickness(0, 0, 12, 0);
         _knob = new Ellipse { Width = 12, Height = 12, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
         _track = new Border { Width = 40, Height = 20, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Child = _knob };
-        Children.Add(_label);
+        if (showLabel) Children.Add(_label);
         Children.Add(_track);
         Refresh();
         MouseLeftButtonUp += (_, e) => { Flip(); e.Handled = true; };

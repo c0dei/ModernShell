@@ -18,7 +18,8 @@ public static class BarWidgetCatalog
     public static readonly IReadOnlyList<BarWidgetInfo> All = new[]
     {
         new BarWidgetInfo("system", "システム", "CPU・メモリ", "CPU とメモリの使用率を円グラフで表示します。クリックで詳細", () => new SystemBarWidget()),
-        new BarWidgetInfo("battery", "システム", "バッテリー", "バッテリー残量と充電中の表示（バッテリーの無い PC では表示されません）", () => new BatteryBarWidget()),
+        new BarWidgetInfo("network", "システム", "ネットワーク", "つないでいる Wi-Fi・有線の名前と電波の強さ。クリックで Wi-Fi のオン/オフ・近くのネットワークへの接続・切断", () => new NetworkBarWidget()),
+        new BarWidgetInfo("battery","システム", "バッテリー", "バッテリー残量と充電中の表示（バッテリーの無い PC では表示されません）", () => new BatteryBarWidget()),
         new BarWidgetInfo("nowplaying", "メディア", "再生中の曲", "再生中の曲名とアーティスト。クリックでジャケット・シークバー・操作ボタン、右クリックで前後の曲へ", () => new NowPlayingBarWidget()),
         new BarWidgetInfo("weather", "天気", "天気", "今の天気（温度・天気）。クリックで時間ごと・週間の予報を表示。設定の天気の地点と更新間隔を使います", () => new WeatherBarWidget()),
         new BarWidgetInfo("pomodoro", "生産性", "ポモドーロ", "25 分の集中と 5 分の休憩を繰り返すタイマー。クリックで開始/一時停止", () => new PomodoroBarWidget()),
