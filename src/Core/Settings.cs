@@ -112,7 +112,6 @@ public sealed class Settings
     /// <summary>カーソルの下だけでなく、両隣のアイコンも距離に応じて拡大する（Mac のドック風）。</summary>
     public bool MagnifyNeighbors { get; set; } = false;
     /// <summary>タスクバーに IME の状態（あ / A）を表示する。</summary>
-    public bool ShowImeIndicator { get; set; } = true;
     /// <summary>開くときのアニメーション（それぞれ切り替えられる）。</summary>
     public bool AnimateStartMenu { get; set; } = true;
     public bool AnimatePreviews { get; set; } = true;
@@ -377,6 +376,10 @@ public sealed class Settings
                 s.BandMarginX = s.BandMarginY = bmv;
             if (!root.TryGetProperty(nameof(IslandMarginX), out _) && root.TryGetProperty("IslandMargin", out var im) && im.TryGetInt32(out var imv))
                 s.IslandMarginX = s.IslandMarginY = imv;
+            // バー標準の IME 表示はなくなり、IME のウィジェットだけになった。表示していた人には、ウィジェットを追加する
+            // （この項目は次の保存で消えるので、あとでウィジェットを外しても、また追加されることはない）
+            if (root.TryGetProperty("ShowImeIndicator", out var ime) && ime.ValueKind == JsonValueKind.True && !s.BarWidgets.Contains("ime"))
+                s.BarWidgets.Add("ime");
             if (!root.TryGetProperty(nameof(StartMenuBackground), out _))
             {
                 if (Old("Backdrop") == "Solid") s.StartMenuBackground = SurfaceStyle.Solid;

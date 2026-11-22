@@ -25,7 +25,7 @@ public sealed partial class TaskbarController
     /// <summary>Win+Space が押された。ポップアップが出るまで少し待ちながら探し、見つけたら IME 表示の上へ動かす。</summary>
     public void MoveImeSwitcher()
     {
-        if (_imeText == null || _disposed) return;
+        if (ImeAnchor == null || _disposed) return;
         _imeFlyoutUntil = DateTime.Now.AddMilliseconds(1200);
         _imeFlyoutTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(30), DispatcherPriority.Normal, (_, _) => ImeFlyoutTick(), _dispatcher);
         if (!_imeFlyoutTimer.IsEnabled) _imeFlyoutTimer.Start();
@@ -33,7 +33,7 @@ public sealed partial class TaskbarController
 
     private void ImeFlyoutTick()
     {
-        if (_disposed || _imeText == null || DateTime.Now > _imeFlyoutUntil) { _imeFlyoutTimer?.Stop(); return; }
+        if (_disposed || ImeAnchor == null || DateTime.Now > _imeFlyoutUntil) { _imeFlyoutTimer?.Stop(); return; }
         try
         {
             var fly = FindImeFlyout();
@@ -60,19 +60,23 @@ public sealed partial class TaskbarController
         catch (Exception ex) { Log.Error("ime flyout move", ex); _imeFlyoutTimer?.Stop(); }
     }
 
-    private double VisualTreeHelperDpi() => _imeText == null ? 1.0 : System.Windows.Media.VisualTreeHelper.GetDpi(_imeText).DpiScaleX;
+    /// <summary>IME 表示の基準にする要素（IME のウィジェットがあればそのカード、なければバー標準の表示）。</summary>
+    private FrameworkElement? ImeAnchor => ImeWidgetCard();
+
+    private double VisualTreeHelperDpi() => ImeAnchor == null ? 1.0 : System.Windows.Media.VisualTreeHelper.GetDpi(ImeAnchor).DpiScaleX;
 
     /// <summary>IME 表示の画面上の矩形（物理ピクセル）。</summary>
     private bool TryImeTileRect(out Win32.RECT rect)
     {
         rect = default;
-        if (_imeText == null || !_imeText.IsLoaded || PresentationSource.FromVisual(_imeText) == null) return false;
-        var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(_imeText);
-        var tl = _imeText.PointToScreen(new Point(0, 0));
+        var el = ImeAnchor;
+        if (el == null || !el.IsLoaded || PresentationSource.FromVisual(el) == null) return false;
+        var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(el);
+        var tl = el.PointToScreen(new Point(0, 0));
         rect = new Win32.RECT
         {
             Left = (int)tl.X, Top = (int)tl.Y,
-            Right = (int)(tl.X + _imeText.ActualWidth * dpi.DpiScaleX), Bottom = (int)(tl.Y + _imeText.ActualHeight * dpi.DpiScaleY),
+            Right = (int)(tl.X + el.ActualWidth * dpi.DpiScaleX), Bottom = (int)(tl.Y + el.ActualHeight * dpi.DpiScaleY),
         };
         return true;
     }

@@ -407,7 +407,6 @@ public sealed class SettingsWindow : Window
             NumberRow(L.T("拡大率"), L.T("カーソルを置いたアイコンの最大の拡大率。バーの太さ・ボタンの大きさに収まる範囲で効きます"), 100, 250, _s.MagnifyScale, "%", v => _s.MagnifyScale = (int)v, on && _s.MagnifyOnHover, step: 5, def: 130),
             ToggleRow(L.T("両隣のアイコンも拡大"), L.T("Mac のドックのように、カーソルの下を最大に、両隣も距離に応じてなめらかに拡大します。オフのときは、カーソルの下のアイコンだけ"),
                 _s.MagnifyNeighbors, v => _s.MagnifyNeighbors = v, on && _s.MagnifyOnHover),
-            ToggleRow(L.T("IME の状態を表示"), L.T("日本語入力の状態（あ / A など）。クリックでオン/オフを切り替えます"), _s.ShowImeIndicator, v => _s.ShowImeIndicator = v, on),
             ToggleRow(L.T("時計に秒を表示"), "", _s.ShowSeconds, v => _s.ShowSeconds = v, on));
 
         Group(p, "", L.T("時計"), L.T("右端の日時の表示（縦のバーでは、幅に合わせて自動で短くします）"),
