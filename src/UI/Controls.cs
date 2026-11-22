@@ -22,6 +22,7 @@ public class Tile : Border
 
     private bool _pressed;
     private bool _selected;
+    private bool _active;
     public object? Payload { get; set; }
 
     public Tile()
@@ -43,6 +44,13 @@ public class Tile : Border
     {
         get => _selected;
         set { _selected = value; Refresh(); }
+    }
+
+    /// <summary>このボタンが開いたポップアップ（メニュー・詳細）が表示されている間、枠を強調する。</summary>
+    public bool IsActive
+    {
+        get => _active;
+        set { _active = value; Refresh(); }
     }
 
     protected override void OnMouseEnter(MouseEventArgs e) { base.OnMouseEnter(e); Refresh(); }
@@ -91,8 +99,8 @@ public class Tile : Border
     public void Refresh()
     {
         var t = Theme.Current;
-        Background = _pressed ? t.Pressed : (IsMouseOver || _selected || IsKeyboardFocused) ? t.Hover : Brushes.Transparent;
-        BorderBrush = IsKeyboardFocused ? t.Stroke : Brushes.Transparent;
+        Background = _pressed ? t.Pressed : (IsMouseOver || _selected || _active || IsKeyboardFocused) ? t.Hover : Brushes.Transparent;
+        BorderBrush = _active ? new SolidColorBrush(Color.FromArgb(0xC0, t.Accent.R, t.Accent.G, t.Accent.B)) : IsKeyboardFocused ? t.Stroke : Brushes.Transparent;
     }
 }
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using ModernShell.Core;
+using ModernShell.Native;
 
 namespace ModernShell.UI;
 
@@ -38,14 +39,15 @@ public sealed partial class TaskbarController
                 var card = w.Build(Vertical, TileH);
                 var tile = new Tile { Child = card, Margin = Gap, Padding = new Thickness(0), Tag = id };
                 w.Outer = tile;
+                // ポップアップ（詳細・メニュー）を開いている間は、そのウィジェットの枠を強調する
                 tile.Click += x =>
                 {
-                    if (w.OnClick()) return;
-                    if (w.BuildDetailsView() is { } view) { ShowBarPopup(x, view); return; }
+                    if (w.OnClick()) { if (w.OpensSystemPanel) HighlightSystemPanel(tile); return; }
+                    if (w.BuildDetailsView() is { } view) { Highlight(tile, ShowBarPopup(x, view)); return; }
                     var details = w.Details().ToList();
-                    if (details.Count > 0) ShowIconMenu(x, details);
+                    if (details.Count > 0) Highlight(tile, ShowIconMenuPopup(x, details));
                 };
-                tile.RightClick += x => ShowIconMenu(x, w.ExtraMenu().Concat(BarWidgetMenu(id)).ToList());
+                tile.RightClick += x => Highlight(tile, ShowIconMenuPopup(x, w.ExtraMenu().Concat(BarWidgetMenu(id)).ToList()));
                 string zone = ZoneOf(id);
                 if (!_barHosts.TryGetValue(zone, out var host))
                     _barHosts[zone] = host = new System.Windows.Controls.StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
@@ -187,7 +189,66 @@ public sealed partial class TaskbarController
     }
 
     /// <summary>ウィジェットのクリックで開く詳細のポップアップ（メニューでは足りない内容用）。</summary>
-    private void ShowBarPopup(FrameworkElement anchor, FrameworkElement content)
+    private sealed class PanelWatch { public System.Windows.Threading.DispatcherTimer Timer = null!; public bool Seen; }
+    private readonly Dictionary<Tile, PanelWatch> _panelWatch = new();
+
+    /// <summary>
+    /// Windows のパネル（通知センター・クイック設定）を開いている間、ウィジェットの枠を強調する。
+    /// 開いたかどうかは、前面のウィンドウが Windows のシェル（ShellHost / ShellExperienceHost）かで見る。閉じると前面は元のアプリに戻る。
+    /// パネルが開いている間のクリックは「閉じる操作」なので、枠はすぐ外し、開き直したときだけ付け直す。
+    /// </summary>
+    private void HighlightSystemPanel(Tile tile)
+    {
+        // Windows のパネルは同時に 1 つしか開かない。別のウィジェットの枠は外す（通知センターとクイック設定を切り替えたとき、両方に枠が残らないように）
+        foreach (var other in _panelWatch.Keys.Where(k => k != tile).ToList())
+        {
+            _panelWatch[other].Timer.Stop();
+            _panelWatch.Remove(other);
+            other.IsActive = false;
+        }
+        bool wasOpen = false;
+        if (_panelWatch.Remove(tile, out var old)) { old.Timer.Stop(); wasOpen = old.Seen; }
+        tile.IsActive = !wasOpen;
+        long start = Environment.TickCount64;
+        long grace = wasOpen ? 1000 : 2000; // 開くまでの猶予
+        var w = new PanelWatch();
+        w.Timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+        w.Timer.Tick += (_, _) =>
+        {
+            bool open = IsShellPanelForeground();
+            if (open) { w.Seen = true; tile.IsActive = true; return; }
+            // 開いたあとに閉じた、または猶予のうちに開かなかった（キーが届かなかったなど）
+            if (w.Seen || Environment.TickCount64 - start > grace)
+            {
+                w.Timer.Stop();
+                _panelWatch.Remove(tile);
+                tile.IsActive = false;
+            }
+        };
+        _panelWatch[tile] = w;
+        w.Timer.Start();
+    }
+
+    private static bool IsShellPanelForeground()
+    {
+        try
+        {
+            var h = Win32.GetForegroundWindow();
+            if (h == IntPtr.Zero) return false;
+            Win32.GetWindowThreadProcessId(h, out uint pid);
+            using var p = System.Diagnostics.Process.GetProcessById((int)pid);
+            return p.ProcessName is "ShellHost" or "ShellExperienceHost";
+        }
+        catch { return false; }
+    }
+
+    private static void Highlight(Tile tile, System.Windows.Controls.Primitives.Popup popup)
+    {
+        tile.IsActive = true;
+        popup.Closed += (_, _) => tile.IsActive = false;
+    }
+
+    private System.Windows.Controls.Primitives.Popup ShowBarPopup(FrameworkElement anchor, FrameworkElement content)
     {
         var popup = FluentSurface.Create(content, anchor, System.Windows.Controls.Primitives.PlacementMode.Custom);
         popup.StaysOpen = false;
@@ -196,6 +257,7 @@ public sealed partial class TaskbarController
         if (_settings.AnimateMenus) FluentSurface.SlideIn(popup, Edge);
         popup.IsOpen = true;
         Flyout.ToggleGuard(popup, anchor);
+        return popup;
     }
 
     /// <summary>タスクバーの空き領域の右クリック → ウィジェットの追加／削除（チェック付きの一覧）。</summary>

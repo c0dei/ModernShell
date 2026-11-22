@@ -92,6 +92,8 @@ public sealed class CalendarBarWidget : BarWidget
 
     public override bool OnClick() => ClickTarget.OpenWindowsIfChosen(Opens, Outer);
 
+    public override bool OpensSystemPanel => Opens == ClickOpens.Windows;
+
     public override FrameworkElement? BuildDetailsView() => Opens == ClickOpens.App ? new CalendarDetailsView() : null;
 
     public override IEnumerable<MenuItemSpec> ExtraMenu() =>

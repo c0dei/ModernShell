@@ -21,6 +21,7 @@ public static class BarWidgetCatalog
         new BarWidgetInfo("network", "システム", "ネットワーク", "つないでいる Wi-Fi・有線の名前と電波の強さ。クリックで Wi-Fi のオン/オフ・近くのネットワークへの接続・切断", () => new NetworkBarWidget()),
         new BarWidgetInfo("netspeed", "システム", "通信速度", "ダウンロード・アップロードの今の速さを円グラフで表示します。クリックで直近 30 秒の推移", () => new NetSpeedBarWidget()),
         new BarWidgetInfo("volume", "メディア", "音量", "今の音量。ホイールで音量を変え、クリックで出力デバイスの切り替え・アプリごとの音量", () => new VolumeBarWidget()),
+        new BarWidgetInfo("quicksettings", "システム", "クイック設定", "ネットワーク（Wi-Fi・有線・機内モード）・Bluetooth・音量をひとつにまとめた表示。オンにすると、バー標準のクイック設定の代わりになります。クリックで Windows のクイック設定、ホイールで音量", () => new QuickSettingsBarWidget()),
         new BarWidgetInfo("battery","システム", "バッテリー", "バッテリー残量と充電中の表示（バッテリーの無い PC では表示されません）", () => new BatteryBarWidget()),
         new BarWidgetInfo("nowplaying", "メディア", "再生中の曲", "再生中の曲名とアーティスト。クリックでジャケット・シークバー・操作ボタン、右クリックで前後の曲へ", () => new NowPlayingBarWidget()),
         new BarWidgetInfo("weather", "天気", "天気", "今の天気（温度・天気）。クリックで時間ごと・週間の予報を表示。設定の天気の地点と更新間隔を使います", () => new WeatherBarWidget()),
@@ -94,6 +95,9 @@ public abstract class BarWidget
 
     /// <summary>左クリック。既定は詳細を出す。true を返したら処理済み（詳細は出さない）。</summary>
     public virtual bool OnClick() => false;
+
+    /// <summary>左クリックで Windows のパネル（通知センター・クイック設定）を開くか。開く間は、バーのウィジェットの枠を強調する。</summary>
+    public virtual bool OpensSystemPanel => false;
 
     /// <summary>右クリックのメニューに足す項目。</summary>
     public virtual IEnumerable<MenuItemSpec> ExtraMenu() => Enumerable.Empty<MenuItemSpec>();

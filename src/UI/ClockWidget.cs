@@ -134,6 +134,8 @@ public sealed class ClockBarWidget : BarWidget
 
     public override bool OnClick() => ClickTarget.OpenWindowsIfChosen(Opens, Outer);
 
+    public override bool OpensSystemPanel => Opens == ClickOpens.Windows;
+
     public override FrameworkElement? BuildDetailsView() => Opens == ClickOpens.App ? new CalendarDetailsView() : null;
 
     public override System.Collections.Generic.IEnumerable<MenuItemSpec> ExtraMenu()

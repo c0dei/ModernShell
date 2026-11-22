@@ -452,10 +452,13 @@ public sealed partial class TaskbarController
     }
 
     /// <summary>アイコンのメニュー（右クリック・ウィンドウ名のリスト）。設定の基準（左・中央・右）でアイコンに合わせて出す。</summary>
-    private void ShowIconMenu(UIElement target, IEnumerable<MenuItemSpec> items, MenuAlign? align = null)
+    private void ShowIconMenu(UIElement target, IEnumerable<MenuItemSpec> items, MenuAlign? align = null) => ShowIconMenuPopup(target, items, align);
+
+    private System.Windows.Controls.Primitives.Popup ShowIconMenuPopup(UIElement target, IEnumerable<MenuItemSpec> items, MenuAlign? align = null)
     {
         var popup = Flyout.Show(target, items, FlyoutPlacement);
         if (target is FrameworkElement anchor) FluentSurface.PlaceAligned(popup, anchor, Edge, align ?? _settings.IconMenuAlign);
+        return popup;
     }
 
     /// <summary>プレビューを使わないときの、ウィンドウ名のリスト。プレビューと同じく、アイコンの中央に出す。</summary>
