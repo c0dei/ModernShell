@@ -624,6 +624,7 @@ public sealed class SettingsWindow : Window
                 },
                 Col(8, Txt("11月23日(月)", 13), Txt("勤労感謝の日", 11, dim, FontWeights.Normal))), 6),
             "clock" => Card(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { Center(Txt("12:34", 15)), Center(Txt("11月23日(月)", 12, T.Text, FontWeights.Normal)) } }, 12),
+            "notification" => Card(new Grid { Width = 24, Height = 24, Children = { UiKit.Glyph("", 19), new Border { MinWidth = 15, Height = 15, CornerRadius = new CornerRadius(8), Background = NotificationLook.Badge, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -4, -7, 0), Child = Center(Txt("4", 10, Brushes.White)) } } }, 14),
             "pomodoro" => new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { Center(Txt("Focus 1/4", 10, dim, FontWeights.Normal)), Center(Txt("25:00", 15)) } },
             _ => Txt(id, 13),
         };

@@ -163,6 +163,8 @@ public sealed class Settings
     public ClickOpens ClockWidgetOpens { get; set; } = ClickOpens.Windows;
     /// <summary>カレンダーのウィジェットをクリックしたときに開くもの（既定: アプリのカレンダー）。</summary>
     public ClickOpens CalendarWidgetOpens { get; set; } = ClickOpens.App;
+    /// <summary>通知のウィジェットをクリックしたときに開くもの（既定: アプリの通知ポップアップ）。</summary>
+    public ClickOpens NotificationWidgetOpens { get; set; } = ClickOpens.App;
     public bool GroupTaskbarButtons { get; set; } = true;
     public bool ShowTaskbarLabels { get; set; } = false;
     /// <summary>アプリが付ける進捗バーとオーバーレイ アイコン（通知の数など）をボタンに表示する。</summary>

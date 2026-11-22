@@ -275,7 +275,7 @@ internal static class ClickTarget
     }
 
     /// <summary>右クリックのメニュー: 通知センターを開く / クリックで開くものの選択。</summary>
-    public static System.Collections.Generic.IEnumerable<MenuItemSpec> Menu(ClickOpens current, Action<ClickOpens> set, FrameworkElement? from) => new[]
+    public static System.Collections.Generic.IEnumerable<MenuItemSpec> Menu(ClickOpens current, Action<ClickOpens> set, FrameworkElement? from, string? appLabel = null) => new[]
     {
         new MenuItemSpec("", L.T("通知センターを開く"), () => OpenWindows(from)),
         new MenuItemSpec("", L.T("クリックで開く"), () => { })
@@ -283,7 +283,7 @@ internal static class ClickTarget
             Children = () => new[]
             {
                 new MenuItemSpec(current == ClickOpens.Windows ? "" : "", L.T("Windows の通知センター"), () => set(ClickOpens.Windows)),
-                new MenuItemSpec(current == ClickOpens.App ? "" : "", L.T("アプリのカレンダー"), () => set(ClickOpens.App)),
+                new MenuItemSpec(current == ClickOpens.App ? "" : "", appLabel ?? L.T("アプリのカレンダー"), () => set(ClickOpens.App)),
             },
         },
         MenuItemSpec.Separator,

@@ -23,6 +23,7 @@ public static class BarWidgetCatalog
         new BarWidgetInfo("volume", "メディア", "音量", "今の音量。ホイールで音量を変え、クリックで出力デバイスの切り替え・アプリごとの音量", () => new VolumeBarWidget()),
         new BarWidgetInfo("quicksettings", "システム", "クイック設定", "ネットワーク（Wi-Fi・有線・機内モード）・Bluetooth・音量をひとつにまとめた表示。オンにすると、バー標準のクイック設定の代わりになります。クリックで Windows のクイック設定、ホイールで音量", () => new QuickSettingsBarWidget()),
         new BarWidgetInfo("ime", "システム", "IME（日本語入力）", "日本語入力の状態（あ / A など）を表示します。オンにすると、バー標準の IME 表示の代わりになります。クリックで入力モード（ひらがな・カタカナ・英数）", () => new ImeBarWidget()),
+        new BarWidgetInfo("notification", "システム", "通知", "ベルのアイコンと通知の数。クリックでアプリの通知ポップアップ（通知の一覧・応答不可の切り替え・Windows の通知設定）か Windows の通知センターを開きます", () => new NotificationBarWidget()),
         new BarWidgetInfo("battery","システム", "バッテリー", "バッテリー残量と充電中の表示（バッテリーの無い PC では表示されません）", () => new BatteryBarWidget()),
         new BarWidgetInfo("nowplaying", "メディア", "再生中の曲", "再生中の曲名とアーティスト。クリックでジャケット・シークバー・操作ボタン、右クリックで前後の曲へ", () => new NowPlayingBarWidget()),
         new BarWidgetInfo("weather", "天気", "天気", "今の天気（温度・天気）。クリックで時間ごと・週間の予報を表示。設定の天気の地点と更新間隔を使います", () => new WeatherBarWidget()),
