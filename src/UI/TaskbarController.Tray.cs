@@ -45,6 +45,7 @@ public sealed partial class TaskbarController
             Child = chevronGlyph, ToolTip = L.T("隠れているインジケーターを表示"),
         };
         _overflowButton.Click += ShowOverflow;
+        _overflowButton.RightClick += ShowOverflowMenu;
         MakeOverflowDropTarget(_overflowButton); // 「^」の上に落としてもしまえる
         if (_barHosts.TryGetValue("Tray", out var barWidgets)) { p.Children.Add(barWidgets); if (Divider() is { } d) p.Children.Add(d); }
         p.Children.Add(_overflowButton);
@@ -455,36 +456,48 @@ public sealed partial class TaskbarController
     private StackPanel? _overflowPanel;
     private TextBlock? _overflowHint;
 
+    private Action? _updateOverflowHint;
+
+    /// <summary>「^」の右クリックメニュー。表示するアイコンの編集を始める／終える。</summary>
+    private void ShowOverflowMenu(Tile anchor)
+    {
+        Flyout.Show(anchor, new[]
+        {
+            _trayEditMode
+                ? new MenuItemSpec("", L.T("完了"), () => SetTrayEdit(anchor, false))
+                : new MenuItemSpec("", L.T("表示するアイコンを選ぶ"), () => SetTrayEdit(anchor, true)),
+        }, FlyoutPlacement);
+    }
+
+    private void SetTrayEdit(Tile anchor, bool on)
+    {
+        _trayEditMode = on;
+        anchor.IsHitTestVisible = true;
+        if (on && _overflowPopup?.IsOpen != true) { ShowOverflow(anchor); RebuildTray(); return; }
+        _updateOverflowHint?.Invoke(); FillOverflow(); RebuildTray();
+    }
+
     private void ShowOverflow(Tile anchor)
     {
         if (_overflowPopup?.IsOpen == true) { _overflowPopup.IsOpen = false; return; } // 編集中（固定表示）に「^」で閉じる
         var t = Theme.Current;
-        _overflowPanel = new StackPanel { Margin = new Thickness(6) };
+        _overflowPanel = new StackPanel { Margin = new Thickness(6, 6, 6, 0) };
         _overflowHint = UiKit.Label("", 11, t.TextSecondary);
         _overflowHint.TextWrapping = TextWrapping.Wrap;
         _overflowHint.MaxWidth = 6 * 34;
         _overflowHint.Margin = new Thickness(8, 0, 8, 4);
 
-        var edit = new Tile { Padding = new Thickness(8, 4, 8, 4), Margin = new Thickness(4), HorizontalAlignment = HorizontalAlignment.Right };
-        void UpdateEdit()
+        _updateOverflowHint = () =>
         {
-            edit.Child = UiKit.Row(UiKit.Glyph(_trayEditMode ? "" : "", 12), Spaced(UiKit.Label(_trayEditMode ? L.T("完了") : L.T("表示するアイコンを選ぶ"), 12)));
             _overflowHint!.Text = _trayEditMode ? L.T("クリックで表示/非表示を切り替え、「常に表示」の中はドラッグで並べ替えできます") : "";
             _overflowHint.Visibility = _trayEditMode ? Visibility.Visible : Visibility.Collapsed;
-        }
-        edit.Click += _ =>
-        {
-            _trayEditMode = !_trayEditMode;
-            if (_trayEditMode) anchor.IsHitTestVisible = true; // 編集中は「^」を押して閉じられるように
-            UpdateEdit(); FillOverflow(); RebuildTray();
         };
-        UpdateEdit();
+        _updateOverflowHint();
 
         var stack = new StackPanel { Background = Brushes.Transparent };
         MakeOverflowDropTarget(stack);
         stack.Children.Add(_overflowPanel);
         stack.Children.Add(_overflowHint);
-        stack.Children.Add(edit);
 
         _overflowPopup = FluentSurface.Create(stack, anchor, FlyoutPlacement);
         // アイコンのアプリがメニューやウィンドウを出してもすぐには閉じない。閉じるのは、ModernShell 以外の場所のクリック
