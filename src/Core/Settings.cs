@@ -41,6 +41,8 @@ public enum BarTintMode { Theme, Accent, Custom, Wallpaper }
 public enum NowPlayingStyle { Standard, Compact, Ring }
 /// <summary>CPU・メモリのウィジェットの見た目（横のバーのみ。縦のバーは常に Ring）。</summary>
 public enum SystemStyle { Ring, HBar, VBar, Underline, Sparkline, Segments, Tile, Text }
+/// <summary>タスク ビューのウィジェットの見た目。Icon = アイコンのみ / Dots = ドット（現在位置が長いピル）/ Chips = 番号チップ。</summary>
+public enum TaskViewStyle { Icon, Dots, Chips }
 /// <summary>通信速度のウィジェットの見た目（横のバーのみ。縦のバーは常に Ring）。</summary>
 public enum NetSpeedStyle { Ring, TwoLine, HBar, Sparkline, VBar, Compact, Text, Tile }
 /// <summary>「再生中の曲」の再生位置の線。Wave =波線（再生済みが波で流れ、これからは直線。一時停止中は直線）/ Line = 常に直線。</summary>
@@ -96,7 +98,6 @@ public sealed class Settings
     [JsonIgnore] public int TaskbarIconSize => TaskbarSize switch { TaskbarSize.Small => 20, TaskbarSize.Large => 28, _ => 24 };
     public StartButtonPosition StartButtonPosition { get; set; } = StartButtonPosition.WithApps;
     public bool ShowSearchButton { get; set; } = true;
-    public bool ShowTaskViewButton { get; set; } = true;
     /// <summary>タスクバーに常に表示するトレイアイコン（ManagedShell の NotifyIcon.Identifier）。それ以外は「^」の中。</summary>
     public List<string> PinnedTrayIcons { get; set; } = new();
     public TaskbarStyle TaskbarStyle { get; set; } = TaskbarStyle.Band;
@@ -135,7 +136,7 @@ public sealed class Settings
     public MenuAlign WindowListAlign { get; set; } = MenuAlign.Center;
     /// <summary>ウィンドウのプレビュー（サムネイル）の基準。</summary>
     public MenuAlign PreviewAlign { get; set; } = MenuAlign.Center;
-    /// <summary>仮想デスクトップの一覧（タスク ビュー ボタン）の基準。</summary>
+    /// <summary>仮想デスクトップの一覧（タスク ビューのウィジェット）の基準。</summary>
     public MenuAlign DesktopsAlign { get; set; } = MenuAlign.Center;
     /// <summary>「^」（隠れているトレイアイコンの一覧）の基準。</summary>
     public MenuAlign TrayOverflowAlign { get; set; } = MenuAlign.Center;
@@ -189,6 +190,8 @@ public sealed class Settings
     public SystemStyle SystemWidgetStyle { get; set; } = SystemStyle.Ring;
     /// <summary>通信速度のウィジェットの見た目。</summary>
     public NetSpeedStyle NetSpeedWidgetStyle { get; set; } = NetSpeedStyle.Ring;
+    /// <summary>タスク ビューのウィジェットの見た目。</summary>
+    public TaskViewStyle TaskViewWidgetStyle { get; set; } = TaskViewStyle.Icon;
     /// <summary>「再生中の曲」にジャケット・動画の画像を出す（オフは音符のアイコン）。</summary>
     public bool NowPlayingThumbnail { get; set; } = true;
     /// <summary>再生中だけ動く波形（棒）を出す。</summary>
@@ -398,6 +401,12 @@ public sealed class Settings
                 s.BarWidgets.Add("ime");
             // トレイアイコン（「^」と常に表示のアイコン）はウィジェットになった。これまで見えていた人には、ウィジェットを追加する
             // （次の保存でこの項目が書かれるので、あとでウィジェットを外しても、また追加されることはない）
+            // バーに埋め込みのタスク ビュー ボタンはなくなり、ウィジェットだけになった。表示していた人には、同じ場所（スタートの隣）にウィジェットを追加する
+            if (root.TryGetProperty("ShowTaskViewButton", out var tv) && tv.ValueKind == JsonValueKind.True && !s.BarWidgets.Contains("taskview"))
+            {
+                s.BarWidgets.Add("taskview");
+                s.BarWidgetZones["taskview"] = "Left";
+            }
             if (!root.TryGetProperty(nameof(TrayWidgetAdded), out _) && !s.BarWidgets.Contains("tray"))
                 s.BarWidgets.Add("tray");
             if (!root.TryGetProperty(nameof(StartMenuBackground), out _))

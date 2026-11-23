@@ -61,6 +61,7 @@ public sealed partial class TaskbarController
                         var details = w.Details().ToList();
                         if (details.Count > 0) Highlight(t, ShowIconMenuPopup(x, details));
                     };
+                    if (w is TaskViewBarWidget) HookDesktops(t); // カーソルを置くと仮想デスクトップの一覧
                     t.RightClick += x => Highlight(t, ShowIconMenuPopup(x, w.ExtraMenu().Concat(BarWidgetMenu(id)).ToList()));
                 }
                 string zone = ZoneOf(id);

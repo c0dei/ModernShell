@@ -529,7 +529,6 @@ public sealed class SettingsWindow : Window
 
         p.Children.Add(Section(L.T("表示するボタン"), first: true));
         p.Children.Add(ToggleRow(L.T("検索ボタンを表示"), "", _s.ShowSearchButton, v => _s.ShowSearchButton = v, on, "\uE721"));
-        p.Children.Add(ToggleRow(L.T("タスク ビュー ボタンを表示"), "", _s.ShowTaskViewButton, v => _s.ShowTaskViewButton = v, on, "\uE7C4"));
         p.Children.Add(ToggleRow(L.T("複数のモニターにタスクバーを表示"), L.T("メイン以外のモニターにもタスクバーを出し、起動中のアプリのボタンをすべてのモニターに並べます（時計付き）"), _s.MultiMonitorTaskbar, v => _s.MultiMonitorTaskbar = v, on, "\uE740"));
         p.Children.Add(ToggleRow(L.T("時計に秒を表示"), "", _s.ShowSeconds, v => _s.ShowSeconds = v, on, "\uE916"));
 
@@ -558,8 +557,8 @@ public sealed class SettingsWindow : Window
                 _s.ShowThumbnailPreview, v => _s.ShowThumbnailPreview = v, on),
             ToggleRow(L.T("プレビューにメディア操作を表示"), L.T("音楽や動画を再生中のアプリのプレビューに、前の曲・再生/一時停止・次の曲のボタンを出します"),
                 _s.ShowPreviewMediaControls, v => _s.ShowPreviewMediaControls = v, on && _s.ShowThumbnailPreview),
-            ToggleRow(L.T("タスク ビュー ボタンで仮想デスクトップを表示"), L.T("カーソルを置くとデスクトップの一覧を表示し、クリックで切り替え、＋ で追加します"),
-                _s.ShowDesktopsOnTaskView, v => _s.ShowDesktopsOnTaskView = v, on && _s.ShowTaskViewButton),
+            ToggleRow(L.T("タスク ビューで仮想デスクトップを表示"), L.T("タスク ビューのウィジェットにカーソルを置くとデスクトップの一覧を表示し、クリックで切り替え、＋ で追加します"),
+                _s.ShowDesktopsOnTaskView, v => _s.ShowDesktopsOnTaskView = v, on && _s.BarWidgets.Contains("taskview")),
             NumberRow(L.T("表示までの待ち時間"), "", 0, 2000, _s.PreviewDelayMs, "ms", v => _s.PreviewDelayMs = (int)v, on && (_s.ShowThumbnailPreview || _s.ShowDesktopsOnTaskView), step: 50, def: 400),
             DropDownRow(L.T("プレビューの大きさ"), "",
                 new[] { ("Small", L.T("小")), ("Medium", L.T("中（標準）")), ("Large", L.T("大")) },
@@ -749,6 +748,7 @@ public sealed class SettingsWindow : Window
             "tray" => Card(Row(UiKit.Glyph("", 12), Pad(UiKit.Glyph("", 16), 10), Pad(UiKit.Glyph("", 16), 10), Pad(UiKit.Glyph("", 16), 10)), 10),
             "quicksettings" => Card(Row(UiKit.Glyph("", 17), Pad(UiKit.Glyph(VolumeGlyph.For(50, false), 17), 12), VolBar(60, 8)), 10),
             "ime" => Card(new Border { Width = 32, Height = 32, CornerRadius = T.Corner(8), Background = T.AccentBrush, Child = Center(Txt("あ", 16, ImeLook.OnAccent(T))) }, 8),
+            "taskview" => Card(TaskViewLook.Indicator(T, _s.TaskViewWidgetStyle, 4, 1, false, 38), 10),
             "battery" => Row(Ring(28, green, 87, "87"), Pad(UiKit.Glyph("", 10), 4)),
             "nowplaying" => NowPlayingPreview(track),
             "weather" => Card(Row(WeatherSymbols.Create(0, true, 30), Col(8, Txt("18°", 13), Txt("横浜市  快晴", 11, dim, FontWeights.Normal))), 8),
@@ -1584,7 +1584,6 @@ public sealed class SettingsWindow : Window
                 var r = new StackPanel { Orientation = flow };
                 r.Children.Add(UiKit.StartLogo(12, T.AccentBrush));
                 if (_s.ShowSearchButton) r.Children.Add(Gap(UiKit.Glyph("", 11), 8));
-                if (_s.ShowTaskViewButton) r.Children.Add(Gap(UiKit.Glyph("", 11), 8));
                 return r;
             }
             FrameworkElement Apps()

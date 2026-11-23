@@ -24,6 +24,7 @@ public static class BarWidgetCatalog
         new BarWidgetInfo("tray", "システム", "トレイアイコン", "アプリが置くアイコン（「^」の一覧と、常に表示するアイコン）。オフにするとトレイアイコンは表示されません。ドラッグで常に表示/しまうを切り替え、「^」の右クリックで表示するアイコンを選べます", () => new TrayBarWidget()),
         new BarWidgetInfo("quicksettings", "システム", "クイック設定", "ネットワーク（Wi-Fi・有線・機内モード）・Bluetooth・音量をひとつにまとめた表示。クリックで Windows のクイック設定、ホイールで音量", () => new QuickSettingsBarWidget()),
         new BarWidgetInfo("ime", "システム", "IME（日本語入力）", "日本語入力の状態（あ / A など）を表示します。オンにすると、バー標準の IME 表示の代わりになります。クリックで入力モード（ひらがな・カタカナ・英数）", () => new ImeBarWidget()),
+        new BarWidgetInfo("taskview", "システム", "タスク ビュー", "今の仮想デスクトップの位置を表示します（アイコンのみ・ドット・番号チップ）。クリックでタスク ビュー、カーソルを置くと仮想デスクトップの一覧。右クリックで表示の形を選べます", () => new TaskViewBarWidget()),
         new BarWidgetInfo("notification", "システム", "通知", "ベルのアイコンと通知の数。クリックでアプリの通知ポップアップ（通知の一覧・応答不可の切り替え・Windows の通知設定）か Windows の通知センターを開きます", () => new NotificationBarWidget()),
         new BarWidgetInfo("battery","システム", "バッテリー", "バッテリー残量と充電中の表示（バッテリーの無い PC では表示されません）", () => new BatteryBarWidget()),
         new BarWidgetInfo("nowplaying", "メディア", "再生中の曲", "再生中の曲名とアーティスト。クリックでジャケット・シークバー・操作ボタン、右クリックで前後の曲へ", () => new NowPlayingBarWidget()),

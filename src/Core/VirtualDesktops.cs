@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
 namespace ModernShell.Core;
@@ -82,14 +84,87 @@ public static class VirtualDesktops
     private static void CloseCurrent() =>
         Input.Send((Native.Win32.VK_LWIN, false), (VK_CONTROL, false), (VK_F4, false), (VK_F4, true), (VK_CONTROL, true), (Native.Win32.VK_LWIN, true));
 
+    // ---- 内部 COM（切り替えずに削除する）。Windows 11 24H2 以降（26100.2605〜）の定義。ビルドで変わるので、合わなければ呼ばずに従来の方法へ戻る ----
+    [ComImport, Guid("6D5140C1-7436-11CE-8034-00AA006009FA"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IServiceProviderCom
+    {
+        [PreserveSig] int QueryService(ref Guid service, ref Guid riid, out IntPtr obj);
+    }
+
+    /// <summary>ポインタとして渡すだけなので、メソッドは宣言しない。</summary>
+    [ComImport, Guid("3F07F4BE-B107-441A-AF0F-39D82529072C"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IVirtualDesktopCom { }
+
+    [ComImport, Guid("53F5CA0B-158F-4124-900C-057158060B27"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IVirtualDesktopManagerInternalCom
+    {
+        [PreserveSig] int GetCount(out uint count);                                          // 0
+        [PreserveSig] int MoveViewToDesktop(IntPtr view, IVirtualDesktopCom desktop);        // 1
+        [PreserveSig] int CanViewMoveDesktops(IntPtr view, out int can);                     // 2
+        [PreserveSig] int GetCurrentDesktop(out IVirtualDesktopCom desktop);                 // 3
+        [PreserveSig] int GetDesktops(out IntPtr array);                                     // 4
+        [PreserveSig] int GetAdjacentDesktop(IVirtualDesktopCom from, uint direction, out IVirtualDesktopCom desktop); // 5
+        [PreserveSig] int SwitchDesktop(IVirtualDesktopCom desktop);                         // 6
+        [PreserveSig] int SwitchDesktopAndMoveForegroundView(IVirtualDesktopCom desktop);    // 7
+        [PreserveSig] int CreateDesktop(out IVirtualDesktopCom desktop);                     // 8
+        [PreserveSig] int MoveDesktop(IVirtualDesktopCom desktop, uint index);               // 9
+        [PreserveSig] int RemoveDesktop(IVirtualDesktopCom destroy, IVirtualDesktopCom fallback); // 10
+        [PreserveSig] int FindDesktop(ref Guid id, out IVirtualDesktopCom desktop);          // 11
+    }
+
+    private static bool _directFailed; // 一度合わないと分かったら、このセッションでは試さない
+
     /// <summary>
-    /// index 番目のデスクトップを削除する。Windows はキー操作では「今のデスクトップを閉じる」しかできないので、
-    /// 別のデスクトップのときは一度そこへ切り替えて閉じ、元のデスクトップへ戻る。
+    /// index 番目のデスクトップを、切り替えずにその場で削除する（内部 COM の RemoveDesktop）。
+    /// 開いていたウィンドウは隣（左、いちばん左なら右）へ移る。呼び出し前後で数と ID を確かめ、合わなければ false（従来の方法へ戻る）。
+    /// </summary>
+    private static async System.Threading.Tasks.Task<bool> TryRemoveDirect(List<DesktopInfo> list, int index)
+    {
+        if (_directFailed || list.Any(d => d.Id == Guid.Empty)) return false;
+        try
+        {
+            var type = Type.GetTypeFromCLSID(new Guid("C2F03A33-21F5-47FA-B4BB-156362A2F239"));
+            if (type == null || Activator.CreateInstance(type) is not IServiceProviderCom shell) return false;
+            var service = new Guid("C5E0CDCA-7B6E-41B2-9FC4-D93975CC467B");
+            var iid = typeof(IVirtualDesktopManagerInternalCom).GUID;
+            if (shell.QueryService(ref service, ref iid, out var ptr) != 0 || ptr == IntPtr.Zero) { _directFailed = true; return false; }
+            IVirtualDesktopManagerInternalCom mgr;
+            try { mgr = (IVirtualDesktopManagerInternalCom)Marshal.GetObjectForIUnknown(ptr); }
+            finally { Marshal.Release(ptr); }
+
+            // 定義が合っているかの確認: 数が一覧と同じで、ID から削除する分と移動先が引ける
+            if (mgr.GetCount(out uint count) != 0 || count != list.Count) { _directFailed = true; return false; }
+            var removeId = list[index].Id;
+            var fallbackId = list[index > 0 ? index - 1 : 1].Id;
+            if (mgr.FindDesktop(ref removeId, out var destroy) != 0 || destroy == null) { _directFailed = true; return false; }
+            if (mgr.FindDesktop(ref fallbackId, out var fallback) != 0 || fallback == null) { _directFailed = true; return false; }
+
+            if (mgr.RemoveDesktop(destroy, fallback) != 0) { _directFailed = true; return false; }
+            for (int i = 0; i < 20; i++)
+            {
+                await System.Threading.Tasks.Task.Delay(50);
+                if (List().Count < list.Count) return true;
+            }
+            _directFailed = true; // 呼べたが何も起きなかった: 定義が合っていない
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log.Info("direct desktop remove unavailable: " + ex.Message);
+            _directFailed = true;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// index 番目のデスクトップを削除する。まず切り替えずに削除する（内部 COM）。
+    /// 使えないときは、Windows のキー操作が「今のデスクトップを閉じる」しかできないので、別のデスクトップなら一度そこへ切り替えて閉じ、元のデスクトップへ戻る。
     /// </summary>
     public static async System.Threading.Tasks.Task Remove(int index)
     {
         var list = List();
         if (list.Count <= 1 || index < 0 || index >= list.Count) return;
+        if (await TryRemoveDirect(list, index)) return;
         int current = list.FindIndex(d => d.IsCurrent);
         if (index == current) { CloseCurrent(); return; }
         SwitchTo(index);
