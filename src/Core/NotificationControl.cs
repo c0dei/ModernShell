@@ -121,7 +121,7 @@ internal static class NotificationControl
             // 通知に付いている起動パラメータ（Windows の通知データベースから）。URL を開く通知は、そのまま開く
             var toast = ToastPayload.Read(item.Id);
             Log.Info($"notification activate: {item.AppId} type={toast?.ActivationType ?? "-"} launch={Trunc(toast?.Launch)}");
-            if (toast is { IsProtocol: true } && IsSafeProtocolUri(toast.Launch) && OpenUri(toast.Launch)) { Remove(item.Id); return; }
+            if (toast is { IsProtocol: true } && IsSafeProtocolUri(toast.Launch, out var safeUri) && OpenUri(safeUri)) { Remove(item.Id); return; }
             if (OpenScreenshot(item)) { Remove(item.Id); return; }
             // ストアアプリは、起動パラメータ付きで起動する（アプリは通知からの起動と同じ引数を受け取る）
             if (toast != null && item.AppId.Contains('!') && OpenApp(item.AppId, toast.Launch)) { Remove(item.Id); return; }
@@ -178,14 +178,17 @@ internal static class NotificationControl
         "ms-appinstaller", "ms-cxh", "ms-cxh-full", "jar", "res", "ms-settings-airplanemode", "ldap", "ftp", "smb", "gopher",
     };
 
-    private static bool IsSafeProtocolUri(string s)
+    /// <summary>開いてよい URL か確かめ、よければ正規化した URL（<see cref="Uri.AbsoluteUri"/>）を返す（元の文字列は ShellExecute に渡さない）。</summary>
+    private static bool IsSafeProtocolUri(string s, out string safe)
     {
+        safe = "";
         if (Launcher.IsElevated) return false;
         if (s.Length == 0 || s.Length > 2048 || s.Any(char.IsControl)) return false;
         if (!Uri.TryCreate(s, UriKind.Absolute, out var u)) return false;
         if (u.IsUnc || u.IsFile || u.Scheme.Length < 2) return false; // C:\... は「C」というスキームに見えてしまうので、1 文字は除く
         if (BlockedSchemes.Contains(u.Scheme)) return false;
         Log.Info("notification protocol: " + u.Scheme);
+        safe = u.AbsoluteUri;
         return true;
     }
 
