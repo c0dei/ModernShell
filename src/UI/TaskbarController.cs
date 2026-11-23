@@ -52,7 +52,6 @@ public sealed partial class TaskbarController : IDisposable
     public event Action? StartClicked;
     /// <summary>タスクバーが実際に画面に描かれたとき（純正タスクバーを隠すのはこのあと）。</summary>
     public event Action? FirstDrawn;
-    public event Action? SearchClicked;
     public event Action? OpenSettingsRequested;
     public event Action? ExitRequested;
 
@@ -266,10 +265,10 @@ public sealed partial class TaskbarController : IDisposable
     private string _layoutKey = "";
     private string LayoutKey() => string.Join("|", _settings.UseCustomTaskbar, _settings.TaskbarStyle, _settings.StartButtonPosition,
         _settings.TaskbarAlignment, _settings.TaskbarEdge, _settings.TaskbarSize, _settings.IslandMarginX, _settings.IslandMarginY,
-        _settings.ShowSearchButton, _settings.ShowSeconds,
+        _settings.ShowSeconds,
         _settings.MagnifyOnHover, _settings.MagnifyScale, _settings.MagnifyNeighbors, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
         _settings.MultiMonitorTaskbar, _settings.AutoHideTaskbar, _settings.TaskbarEdgeOffset, _settings.TaskbarPill, _settings.ShowBarDividers, _settings.ClockAlign, _settings.ClockStyle, _settings.ClockTimeFormat, _settings.ClockDateFormat, _settings.TaskbarTint, _settings.TaskbarCustomColor, string.Join(",", _settings.BarWidgets.Select(w => w + ":" + (_settings.BarWidgetZones.GetValueOrDefault(w) ?? "Tray"))), _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language,
-        _settings.SystemWidgetStyle, _settings.NetSpeedWidgetStyle, _settings.TaskViewWidgetStyle,
+        _settings.SystemWidgetStyle, _settings.NetSpeedWidgetStyle, _settings.TaskViewWidgetStyle, _settings.SearchWidgetStyle, _settings.EverythingWidgetStyle,
         _settings.NowPlayingStyle, _settings.NowPlayingThumbnail, _settings.NowPlayingWave, _settings.NowPlayingWavePlacement, _settings.NowPlayingProgress, _settings.NowPlayingProgressStyle, _settings.NowPlayingTextWidth, _settings.NowPlayingScroll);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e)
     {
@@ -678,7 +677,6 @@ public sealed partial class TaskbarController : IDisposable
             new MenuItemSpec("", L.T("ModernShell を終了（純正に戻す）"), () => ExitRequested?.Invoke()),
         });
         p.Children.Add(start);
-        if (_settings.ShowSearchButton) p.Children.Add(SmallButton("", L.T("検索"), () => SearchClicked?.Invoke()));
         if (_barHosts.TryGetValue("Left", out var leftWidgets)) p.Children.Add(leftWidgets);
         return p;
     }
@@ -692,14 +690,6 @@ public sealed partial class TaskbarController : IDisposable
         _ => PlacementMode.Top,
     };
 
-    private Tile SmallButton(string glyph, string tip, Action onClick, Action<Tile>? configure = null)
-    {
-        var tile = new Tile { Width = TileSize.Width, Height = TileSize.Height, Margin = Gap, Child = UiKit.Glyph(glyph, GlyphSz), ToolTip = tip };
-        // 検索・タスク ビューはキー操作を送って開くので、管理者として動くアプリが前面でも届くよう先に前面になる
-        tile.Click += x => { TakeForeground(x); onClick(); };
-        configure?.Invoke(tile);
-        return tile;
-    }
 
     /// <summary>タスクビューボタン: カーソルを置くと仮想デスクトップの一覧（Windows 11 と同じ）。</summary>
     private void HookDesktops(Tile tv)

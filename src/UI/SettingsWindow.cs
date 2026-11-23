@@ -322,12 +322,10 @@ public sealed class SettingsWindow : Window
     private void StartPage(StackPanel p)
     {
         if (!_flat) p.Children.Add(StartPreview());
-        var which = new[] { ("ModernShell", L.T("ModernShell のスタート")), ("Windows", L.T("Windows 標準のスタート")) };
         p.Children.Add(Section(L.T("開き方")));
-        p.Children.Add(DropDownRow(L.T("Win キーで開くスタート"), L.T("Win+E などの組み合わせは、どちらでもそのまま使えます"),
-            which, _s.ReplaceStartMenu ? "ModernShell" : "Windows", v => _s.ReplaceStartMenu = v == "ModernShell"));
-        p.Children.Add(DropDownRow(L.T("スタート ボタンで開くスタート"), L.T("タスクバーのスタートボタンをクリックしたとき（どちらのタスクバーでも）"),
-            which, _s.InterceptNativeStartButton ? "ModernShell" : "Windows", v => _s.InterceptNativeStartButton = v == "ModernShell"));
+        p.Children.Add(DropDownRow(L.T("開くスタート メニュー"), L.T("Win キーとタスクバーのスタート ボタン（どちらのタスクバーでも）で開くものです。Win+E などの組み合わせは、どちらでもそのまま使えます"),
+            new[] { ("ModernShell", L.T("ModernShell のスタート")), ("Windows", L.T("Windows 標準のスタート")) },
+            _s.ReplaceStartMenu ? "ModernShell" : "Windows", v => _s.ReplaceStartMenu = v == "ModernShell", icon: ""));
         p.Children.Add(DropDownRow(L.T("スタート メニューを開く位置"), L.T("自動のときはスタートボタンの位置に合わせます。Windows 標準のスタートも、ModernShell のタスクバー使用中はこの位置に開きます"),
             new[] { ("Auto", L.T("自動")), ("Left", L.T("左")), ("Center", L.T("中央")) },
             _s.StartMenuPosition.ToString(), v => _s.StartMenuPosition = Enum.Parse<StartMenuPosition>(v)));
@@ -528,7 +526,6 @@ public sealed class SettingsWindow : Window
         if (!on && !_flat) p.Children.Add(Note(L.T("「タスクバー」ページで ModernShell のタスクバーを使うと、ここの設定が反映されます。")));
 
         p.Children.Add(Section(L.T("表示するボタン"), first: true));
-        p.Children.Add(ToggleRow(L.T("検索ボタンを表示"), "", _s.ShowSearchButton, v => _s.ShowSearchButton = v, on, "\uE721"));
         p.Children.Add(ToggleRow(L.T("複数のモニターにタスクバーを表示"), L.T("メイン以外のモニターにもタスクバーを出し、起動中のアプリのボタンをすべてのモニターに並べます（時計付き）"), _s.MultiMonitorTaskbar, v => _s.MultiMonitorTaskbar = v, on, "\uE740"));
         p.Children.Add(ToggleRow(L.T("時計に秒を表示"), "", _s.ShowSeconds, v => _s.ShowSeconds = v, on, "\uE916"));
 
@@ -677,7 +674,7 @@ public sealed class SettingsWindow : Window
         int shown = _s.BarWidgets.Count(id => !BarWidgetCatalog.IsPart(id));
         p.Children.Add(Note(L.T("ウィジェットをクリックすると、タスクバーに追加／削除できます。位置はバー上でドラッグして変えられます。") + "  " + L.F("表示中: {0} 個", shown)));
         var wrap = new WrapPanel { Margin = new Thickness(-4, 4, -4, 0), IsEnabled = on, Opacity = on ? 1 : 0.45 };
-        foreach (var w in BarWidgetCatalog.All) wrap.Children.Add(WidgetPreviewCard(w));
+        foreach (var w in BarWidgetCatalog.All.Where(w => w.Id != "everything" || Everything.IsInstalled || _s.BarWidgets.Contains("everything"))) wrap.Children.Add(WidgetPreviewCard(w));
         p.Children.Add(wrap);
 
         // 区切り線とスペース: 何個でも足せる
@@ -746,6 +743,8 @@ public sealed class SettingsWindow : Window
             "tray" => Card(Row(UiKit.Glyph("", 12), Pad(UiKit.Glyph("", 16), 10), Pad(UiKit.Glyph("", 16), 10), Pad(UiKit.Glyph("", 16), 10)), 10),
             "quicksettings" => Card(Row(UiKit.Glyph("", 17), Pad(UiKit.Glyph(VolumeGlyph.For(50, false), 17), 12), VolBar(60, 8)), 10),
             "ime" => Card(new Border { Width = 32, Height = 32, CornerRadius = T.Corner(8), Background = T.AccentBrush, Child = Center(Txt("あ", 16, ImeLook.OnAccent(T))) }, 8),
+            "search" => SearchPreview(SearchLook.Kind.Search, _s.SearchWidgetStyle),
+            "everything" => SearchPreview(SearchLook.Kind.Everything, _s.EverythingWidgetStyle),
             "taskview" => Card(TaskViewLook.Indicator(T, _s.TaskViewWidgetStyle, 4, 1, false, 38), 10),
             "battery" => Row(Ring(28, green, 87, "87"), Pad(UiKit.Glyph("", 10), 4)),
             "nowplaying" => NowPlayingPreview(track),
@@ -762,6 +761,14 @@ public sealed class SettingsWindow : Window
             "pomodoro" => new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { Center(Txt("Focus 1/4", 10, dim, FontWeights.Normal)), Center(Txt("25:00", 15)) } },
             _ => Txt(id, 13),
         };
+    }
+
+    /// <summary>検索・Everything の絵（実物と同じ部品）。</summary>
+    private FrameworkElement SearchPreview(SearchLook.Kind kind, SearchStyle style)
+    {
+        var card = (Border)SearchLook.Card(new SearchBarWidget(), T, false, "", kind, style, null, out _);
+        card.Height = 38;
+        return card;
     }
 
     /// <summary>「再生中の曲」の絵: ジャケット・曲名とアーティスト・再生ボタン・再生位置の下線。</summary>
@@ -1581,7 +1588,6 @@ public sealed class SettingsWindow : Window
             {
                 var r = new StackPanel { Orientation = flow };
                 r.Children.Add(UiKit.StartLogo(12, T.AccentBrush));
-                if (_s.ShowSearchButton) r.Children.Add(Gap(UiKit.Glyph("", 11), 8));
                 return r;
             }
             FrameworkElement Apps()

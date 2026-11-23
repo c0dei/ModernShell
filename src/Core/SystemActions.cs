@@ -24,6 +24,7 @@ public static class SystemActions
     public static void NotificationCenter() => Input.WinCombo(0x4E); // Win+N
     public static void ShowDesktop() => Input.WinCombo(0x44); // Win+D
     public static void TaskView() => Input.WinCombo(0x09); // Win+Tab
+    public static void WindowsSearch() => Input.WinCombo(0x53); // Win+S
     public static void PowerUserMenu() => Input.WinCombo(0x58); // Win+X
 
     /// <summary>"ファイル名を指定して実行" 相当。検索欄にコマンドやパスを打った場合に使う。</summary>

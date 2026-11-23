@@ -43,6 +43,10 @@ public enum NowPlayingStyle { Standard, Compact, Ring }
 public enum SystemStyle { Ring, HBar, VBar, Underline, Sparkline, Segments, Tile, Text }
 /// <summary>タスク ビューのウィジェットの見た目。Icon = アイコンのみ / Dots = ドット（現在位置が長いピル）/ Chips = 番号チップ。</summary>
 public enum TaskViewStyle { Icon, Dots, Chips }
+/// <summary>検索・Everything のウィジェットの見た目。Icon: アイコンのみ / Box: 検索ボックスの形</summary>
+public enum SearchStyle { Icon, Box }
+/// <summary>Everything のウィジェットをクリックして開くもの。Panel: アプリ独自の検索ウィンドウ（Everything SDK） / Window: Everything 本体のウィンドウ</summary>
+public enum EverythingOpens { Panel, Window }
 /// <summary>通信速度のウィジェットの見た目（横のバーのみ。縦のバーは常に Ring）。</summary>
 public enum NetSpeedStyle { Ring, TwoLine, HBar, Sparkline, VBar, Compact, Text, Tile }
 /// <summary>「再生中の曲」の再生位置の線。Wave =波線（再生済みが波で流れ、これからは直線。一時停止中は直線）/ Line = 常に直線。</summary>
@@ -68,10 +72,8 @@ public enum TaskbarStyle { Band, Floating }
 public sealed class Settings
 {
     // --- スタートメニュー ---
-    /// <summary>Win キー / スタートボタンを横取りして独自スタートメニューを表示する。</summary>
+    /// <summary>Win キー / スタートボタン（どちらのタスクバーでも）を横取りして独自スタートメニューを表示する。false なら Windows 標準のスタート。</summary>
     public bool ReplaceStartMenu { get; set; } = true;
-    /// <summary>純正タスクバー使用時、純正スタートボタンのクリックも横取りする。</summary>
-    public bool InterceptNativeStartButton { get; set; } = true;
     public int PinnedColumns { get; set; } = 6;
     /// <summary>スタートメニュー（ModernShell / Windows 標準どちらも）を開く位置。</summary>
     public StartMenuPosition StartMenuPosition { get; set; } = StartMenuPosition.Auto;
@@ -97,7 +99,6 @@ public sealed class Settings
     /// <summary>アプリ アイコンの大きさ (DIP)。<see cref="TaskbarSize"/> から決まる。</summary>
     [JsonIgnore] public int TaskbarIconSize => TaskbarSize switch { TaskbarSize.Small => 20, TaskbarSize.Large => 28, _ => 24 };
     public StartButtonPosition StartButtonPosition { get; set; } = StartButtonPosition.WithApps;
-    public bool ShowSearchButton { get; set; } = true;
     /// <summary>タスクバーに常に表示するトレイアイコン（ManagedShell の NotifyIcon.Identifier）。それ以外は「^」の中。</summary>
     public List<string> PinnedTrayIcons { get; set; } = new();
     public TaskbarStyle TaskbarStyle { get; set; } = TaskbarStyle.Band;
@@ -192,6 +193,12 @@ public sealed class Settings
     public NetSpeedStyle NetSpeedWidgetStyle { get; set; } = NetSpeedStyle.Ring;
     /// <summary>タスク ビューのウィジェットの見た目。</summary>
     public TaskViewStyle TaskViewWidgetStyle { get; set; } = TaskViewStyle.Icon;
+    /// <summary>検索のウィジェットの見た目。</summary>
+    public SearchStyle SearchWidgetStyle { get; set; } = SearchStyle.Icon;
+    /// <summary>Everything のウィジェットの見た目。</summary>
+    public SearchStyle EverythingWidgetStyle { get; set; } = SearchStyle.Icon;
+    /// <summary>Everything のウィジェットをクリックしたとき（検索ボックスで Enter を押したとき）に開くもの。</summary>
+    public EverythingOpens EverythingWidgetOpens { get; set; } = EverythingOpens.Panel;
     /// <summary>「再生中の曲」にジャケット・動画の画像を出す（オフは音符のアイコン）。</summary>
     public bool NowPlayingThumbnail { get; set; } = true;
     /// <summary>再生中だけ動く波形（棒）を出す。</summary>
@@ -406,6 +413,18 @@ public sealed class Settings
             {
                 s.BarWidgets.Add("taskview");
                 s.BarWidgetZones["taskview"] = "Left";
+            }
+            // バーに埋め込みの検索ボタンはなくなり、ウィジェットだけになった。表示していた人には、同じ場所（スタートの隣）にウィジェットを追加する
+            if (root.TryGetProperty("ShowSearchButton", out var sb) && sb.ValueKind == JsonValueKind.True && !s.BarWidgets.Contains("search"))
+            {
+                s.BarWidgets.Add("search");
+                s.BarWidgetZones["search"] = "Left";
+            }
+            // 検索のウィジェットの「クリックで開く」に Everything を選んでいた人は、Everything のウィジェットに置き換える（Windows の検索と Everything は別のウィジェットになった）
+            if (Old("SearchWidgetOpens") == "Everything" && s.BarWidgets.IndexOf("search") is int si and >= 0 && !s.BarWidgets.Contains("everything"))
+            {
+                s.BarWidgets[si] = "everything";
+                if (s.BarWidgetZones.Remove("search", out var sz)) s.BarWidgetZones["everything"] = sz;
             }
             if (!root.TryGetProperty(nameof(TrayWidgetAdded), out _) && !s.BarWidgets.Contains("tray"))
                 s.BarWidgets.Add("tray");

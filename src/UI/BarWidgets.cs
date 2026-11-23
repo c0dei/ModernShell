@@ -17,6 +17,8 @@ public static class BarWidgetCatalog
 {
     public static readonly IReadOnlyList<BarWidgetInfo> All = new[]
     {
+        new BarWidgetInfo("search", "生産性", "検索", "クリックで検索を開きます（もう一度押すと閉じます）。「開くスタート メニュー」が ModernShell のときはスタート メニューの検索ボックス、Windows 標準のときは Windows の検索です", () => new SearchBarWidget()),
+        new BarWidgetInfo("everything", "生産性", "Everything", "クリックで Everything のウィンドウを開きます（もう一度押すと閉じます）。Everything が入っている PC で使えます", () => new EverythingBarWidget()),
         new BarWidgetInfo("system", "システム", "CPU・メモリ", "CPU とメモリの使用率を円グラフで表示します。クリックで詳細", () => new SystemBarWidget()),
         new BarWidgetInfo("network", "システム", "ネットワーク", "つないでいる Wi-Fi・有線の名前と電波の強さ。クリックで Wi-Fi のオン/オフ・近くのネットワークへの接続・切断", () => new NetworkBarWidget()),
         new BarWidgetInfo("netspeed", "システム", "通信速度", "ダウンロード・アップロードの今の速さを円グラフで表示します。クリックで直近 30 秒の推移", () => new NetSpeedBarWidget()),
@@ -65,6 +67,9 @@ public abstract class BarWidget
     protected double TileH { get; private set; }
     /// <summary>カードの余白を、ウィジェット側で決めたいとき（<see cref="BuildContent"/> の中で入れる）。</summary>
     protected Thickness? PadOverride { get; set; }
+    internal void SetPadding(Thickness t) => PadOverride = t;
+    /// <summary>この場所のマウス操作を、ウィジェット自身（入力欄など）が扱うか。true なら、クリック・ドラッグの処理をしない。</summary>
+    public virtual bool OwnsMouse(DependencyObject source) => false;
 
     /// <summary>カードを作る。縦のバーでは幅が狭いので、小さな表示にする。</summary>
     public FrameworkElement Build(bool vertical, double tileH)

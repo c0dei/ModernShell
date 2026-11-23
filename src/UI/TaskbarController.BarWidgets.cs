@@ -51,6 +51,8 @@ public sealed partial class TaskbarController
                     w = info.Create();
                     var card = w.Build(Vertical, TileH);
                     var t = new Tile { Child = card, Margin = Gap, Padding = new Thickness(0), Tag = id };
+                    // 入力欄のあるウィジェットは、欄の上ではドラッグを始めない
+                    canStart = e => e.OriginalSource is not DependencyObject d || !w.OwnsMouse(d);
                     tile = t;
                     w.Outer = t;
                     // ポップアップ（詳細・メニュー）を開いている間は、そのウィジェットの枠を強調する
@@ -281,6 +283,7 @@ public sealed partial class TaskbarController
     {
         foreach (var info in BarWidgetCatalog.All)
         {
+            if (info.Id == "everything" && !Everything.IsInstalled && !_settings.BarWidgets.Contains("everything")) continue; // Everything が入っていなければ出さない
             string id = info.Id;
             bool on = _settings.BarWidgets.Contains(id);
             yield return new MenuItemSpec(on ? "" : "", L.T(info.Title), () =>

@@ -110,6 +110,14 @@ public sealed class StartMenuWindow : Window
         ShowMenu();
     }
 
+    /// <summary>検索のウィジェット用: 閉じていれば、検索ボックスにフォーカスを当てて開く。開いていれば閉じる。</summary>
+    public void ToggleSearch()
+    {
+        if (IsVisible) { HideMenu(); return; }
+        if ((DateTime.Now - _hiddenAt).TotalMilliseconds < 250) return;
+        ShowMenu(""); // ShowMenu は、開くたびに検索ボックスへフォーカスを当てる
+    }
+
     public void ShowMenu(string? initialSearch = null)
     {
         var clock = Stopwatch.StartNew();

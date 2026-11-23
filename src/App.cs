@@ -138,7 +138,7 @@ public static class Program
         _hooks = new InputHooks(app.Dispatcher)
         {
             InterceptWinKey = () => _settings.ReplaceStartMenu,
-            InterceptStartButton = () => _settings.InterceptNativeStartButton,
+            InterceptStartButton = () => _settings.ReplaceStartMenu,
         };
 
         Log.Timing("before start menu");
@@ -170,7 +170,7 @@ public static class Program
         // 純正スタートボタン位置の監視（純正タスクバー使用時のみ意味がある）
         _startButtonWatcher = NativeTaskbar.WatchStartButton(
             r => _hooks.NativeStartButtonRect = r,
-            () => _settings.InterceptNativeStartButton && !_settings.UseCustomTaskbar);
+            () => _settings.ReplaceStartMenu && !_settings.UseCustomTaskbar);
 
         _settings.Changed += () => app.Dispatcher.BeginInvoke(OnSettingsChanged);
         StallDetector.Phase = "start: system events";
@@ -285,8 +285,16 @@ public static class Program
             }
             _taskbar = new TaskbarController(_settings, _catalog, _shell, Application.Current.Dispatcher);
             // スタートボタンで開くのは設定どおり（ModernShell のスタート / Windows 標準のスタート）
-            _taskbar.StartClicked += () => { if (_settings.InterceptNativeStartButton) _start.Toggle(); else Input.NativeStart(); };
-            _taskbar.SearchClicked += () => _start.ShowMenu("");
+            _taskbar.StartClicked += () => { if (_settings.ReplaceStartMenu) _start.Toggle(); else Input.NativeStart(); };
+            // 検索のウィジェット: ModernShell のスタートなら検索にフォーカスして開く。Windows 標準のスタートの設定なら Windows の検索（Win+S）
+            SearchBarWidget.OpenStartSearch = () => { if (_settings.ReplaceStartMenu) _start.ToggleSearch(); else SystemActions.WindowsSearch(); };
+            SearchBarWidget.OpenStartSearchWith = text =>
+            {
+                if (_settings.ReplaceStartMenu) { _start.ShowMenu(text); return; }
+                // Windows 標準のスタート: Windows の検索を開いて、言葉を入力する
+                SystemActions.WindowsSearch();
+                _ = System.Threading.Tasks.Task.Delay(450).ContinueWith(_ => Application.Current.Dispatcher.BeginInvoke(() => Input.TypeText(text)));
+            };
             _taskbar.OpenSettingsRequested += ShowSettings;
             _taskbar.ExitRequested += Exit;
             _taskbar.KeepBarVisible = () => _start.IsVisible; // スタートメニューを開いている間は、自動非表示のバーを隠さない

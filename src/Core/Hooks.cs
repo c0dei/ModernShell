@@ -29,6 +29,19 @@ internal static class Input
 
     public static void Tap(ushort vk) => Send((vk, false), (vk, true));
 
+    /// <summary>文字列を、キー入力として送る（Unicode のまま）。</summary>
+    public static void TypeText(string text)
+    {
+        var inputs = new Win32.INPUT[text.Length * 2];
+        for (int i = 0; i < text.Length; i++)
+            for (int up = 0; up < 2; up++)
+            {
+                inputs[i * 2 + up].type = Win32.INPUT_KEYBOARD;
+                inputs[i * 2 + up].U.ki = new Win32.KEYBDINPUT { wVk = 0, wScan = text[i], dwFlags = 0x0004 /*KEYEVENTF_UNICODE*/ | (up == 1 ? Win32.KEYEVENTF_KEYUP : 0), dwExtraInfo = Tag };
+            }
+        if (inputs.Length > 0) Win32.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Win32.INPUT>());
+    }
+
     /// <summary>Win+X のようなショートカットを送る（フックはタグで素通りさせる）。</summary>
     public static void WinCombo(ushort vk) =>
         Send((Win32.VK_LWIN, false), (vk, false), (vk, true), (Win32.VK_LWIN, true));

@@ -36,6 +36,10 @@
     <Compile Remove="verify/**" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Everything SDK（voidtools, MIT License）。Everything の検索結果を、アプリの独自ウィンドウに出すために使う -->
+    <None Include="lib\Everything64.dll" Link="Everything64.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- 天気のアイコン（Meteocons, MIT License）。実行ファイルに埋め込む -->
     <EmbeddedResource Include="assets\weather\*.png" LogicalName="weather.%(Filename)%(Extension)" />
   </ItemGroup>
