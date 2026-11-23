@@ -26,7 +26,7 @@ public sealed class SettingsWindow : Window
     {
         (Page.Start, "", L.T("スタート メニュー")),
         (Page.Taskbar, "", L.T("タスクバー")),
-        (Page.TaskbarItems, "", L.T("ボタンと操作")),
+        (Page.TaskbarItems, "\uE8B0", L.T("ボタンと操作")),
         (Page.Pins, "", L.T("ピン留めとアイコン")),
         (Page.Widgets, "", L.T("ウィジェット")),
         (Page.Look, "", L.T("外観")),
@@ -120,6 +120,18 @@ public sealed class SettingsWindow : Window
         base.OnStateChanged(e);
         // 最大化の直後は位置が確定していないので、少し待ってから合わせる
         Dispatcher.BeginInvoke(new Action(FitToScreen), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    /// <summary>折りたたみの開閉状態（グループの見出し → 開いているか）。ページを描き直しても保つ。</summary>
+    private readonly Dictionary<string, bool> _open = new();
+
+    /// <summary>保存はせず、スクロール位置を保ったままページを描き直す。</summary>
+    private void Refresh()
+    {
+        double offset = _scroll?.VerticalOffset ?? 0;
+        RenderPage();
+        _scroll?.UpdateLayout();
+        _scroll?.ScrollToVerticalOffset(offset);
     }
 
     /// <summary>設定を保存して、依存する項目の有効/無効を反映するため現在のページを描き直す。</summary>
@@ -221,12 +233,25 @@ public sealed class SettingsWindow : Window
     {
         if (_scroll == null) return;
         var p = new StackPanel { Margin = new Thickness(24, 8, 40, 40), MaxWidth = 1000, HorizontalAlignment = HorizontalAlignment.Stretch };
+        string subtitle = _query.Length > 0 ? "" : L.T(_page switch
+        {
+            Page.Start => "開き方とレイアウトを設定します",
+            Page.Taskbar => "タスクバーの見た目と位置を設定します",
+            Page.TaskbarItems => "ボタンの並び方、ホバー、ポップアップの動きを設定します",
+            Page.Pins => "ピン留めの管理方法とアイコンを設定します",
+            Page.Widgets => "スタート メニューとタスクバーのウィジェットを選びます",
+            Page.Look => "色・動き・文字の大きさを設定します",
+            Page.General => "起動、バックアップ、トラブルシューティング",
+            _ => "ModernShell について",
+        });
         p.Children.Add(new TextBlock
         {
             Text = _query.Length > 0 ? L.F("「{0}」の検索結果", _query) : Pages.First(x => x.page == _page).label,
-            FontSize = 28, FontWeight = FontWeights.SemiBold, Foreground = T.Text, Margin = new Thickness(0, 0, 0, 24),
+            FontSize = 28, FontWeight = FontWeights.SemiBold, Foreground = T.Text, Margin = new Thickness(0, 0, 0, subtitle.Length > 0 ? 2 : 24),
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
+        if (subtitle.Length > 0)
+            p.Children.Add(new TextBlock { Text = subtitle, FontSize = 14, Foreground = T.TextSecondary, Margin = new Thickness(0, 0, 0, 24), TextWrapping = TextWrapping.Wrap });
         if (_query.Length > 0) SearchResults(p);
         else RenderInto(_page, p);
         _scroll.Content = p;
@@ -296,27 +321,138 @@ public sealed class SettingsWindow : Window
 
     private void StartPage(StackPanel p)
     {
+        if (!_flat) p.Children.Add(StartPreview());
         var which = new[] { ("ModernShell", L.T("ModernShell のスタート")), ("Windows", L.T("Windows 標準のスタート")) };
-        Group(p, "", L.T("開き方"), L.T("どのスタートを、どこに開くか"),
-            DropDownRow(L.T("Win キーで開くスタート"), L.T("Win+E などの組み合わせはどちらでもそのまま使えます"),
-                which, _s.ReplaceStartMenu ? "ModernShell" : "Windows", v => _s.ReplaceStartMenu = v == "ModernShell"),
-            DropDownRow(L.T("スタート ボタンで開くスタート"), L.T("タスクバーのスタートボタン（ModernShell / 純正どちらのタスクバーでも）をクリックしたとき"),
-                which, _s.InterceptNativeStartButton ? "ModernShell" : "Windows", v => _s.InterceptNativeStartButton = v == "ModernShell"),
-            DropDownRow(L.T("スタート メニューを開く位置"), L.T("自動はスタートボタンの位置に合わせます。Windows 標準のスタートも、ModernShell のタスクバー使用中はこの位置に開きます"),
-                new[] { ("Auto", L.T("自動")), ("Left", L.T("左")), ("Center", L.T("中央")) },
-                _s.StartMenuPosition.ToString(), v => _s.StartMenuPosition = Enum.Parse<StartMenuPosition>(v)));
+        p.Children.Add(Section(L.T("開き方")));
+        p.Children.Add(DropDownRow(L.T("Win キーで開くスタート"), L.T("Win+E などの組み合わせは、どちらでもそのまま使えます"),
+            which, _s.ReplaceStartMenu ? "ModernShell" : "Windows", v => _s.ReplaceStartMenu = v == "ModernShell"));
+        p.Children.Add(DropDownRow(L.T("スタート ボタンで開くスタート"), L.T("タスクバーのスタートボタンをクリックしたとき（どちらのタスクバーでも）"),
+            which, _s.InterceptNativeStartButton ? "ModernShell" : "Windows", v => _s.InterceptNativeStartButton = v == "ModernShell"));
+        p.Children.Add(DropDownRow(L.T("スタート メニューを開く位置"), L.T("自動のときはスタートボタンの位置に合わせます。Windows 標準のスタートも、ModernShell のタスクバー使用中はこの位置に開きます"),
+            new[] { ("Auto", L.T("自動")), ("Left", L.T("左")), ("Center", L.T("中央")) },
+            _s.StartMenuPosition.ToString(), v => _s.StartMenuPosition = Enum.Parse<StartMenuPosition>(v)));
 
-        Group(p, "", L.T("レイアウト"), "",
-            ToggleRow(L.T("開いたときに「すべてのアプリ」を表示"), L.T("ピン留めではなくアプリの一覧から始めます"), _s.ShowAllAppsFirst, v => _s.ShowAllAppsFirst = v),
-            NumberRow(L.T("ピン留めの列数"), "", 3, 8, _s.PinnedColumns, L.T("列"), v => _s.PinnedColumns = (int)v, def: 6),
-            ToggleRow(L.T("「最近使った」を表示"), L.T("ピン留めの下に、最近開いたアプリを 1 行で表示します（開いた記録はこの PC の中だけに保存されます）"), _s.ShowRecentApps, v => _s.ShowRecentApps = v),
-            ToggleRow(L.T("「よく使う」を表示"), L.T("ピン留めの下に、よく開くアプリ（2 回以上）を 1 行で表示します"), _s.ShowFrequentApps, v => _s.ShowFrequentApps = v),
-            ButtonRow(L.T("利用履歴を消去"), L.T("「最近使った」「よく使う」の元になっている、アプリを開いた記録を消します"), L.T("消去"),
-                () => { if (Confirm(L.T("アプリを開いた記録を消しますか？"))) { UsageStats.Clear(); _s.Save(); } }),
-            ButtonRow(L.T("ウィジェット"), L.T("スタート メニューの右側に出すウィジェット（天気・時計など）の設定は、「ウィジェット」ページにあります"), L.T("開く"),
-                () => { _page = Page.Widgets; Build(); }));
+        p.Children.Add(Section(L.T("レイアウト")));
+        p.Children.Add(ToggleRow(L.T("開いたときに「すべてのアプリ」を表示"), L.T("ピン留めではなく、アプリの一覧から始めます"), _s.ShowAllAppsFirst, v => _s.ShowAllAppsFirst = v));
+        p.Children.Add(NumberRow(L.T("ピン留めの列数"), L.T("ピン留めのアイコンを横に並べる数。スタート メニューをピン留めから始めるときに使われます"), 3, 8, _s.PinnedColumns, L.T("列"), v => _s.PinnedColumns = (int)v, !_s.ShowAllAppsFirst, def: 6));
+        p.Children.Add(ToggleRow(L.T("「最近使った」を表示"), L.T("ピン留めの下に、最近開いたアプリを 1 行で表示します（開いた記録はこの PC の中だけに保存されます）"), _s.ShowRecentApps, v => _s.ShowRecentApps = v));
+        p.Children.Add(ToggleRow(L.T("「よく使う」を表示"), L.T("ピン留めの下に、よく開くアプリ（2 回以上）を 1 行で表示します"), _s.ShowFrequentApps, v => _s.ShowFrequentApps = v));
+
+        p.Children.Add(Section(L.T("履歴とウィジェット")));
+        p.Children.Add(ButtonRow(L.T("利用履歴を消去"), L.T("「最近使った」「よく使う」の元になっている、アプリを開いた記録を消します"), L.T("消去"),
+            () => { if (Confirm(L.T("アプリを開いた記録を消しますか？"))) { UsageStats.Clear(); _s.Save(); } }));
+        p.Children.Add(LinkRow("", L.T("ウィジェット"), L.T("スタート メニューの右側に出すウィジェット（天気・時計など）の設定は、「ウィジェット」ページにあります"),
+            L.T("開く"), () => { _page = Page.Widgets; Build(); }));
 
         p.Children.Add(Note(L.T("ピン留めはスタート メニュー上でドラッグして並べ替え、右クリックで追加・削除できます。初期状態に戻すには「ピン留めとアイコン」へ。")));
+    }
+
+    /// <summary>押すと別の場所を開く行（右端に「開く ＞」）。</summary>
+    private Border LinkRow(string icon, string title, string desc, string text, Action onClick)
+    {
+        var line = UiKit.Row(UiKit.Label(text, 14, T.AccentBrush), Spaced(UiKit.Glyph("\uE76C", 12, T.AccentBrush), 10));
+        var card = Card(Texts(title, desc), line, true, icon);
+        card.Cursor = Cursors.Hand;
+        card.MouseEnter += (_, _) => card.Background = T.Hover;
+        card.MouseLeave += (_, _) => card.Background = T.Surface;
+        card.MouseLeftButtonUp += (_, _) => onClick();
+        return card;
+    }
+
+    private static readonly Color[] PreviewColors =
+    {
+        Color.FromRgb(0xE0, 0xAD, 0x3F), Color.FromRgb(0xE0, 0x5D, 0x5D), Color.FromRgb(0x3F, 0xA9, 0xCB), Color.FromRgb(0x8D, 0xB9, 0x4A),
+        Color.FromRgb(0x2E, 0xB8, 0x72), Color.FromRgb(0x9B, 0x6B, 0xE0), Color.FromRgb(0x5B, 0x8D, 0xEF), Color.FromRgb(0xE0, 0x82, 0x4A),
+    };
+
+    /// <summary>現在の設定で描いたスタート メニューのプレビュー（列数・すべてのアプリ・最近使った・よく使う・ウィジェットに反応する）。</summary>
+    private FrameworkElement StartPreview()
+    {
+        var area = new Grid { Height = 240, Background = Desktop, ClipToBounds = true };
+        Brush track = new SolidColorBrush(Color.FromArgb(0x40, 0x80, 0x80, 0x80));
+        TextBlock Txt(string text, double size, Brush? fg = null, FontWeight? fw = null) { var t = UiKit.Label(text, size, fg ?? T.Text, fw ?? FontWeights.SemiBold); t.TextTrimming = TextTrimming.None; return t; }
+        Border Dot(int i, double size = 14) => new()
+        {
+            Width = size, Height = size, CornerRadius = new CornerRadius(3), Background = new SolidColorBrush(PreviewColors[i % PreviewColors.Length]),
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        FrameworkElement Header(string left, string? right = null)
+        {
+            var g = new Grid { Margin = new Thickness(0, 8, 0, 4) };
+            g.Children.Add(Txt(left, 10));
+            if (right != null) { var r = Txt(right, 9, T.TextSecondary, FontWeights.Normal); r.HorizontalAlignment = HorizontalAlignment.Right; g.Children.Add(r); }
+            return g;
+        }
+        FrameworkElement Strip(int count)
+        {
+            var row = new UniformGrid { Columns = Math.Max(1, _s.PinnedColumns), Rows = 1, Margin = new Thickness(0, 0, 0, 0) };
+            for (int i = 0; i < _s.PinnedColumns; i++) row.Children.Add(i < count ? Dot(i + 2) : new Border());
+            return row;
+        }
+
+        var body = new StackPanel { Margin = new Thickness(12, 10, 12, 10) };
+        var search = new Border { Height = 16, CornerRadius = new CornerRadius(8), Background = T.Hover, Child = Txt(L.T("アプリ、設定、ドキュメントを検索"), 8.5, T.TextSecondary, FontWeights.Normal) };
+        ((FrameworkElement)search.Child).Margin = new Thickness(10, 0, 0, 0);
+        ((FrameworkElement)search.Child).VerticalAlignment = VerticalAlignment.Center;
+        body.Children.Add(search);
+        if (_s.ShowAllAppsFirst)
+        {
+            body.Children.Add(Header(L.T("すべてのアプリ"), L.T("あ行から")));
+            double[] widths = { 90, 130, 160, 110, 140 };
+            for (int i = 0; i < 5; i++)
+            {
+                var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 5) };
+                row.Children.Add(Dot(i, 12));
+                row.Children.Add(new Border { Width = widths[i], Height = 4, CornerRadius = new CornerRadius(2), Background = track, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+                body.Children.Add(row);
+            }
+        }
+        else
+        {
+            body.Children.Add(Header(L.T("ピン留め")));
+            var grid = new UniformGrid { Columns = Math.Max(1, _s.PinnedColumns), Margin = new Thickness(0, 0, 0, 2) };
+            for (int i = 0; i < _s.PinnedColumns * 2; i++) { var d = Dot(i, 16); d.Margin = new Thickness(0, 0, 0, 7); grid.Children.Add(d); }
+            body.Children.Add(grid);
+            if (_s.ShowRecentApps) { body.Children.Add(Header(L.T("最近使った"))); body.Children.Add(Strip(_s.PinnedColumns)); }
+            if (_s.ShowFrequentApps) { body.Children.Add(Header(L.T("よく使う"))); body.Children.Add(Strip(Math.Min(4, _s.PinnedColumns))); }
+        }
+        var menu = new Border
+        {
+            Width = 300, Height = 196, Background = T.SolidBackground, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(8),
+            ClipToBounds = true, Child = body,
+        };
+
+        var panels = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 34) };
+        panels.Children.Add(menu);
+        if (_s.ShowWidgets)
+        {
+            var col = new StackPanel { Margin = new Thickness(8) };
+            foreach (var id in _s.OrderedWidgets().Where(_s.IsWidgetEnabled).Take(4))
+            {
+                string label = id switch { "clock" => "12:34", "weather" => "18°  " + L.T("快晴"), "system" => "CPU 23%", "folders" => L.T("フォルダー"), "recent" => L.T("最近使ったファイル"), _ => L.T("メモ") };
+                var card = new Border { Height = 34, CornerRadius = T.Corner(6), Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), Margin = new Thickness(0, 0, 0, 6), Child = Txt(label, 10) };
+                ((FrameworkElement)card.Child).VerticalAlignment = VerticalAlignment.Center;
+                ((FrameworkElement)card.Child).Margin = new Thickness(10, 0, 0, 0);
+                col.Children.Add(card);
+            }
+            panels.Children.Add(new Border { Width = 128, Height = 196, Margin = new Thickness(8, 0, 0, 0), Background = T.SolidBackground, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(8), ClipToBounds = true, Child = col });
+        }
+        bool left = _s.StartMenuPosition == StartMenuPosition.Left
+            || (_s.StartMenuPosition == StartMenuPosition.Auto && _s.UseCustomTaskbar && (_s.TaskbarAlignment == TaskbarAlignment.Left || _s.StartButtonPosition == StartButtonPosition.LeftEdge));
+        panels.HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Center;
+        if (left) panels.Margin = new Thickness(10, 0, 0, 34);
+        area.Children.Add(panels);
+
+        var bar = new Border { Height = 26, VerticalAlignment = VerticalAlignment.Bottom, Background = T.SolidBackground };
+        var icons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(left ? 14 : 0, 0, 0, 0) };
+        icons.Children.Add(UiKit.StartLogo(12, T.AccentBrush));
+        foreach (var i in new[] { 0, 6, 4 }) { var d = Dot(i, 12); d.Margin = new Thickness(10, 0, 0, 0); icons.Children.Add(d); }
+        bar.Child = icons;
+        area.Children.Add(bar);
+
+        var chip = new Border { CornerRadius = new CornerRadius(10), Background = new SolidColorBrush(Color.FromArgb(0x70, 0, 0, 0)), Padding = new Thickness(10, 3, 10, 4), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(10), Child = UiKit.Label(L.T("プレビュー"), 11, Brushes.White) };
+        area.Children.Add(chip);
+        return PreviewFrame(area);
     }
 
     /// <summary>余白の選択肢（0 = なし / 画面端に密着）。</summary>
@@ -352,8 +488,7 @@ public sealed class SettingsWindow : Window
                 () => _s.StartButtonPosition = StartButtonPosition.LeftEdge, Art.LeftEdge),
         }, on));
 
-        p.Children.Add(Section(L.T("詳細")));
-        Group(p, "", L.T("配置と大きさ"), L.T("位置・高さ・余白"),
+        Group(p, "", L.T("詳細設定"), L.T("配置・位置・大きさ・余白"), true, false,
             DropDownRow(L.T("アプリの配置"), L.T("アプリのボタン（「アプリと一緒」のときはスタートボタンも）の位置。「すべて中央」は、スタート・アプリ・ウィジェット・トレイを 1 つのかたまりにして中央に置きます"),
                 new[] { ("Center", L.T("中央")), ("AllCenter", L.T("すべて中央")), ("Left", L.T("左")) }, _s.TaskbarAlignment.ToString(), v => _s.TaskbarAlignment = Enum.Parse<TaskbarAlignment>(v), on),
             DropDownRow(L.T("画面上の位置"), L.T("左・右に置くと、縦向きのタスクバーになります（ボタンが縦に並びます）"),
@@ -389,28 +524,36 @@ public sealed class SettingsWindow : Window
     private void TaskbarItemsPage(StackPanel p)
     {
         bool on = _s.UseCustomTaskbar;
-        bool vertical = _s.TaskbarEdge is TaskbarEdge.Left or TaskbarEdge.Right;
+        string itemsGlyph = Pages.First(x => x.page == Page.TaskbarItems).glyph;
         if (!on && !_flat) p.Children.Add(Note(L.T("「タスクバー」ページで ModernShell のタスクバーを使うと、ここの設定が反映されます。")));
-        p.Children.Add(Section(L.T("ボタンと時計")));
-        Group(p, "", L.T("ボタン"), L.T("タスクバーに並べるもの"),
-            ToggleRow(L.T("タスクバーを自動的に隠す"), L.T("使わないときは画面の外に隠し、画面の端（タスクバーのある側）にカーソルを当てると出します。作業領域は確保しません"), _s.AutoHideTaskbar, v => _s.AutoHideTaskbar = v, on),
-            ToggleRow(L.T("隠している間、画面の端に細い線を残す"), L.T("線の区切りは開いているアプリです。前面のアプリはアクセント色。カーソルを端に当てるとバーが出ます。全画面のアプリの間は出しません"), _s.AutoHideHairline, v => _s.AutoHideHairline = v, on && _s.AutoHideTaskbar),
-            ToggleRow(L.T("複数のモニターにタスクバーを表示"), L.T("メイン以外のモニターにもタスクバーを出し、起動中のアプリのボタンをすべてのモニターに並べます（時計付き）"), _s.MultiMonitorTaskbar, v => _s.MultiMonitorTaskbar = v, on),
-            ToggleRow(L.T("検索ボタンを表示"), "", _s.ShowSearchButton, v => _s.ShowSearchButton = v, on),
-            ToggleRow(L.T("タスク ビュー ボタンを表示"), "", _s.ShowTaskViewButton, v => _s.ShowTaskViewButton = v, on),
-            ToggleRow(L.T("同じアプリのボタンをまとめる"), L.T("複数のウィンドウは一覧で選べます"), _s.GroupTaskbarButtons, v => _s.GroupTaskbarButtons = v, on),
-            ToggleRow(L.T("グループのあいだに区切り線を引く"), L.T("スタート・アプリ・ウィジェット・トレイのあいだに、細い線を引きます"), _s.ShowBarDividers, v => _s.ShowBarDividers = v, on),
-            ToggleRow(L.T("ウィンドウの数を点で表示"), L.T("同じアプリのウィンドウが複数あるとき、実行中の印をウィンドウの数（最大 3）だけ並べます"), _s.ShowWindowCountDots, v => _s.ShowWindowCountDots = v, on),
-            ToggleRow(L.T("進捗とバッジを表示"), L.T("ダウンロードなどの進捗バーと、通知の数などの小さな印（アプリが付けるもの）をボタンに表示します"), _s.ShowTaskbarBadges, v => _s.ShowTaskbarBadges = v, on),
-            ToggleRow(L.T("ボタンにウィンドウ名を表示"), "", _s.ShowTaskbarLabels, v => _s.ShowTaskbarLabels = v, on),
-            ToggleRow(L.T("ホバー時にアイコンを拡大"), L.T("カーソルを置いたアプリのアイコンを少し大きくします"), _s.MagnifyOnHover, v => _s.MagnifyOnHover = v, on),
+
+        p.Children.Add(Section(L.T("表示するボタン"), first: true));
+        p.Children.Add(ToggleRow(L.T("検索ボタンを表示"), "", _s.ShowSearchButton, v => _s.ShowSearchButton = v, on, "\uE721"));
+        p.Children.Add(ToggleRow(L.T("タスク ビュー ボタンを表示"), "", _s.ShowTaskViewButton, v => _s.ShowTaskViewButton = v, on, "\uE7C4"));
+        p.Children.Add(ToggleRow(L.T("複数のモニターにタスクバーを表示"), L.T("メイン以外のモニターにもタスクバーを出し、起動中のアプリのボタンをすべてのモニターに並べます（時計付き）"), _s.MultiMonitorTaskbar, v => _s.MultiMonitorTaskbar = v, on, "\uE740"));
+        p.Children.Add(ToggleRow(L.T("時計に秒を表示"), "", _s.ShowSeconds, v => _s.ShowSeconds = v, on, "\uE916"));
+
+        p.Children.Add(Section(L.T("アプリのボタン")));
+        p.Children.Add(ToggleRow(L.T("同じアプリのボタンをまとめる"), L.T("複数のウィンドウは一覧で選べます"), _s.GroupTaskbarButtons, v => _s.GroupTaskbarButtons = v, on, "\uF0E2"));
+        p.Children.Add(ToggleRow(L.T("グループのあいだに区切り線を引く"), L.T("スタート・アプリ・ウィジェット・トレイのあいだに、細い線を引きます"), _s.ShowBarDividers, v => _s.ShowBarDividers = v, on, "\uE75B"));
+        p.Children.Add(ToggleRow(L.T("ウィンドウの数を点で表示"), L.T("同じアプリのウィンドウが複数あるとき、実行中の印をウィンドウの数（最大 3）だけ並べます"), _s.ShowWindowCountDots, v => _s.ShowWindowCountDots = v, on, "\uE718"));
+        p.Children.Add(ToggleRow(L.T("進捗とバッジを表示"), L.T("ダウンロードなどの進捗バーと、通知の数などの小さな印（アプリが付けるもの）をボタンに表示します"), _s.ShowTaskbarBadges, v => _s.ShowTaskbarBadges = v, on, "\uE896"));
+        p.Children.Add(ToggleRow(L.T("ボタンにウィンドウ名を表示"), "", _s.ShowTaskbarLabels, v => _s.ShowTaskbarLabels = v, on, itemsGlyph));
+
+        p.Children.Add(Section(L.T("自動で隠す")));
+        Chain(p,
+            ToggleRow(L.T("タスクバーを自動的に隠す"), L.T("使わないときは画面の外に隠し、画面の端（タスクバーのある側）にカーソルを当てると出します。作業領域は確保しません"), _s.AutoHideTaskbar, v => _s.AutoHideTaskbar = v, on, "\uE7B3"),
+            ToggleRow(L.T("隠している間、画面の端に細い線を残す"), L.T("線の区切りは開いているアプリです。前面のアプリはアクセント色。カーソルを端に当てるとバーが出ます。全画面のアプリの間は出しません"), _s.AutoHideHairline, v => _s.AutoHideHairline = v, on && _s.AutoHideTaskbar));
+
+        p.Children.Add(Section(L.T("アイコンの拡大")));
+        Chain(p,
+            ToggleRow(L.T("ホバー時にアイコンを拡大"), L.T("カーソルを置いたアプリのアイコンを少し大きくします"), _s.MagnifyOnHover, v => _s.MagnifyOnHover = v, on, "\uE71E"),
             NumberRow(L.T("拡大率"), L.T("カーソルを置いたアイコンの最大の拡大率。バーの太さ・ボタンの大きさに収まる範囲で効きます"), 100, 250, _s.MagnifyScale, "%", v => _s.MagnifyScale = (int)v, on && _s.MagnifyOnHover, step: 5, def: 130),
             ToggleRow(L.T("両隣のアイコンも拡大"), L.T("Mac のドックのように、カーソルの下を最大に、両隣も距離に応じてなめらかに拡大します。オフのときは、カーソルの下のアイコンだけ"),
-                _s.MagnifyNeighbors, v => _s.MagnifyNeighbors = v, on && _s.MagnifyOnHover),
-            ToggleRow(L.T("時計に秒を表示"), "", _s.ShowSeconds, v => _s.ShowSeconds = v, on));
+                _s.MagnifyNeighbors, v => _s.MagnifyNeighbors = v, on && _s.MagnifyOnHover));
 
         p.Children.Add(Section(L.T("ポップアップ")));
-        Group(p, "", L.T("プレビュー"), L.T("カーソルを置いたときに出る一覧"),
+        Group(p, "\uE7B3", L.T("プレビュー"), L.T("カーソルを置いたときに出る一覧"), true, true,
             ToggleRow(L.T("ウィンドウのプレビューを表示"), L.T("実行中のアプリのボタンに置くと、ウィンドウの中身を縮小表示します。クリックで切り替え、× で閉じます。複数ウィンドウのボタンをクリックしたときもプレビューを出します（オフのときは、ウィンドウ名のリストを出します）"),
                 _s.ShowThumbnailPreview, v => _s.ShowThumbnailPreview = v, on),
             ToggleRow(L.T("プレビューにメディア操作を表示"), L.T("音楽や動画を再生中のアプリのプレビューに、前の曲・再生/一時停止・次の曲のボタンを出します"),
@@ -422,7 +565,7 @@ public sealed class SettingsWindow : Window
                 new[] { ("Small", L.T("小")), ("Medium", L.T("中（標準）")), ("Large", L.T("大")) },
                 _s.PreviewSize, v => _s.PreviewSize = v, on && _s.ShowThumbnailPreview));
 
-        Group(p, "", L.T("メニューとポップアップの位置"), L.T("ボタンやカーソルのどこを基準に出すか（縦のバーでは 左 = 上、右 = 下）"),
+        Group(p, "\uE740", L.T("メニューとポップアップの位置"), L.T("ボタンやカーソルのどこを基準に出すか（縦のバーでは 左 = 上、右 = 下）"), true, false,
             DropDownRow(L.T("アイコンの右クリック"), "", AlignOptions(), _s.IconMenuAlign.ToString(), v => _s.IconMenuAlign = Enum.Parse<MenuAlign>(v), on),
             DropDownRow(L.T("タスクバーの右クリック"), L.T("空いている場所を右クリックしたとき。カーソルの位置が基準です"), AlignOptions(), _s.BarMenuAlign.ToString(), v => _s.BarMenuAlign = Enum.Parse<MenuAlign>(v), on),
             DropDownRow(L.T("ウィンドウのプレビュー"), "", AlignOptions(), _s.PreviewAlign.ToString(), v => _s.PreviewAlign = Enum.Parse<MenuAlign>(v), on),
@@ -442,25 +585,26 @@ public sealed class SettingsWindow : Window
             (L.T("ModernShell で管理"), L.T("右クリックでピン留め、ドラッグで並べ替え"),
                 _s.TaskbarPinSource == TaskbarPinSource.ModernShell, () => _s.TaskbarPinSource = TaskbarPinSource.ModernShell, Art.PinsOwn),
         }, on));
-        if (_s.TaskbarPinSource == TaskbarPinSource.Windows)
-            p.Children.Add(NoteRow(L.T("Windows はアプリからピン留めを変更する手段を提供していないため、共有は「Windows → ModernShell」の一方向です。") +
-                                   L.T("ModernShell のタスクバーで右クリックしてピン留めしたものは、Windows のピン留めの後ろに追加で並びます。")));
-        else
-            p.Children.Add(ButtonRow(L.T("Windows のピン留めを取り込む"), L.T("Windows のタスクバーと同じ内容・並び順で置き換えます（その後は ModernShell で自由に変更できます）"),
-                L.T("取り込む"), () =>
-                {
-                    var ids = ImportWindowsPins?.Invoke();
-                    if (ids == null || ids.Count == 0) return;
-                    _s.PinnedTaskbar = ids;
-                    Commit();
-                }, enabled: on));
+        bool shared = _s.TaskbarPinSource == TaskbarPinSource.Windows;
+        // 共有のときは、取り込む必要がないので押せなくする（説明は下の注記）
+        p.Children.Add(ButtonRow(L.T("Windows のピン留めを取り込む"), L.T("Windows のタスクバーと同じ内容・並び順で置き換えます（その後は ModernShell で自由に変更できます）"),
+            L.T("取り込む"), () =>
+            {
+                var ids = ImportWindowsPins?.Invoke();
+                if (ids == null || ids.Count == 0) return;
+                _s.PinnedTaskbar = ids;
+                Commit();
+            }, enabled: on && !shared, icon: "\uE896"));
+        if (shared)
+            p.Children.Add(Note(L.T("Windows はアプリからピン留めを変更する手段を提供していないため、共有は「Windows → ModernShell」の一方向です。") +
+                                L.T("ModernShell のタスクバーで右クリックしてピン留めしたものは、Windows のピン留めの後ろに追加で並びます。")));
 
         p.Children.Add(Section(L.T("アイコン")));
         int custom = _s.CustomIcons.Count;
         p.Children.Add(ButtonRow(L.T("変更したアイコンを元に戻す"),
             custom > 0 ? L.F("タスクバーのボタンで「アイコンの変更」をした {0} 個のアプリを、元のアイコンに戻します", custom)
                        : L.T("タスクバーのボタンを右クリック →「アイコンの変更」で、アプリごとに好きなアイコンを選べます"),
-            L.T("すべて元に戻す"), () => { _s.CustomIcons.Clear(); Commit(); }, enabled: custom > 0));
+            L.T("すべて元に戻す"), () => { _s.CustomIcons.Clear(); Commit(); }, enabled: custom > 0, icon: "\uE777"));
 
         p.Children.Add(Section(L.T("スタート メニューのピン留め")));
         p.Children.Add(ButtonRow(L.T("スタート メニューのピン留めを初期状態に戻す"), L.T("スタートメニュー上でドラッグして並べ替え、右クリックで追加・削除できます"),
@@ -470,15 +614,15 @@ public sealed class SettingsWindow : Window
                 _s.PinnedStart.Clear();
                 _s.PinnedStart.AddRange(Settings.DefaultPinnedStart);
                 Commit();
-            }));
+            }, icon: "\uE8FC"));
 
         p.Children.Add(Section(L.T("通知領域（トレイ）")));
-        p.Children.Add(NoteRow(L.T("トレイのアイコンは、タスクバーと「^」の一覧のあいだをドラッグして、常に表示するかどうかを切り替えられます。並び順もドラッグで変えられます。")));
+        p.Children.Add(TrayHint());
     }
 
     private void WidgetsPage(StackPanel p)
     {
-        p.Children.Add(ToggleRow(L.T("スタート メニューにウィジェットを表示"), L.T("スタート メニューの右側に表示します"), _s.ShowWidgets, v => _s.ShowWidgets = v));
+        p.Children.Add(ToggleRow(L.T("スタート メニューにウィジェットを表示"), L.T("スタート メニューの右側に表示します"), _s.ShowWidgets, v => _s.ShowWidgets = v, true, "\uF0E2"));
         bool on = _s.ShowWidgets;
         p.Children.Add(Section(L.T("スタート メニューのウィジェット")));
         if (!_flat) p.Children.Add(Note(L.T("↑↓ で並び順を変えられます。スタート メニュー上でもウィジェットの見出しをドラッグして並べ替えできます。")));
@@ -533,7 +677,8 @@ public sealed class SettingsWindow : Window
         bool on = _s.UseCustomTaskbar;
         p.Children.Add(Section(L.T("タスクバーのウィジェット")));
         if (!on && !_flat) p.Children.Add(Note(L.T("「タスク バー」ページで ModernShell のタスクバーを使うと、ここで選んだウィジェットが並びます。")));
-        p.Children.Add(Note(L.T("ウィジェットをクリックすると、タスクバーに追加／削除できます。位置はバー上でドラッグして変えられます。")));
+        int shown = _s.BarWidgets.Count(id => !BarWidgetCatalog.IsPart(id));
+        p.Children.Add(Note(L.T("ウィジェットをクリックすると、タスクバーに追加／削除できます。位置はバー上でドラッグして変えられます。") + "  " + L.F("表示中: {0} 個", shown)));
         var wrap = new WrapPanel { Margin = new Thickness(-4, 4, -4, 0), IsEnabled = on, Opacity = on ? 1 : 0.45 };
         foreach (var w in BarWidgetCatalog.All) wrap.Children.Add(WidgetPreviewCard(w));
         p.Children.Add(wrap);
@@ -698,7 +843,7 @@ public sealed class SettingsWindow : Window
 
         p.Children.Add(Section(L.T("背景と効果")));
         // 3 択はどれも ModernShell が自分で描くので、GPU が無い PC でも同じ見た目になる
-        Group(p, "\uE8FC", L.T("スタート メニュー"), L.T("スタート メニューと、そこから開くメニューの背景"),
+        Group(p, "\uE8FC", L.T("スタート メニュー"), L.T("スタート メニューと、そこから開くメニューの背景"), true, true,
             DropDownRow(L.T("背景"), L.T("透過なし: テーマの色（ライト/ダーク）。透過: テーマの色を半透明で。ぼかし: 壁紙を強くぼかした下地にテーマの色を重ねる"),
                 new[] { ("Solid", L.T("透過なし")), ("Transparent", L.T("透過")), ("Blur", L.T("ぼかし")) }, _s.StartMenuBackground.ToString(), v => _s.StartMenuBackground = Enum.Parse<SurfaceStyle>(v)),
             NumberRow(L.T("不透明度"), L.T("重ねるテーマの色の濃さ。0 で下地のまま、100 で透過なしと同じ"), 0, 100, _s.StartMenuOpacity, "%",
@@ -706,7 +851,7 @@ public sealed class SettingsWindow : Window
 
         p.Children.Add(Note(L.T("タスクバーの背景・色・形は「タスクバー」ページで変えられます。")));
 
-        Group(p, "\uE916", L.T("アニメーション"), L.T("開くときに滑り込ませるか、パッと表示するか"),
+        Group(p, "\uE916", L.T("アニメーション"), L.T("開くときに滑り込ませるか、パッと表示するか"), true, true,
             ToggleRow(L.T("GPU が無い PC では軽く動かす"),
                 L.F("グラフィックスの描画が GPU でないこと（ソフトウェア描画）を自動で見つけて、アニメーションを短くし、アイコンの拡大を省きます。今の PC: {0}", Anim.NoGpu ? L.T("GPU なし（軽量）") : L.T("GPU あり")),
                 _s.AutoLightMode, v => _s.AutoLightMode = v),
@@ -719,7 +864,7 @@ public sealed class SettingsWindow : Window
             ToggleRow(L.T("通知領域（「^」）の展開"), "", _s.AnimateTrayOverflow, v => _s.AnimateTrayOverflow = v),
             ToggleRow(L.T("右クリック メニュー・ジャンプリスト・ドロップダウン"), "", _s.AnimateMenus, v => _s.AnimateMenus = v));
 
-        Group(p, "", L.T("形と文字"), "",
+        Group(p, "", L.T("形と文字"), "", true, true,
             FontRow(),
             NumberRow(L.T("角の丸み"), "", 0, 24, _s.CornerRadius, "px", v => _s.CornerRadius = v, def: 8),
             NumberRow(L.T("スタート メニューの文字サイズ"), L.T("アプリ名・見出し・検索欄・ウィジェットなど、スタート メニューの文字すべて"), 80, 200, _s.StartMenuTextScale, "%", v => _s.StartMenuTextScale = (int)v, step: 5, def: 100),
@@ -733,15 +878,16 @@ public sealed class SettingsWindow : Window
 
     private void GeneralPage(StackPanel p)
     {
+        p.Children.Add(Section(L.T("起動と表示"), first: true));
         p.Children.Add(DropDownRow(L.T("表示言語"), L.T("ModernShell の画面とメニューの言語"),
             new[] { ("", L.T("自動（Windows に合わせる）")), ("ja", "日本語"), ("en", "English") },
-            _s.Language, v => _s.Language = v));
+            _s.Language, v => _s.Language = v, true, "\uE774"));
         p.Children.Add(ToggleRow(L.T("サインイン時に起動"), L.T("Windows にサインインすると自動で常駐します"),
             _s.RunAtStartup, v =>
             {
                 if (!SystemActions.SetStartup(v, v && _s.RunElevatedAtStartup)) return;
                 _s.RunAtStartup = v;
-            }));
+            }, true, "\uE7E8"));
         p.Children.Add(ToggleRow(L.T("管理者として起動する"),
             L.T("管理者として動いているアプリ（管理者の Terminal など）でも、IME の表示や Win キーなどが効くようになります。ModernShell から開いたアプリは普通の権限で起動します。タスク スケジューラに登録するため、切り替えるときに確認が出ることがあります") +
             (Launcher.IsElevated ? L.T("（現在: 管理者として動作中）") : L.T("（現在: 普通の権限で動作中。次のサインインから管理者で起動します）")),
@@ -754,7 +900,7 @@ public sealed class SettingsWindow : Window
                     _s.SaveQuiet();
                     RestartElevatedRequested?.Invoke();
                 }
-            }, _s.RunAtStartup));
+            }, _s.RunAtStartup, "\uEA18"));
         p.Children.Add(ToggleRow(L.T("描画に GPU を使う"),
             L.T("オフにすると GPU ドライバーを読み込まないので、使用メモリが減ります（アニメーションは CPU で描画）。見た目は変わりません。変更すると ModernShell を再起動します"),
             _s.UseGpuRendering, v =>
@@ -762,7 +908,7 @@ public sealed class SettingsWindow : Window
                 _s.UseGpuRendering = v;
                 _s.SaveQuiet();
                 if (Confirm(L.T("ModernShell を再起動して反映しますか？"))) RestartRequested?.Invoke();
-            }));
+            }, true, "\uE950"));
 
         p.Children.Add(Section(L.T("設定の管理")));
         Group(p, "", L.T("バックアップ"), L.T("設定（ピン留め・並び順・アイコンを含む）を 1 つのファイルに保存して、別の PC に移したり元に戻したりできます"),
@@ -774,16 +920,16 @@ public sealed class SettingsWindow : Window
         if (Diagnostics.SafeMode)
             p.Children.Add(InfoBar(L.T("セーフ モードで動いています"), L.T("起動に続けて失敗したため、純正タスクバーのままで動いています。設定は保存されません。原因の調査のため、デバッグ ログはオンです")));
         p.Children.Add(ButtonRow(L.T("診断情報を書き出す"), L.T("環境・設定・ログを 1 つの zip にまとめます（不具合の報告用。設定には地点やフォルダーのパスが含まれます）"),
-            L.T("書き出す"), ExportDiagnostics));
+            L.T("書き出す"), ExportDiagnostics, icon: "\uE9D9"));
         p.Children.Add(ButtonRow(L.T("セーフ モードで再起動"), L.T("純正タスクバーのまま、ウィジェットとアニメーションをオフにして起動します。起動に失敗するときの切り分け用です"),
-            L.T("再起動"), () => { if (Confirm(L.T("セーフ モードで再起動しますか？"))) RestartSafeRequested?.Invoke(); }));
-        Group(p, "", L.T("デバッグ"), "",
-            ToggleRow(L.T("デバッグ ログを書き出す"), L.T("不具合の調査用です。通常はオフのままで構いません。オンにすると、動作の記録を modernshell.log に書きます"),
-                _s.DebugLog, v => _s.DebugLog = v));
+            L.T("再起動"), () => { if (Confirm(L.T("セーフ モードで再起動しますか？"))) RestartSafeRequested?.Invoke(); }, icon: "\uE777"));
+        p.Children.Add(ToggleRow(L.T("デバッグ ログを書き出す"), L.T("不具合の調査用です。通常はオフのままで構いません。オンにすると、動作の記録を modernshell.log に書きます"),
+            _s.DebugLog, v => _s.DebugLog = v, true, "\uEBE8"));
         p.Children.Add(ButtonRow(L.T("設定とログ"), L.T("%AppData%\\ModernShell に settings.json と modernshell.log があります"),
-            L.T("フォルダーを開く"), () => Launcher.Open("explorer.exe", "\"" + Settings.Directory + "\"")));
+            L.T("フォルダーを開く"), () => Launcher.Open("explorer.exe", "\"" + Settings.Directory + "\""), icon: "\uE8B7"));
+        p.Children.Add(Section(L.T("終了")));
         p.Children.Add(ButtonRow(L.T("ModernShell を終了"), L.T("スタートメニューとタスクバーが純正に戻ります（Ctrl + Alt + Shift + F12 でも可）"),
-            L.T("終了"), () => ExitRequested?.Invoke(), accent: true));
+            L.T("終了"), () => ExitRequested?.Invoke(), accent: true, icon: "\uE7E8"));
         p.Children.Add(Note(L.T("終了できなくなった場合は、ModernShell.exe --restore を実行するか PC を再起動してください。")));
     }
 
@@ -842,11 +988,60 @@ public sealed class SettingsWindow : Window
 
     private void AboutPage(StackPanel p)
     {
-        p.Children.Add(ButtonRow("ModernShell " + Version, L.T("explorer.exe にコードを注入しない、別プロセス型のスタートメニュー / タスクバー"),
-            L.T("Releases を開く"), () => Open("https://github.com/c0dei/ModernShell/releases")));
-        p.Children.Add(ButtonRow(L.T("ソースコード"), "github.com/c0dei/ModernShell", L.T("GitHub で開く"), () => Open("https://github.com/c0dei/ModernShell")));
-        p.Children.Add(Note(L.T("通知領域とタスク一覧には ManagedShell (Apache-2.0, cairoshell) を使用しています。")));
-        p.Children.Add(Note(L.T("天気のアイコンは Meteocons (MIT License, © Bas Milius) を使用しています。")));
+        var logo = new Border
+        {
+            Width = 72, Height = 72, CornerRadius = T.Corner(16), Background = T.AccentBrush, VerticalAlignment = VerticalAlignment.Center,
+            Child = UiKit.StartLogo(32, T.OnAccent),
+        };
+        ((FrameworkElement)logo.Child).HorizontalAlignment = HorizontalAlignment.Center;
+        ((FrameworkElement)logo.Child).VerticalAlignment = VerticalAlignment.Center;
+        var names = new StackPanel { Margin = new Thickness(20, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        names.Children.Add(UiKit.Label("ModernShell", 24, T.Text, FontWeights.SemiBold));
+        names.Children.Add(UiKit.Label(L.T("バージョン ") + Version, 14, T.TextSecondary));
+        var blurb = UiKit.Label(L.T("explorer.exe にコードを注入しない、別プロセス型のスタート メニュー / タスクバー"), 14, T.Text);
+        blurb.TextWrapping = TextWrapping.Wrap;
+        blurb.Margin = new Thickness(0, 6, 0, 0);
+        names.Children.Add(blurb);
+
+        Tile Btn(string text, bool accent, Action click)
+        {
+            var b = new Tile
+            {
+                Padding = new Thickness(16, 5, 16, 6), CornerRadius = T.Corner(4), MinWidth = 150, Margin = new Thickness(0, 0, 0, 8),
+                Background = accent ? T.AccentBrush : T.ControlFill, BorderBrush = T.ControlBorder, BorderThickness = new Thickness(1),
+                Child = UiKit.Label(text, 14, accent ? T.OnAccent : T.Text),
+            };
+            ((TextBlock)b.Child).HorizontalAlignment = HorizontalAlignment.Center;
+            var normal = b.Background;
+            b.MouseEnter += (_, _) => { b.Background = accent ? normal : T.ControlFillHover; if (accent) b.Opacity = 0.9; };
+            b.MouseLeave += (_, _) => { b.Background = normal; b.BorderBrush = T.ControlBorder; b.Opacity = 1; };
+            b.Click += _ => click();
+            return b;
+        }
+        var buttons = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(24, 0, 0, 0) };
+        buttons.Children.Add(Btn(L.T("Releases を開く"), true, () => Open("https://github.com/c0dei/ModernShell/releases")));
+        buttons.Children.Add(Btn(L.T("GitHub で開く"), false, () => Open("https://github.com/c0dei/ModernShell")));
+
+        var hero = new Grid();
+        hero.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        hero.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        hero.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        hero.Children.Add(logo);
+        Grid.SetColumn(names, 1);
+        hero.Children.Add(names);
+        Grid.SetColumn(buttons, 2);
+        hero.Children.Add(buttons);
+        p.Children.Add(new Border
+        {
+            Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(8),
+            Padding = new Thickness(28, 26, 28, 18), Child = hero,
+        });
+
+        p.Children.Add(Section(L.T("リンク")));
+        p.Children.Add(LinkRow("\uE943", L.T("ソースコード"), "github.com/c0dei/ModernShell", L.T("開く"), () => Open("https://github.com/c0dei/ModernShell")));
+        p.Children.Add(Section(L.T("使用しているもの")));
+        p.Children.Add(Card(Texts(L.T("通知領域とタスク一覧"), L.T("ManagedShell（Apache-2.0, cairoshell）を使用しています")), null, true, "\uE75B"));
+        p.Children.Add(Card(Texts(L.T("天気のアイコン"), L.T("Meteocons（MIT License, © Bas Milius）を使用しています")), null, true, "\uF0E2"));
     }
 
     private static void Open(string url)
@@ -857,9 +1052,16 @@ public sealed class SettingsWindow : Window
     // ------------------------------------------------------------------
     // グループ（Windows 11 の設定アプリの展開カードと同じ見た目: 見出しのカードの下に行がつながる）
 
-    private void Group(StackPanel p, string glyph, string title, string desc, params Border[] rows)
+    private void Group(StackPanel p, string glyph, string title, string desc, params Border[] rows) =>
+        Group(p, glyph, title, desc, false, true, rows);
+
+    /// <summary>
+    /// 見出しのカードの下に行がつながるグループ。collapsible なら見出しを押して開閉できる（開閉は _open に覚える）。
+    /// </summary>
+    private void Group(StackPanel p, string glyph, string title, string desc, bool collapsible, bool openByDefault, params Border[] rows)
     {
         if (_flat) { foreach (var r in rows) p.Children.Add(r); return; }
+        bool open = !collapsible || (_open.TryGetValue(title, out var o) ? o : openByDefault);
         var r0 = T.Corner(6).TopLeft;
         var icon = UiKit.Glyph(glyph, 18);
         icon.Width = 24;
@@ -867,21 +1069,46 @@ public sealed class SettingsWindow : Window
         var texts = Texts(title, desc);
         texts.Tag = null;
         texts.Margin = new Thickness(18, 0, 0, 0);
-        var head = Card(UiKit.Row(icon, texts), null);
-        head.Margin = new Thickness(0, 4, 0, 0);
-        head.CornerRadius = new CornerRadius(r0, r0, 0, 0);
+        var head = Card(UiKit.Row(icon, texts), collapsible ? UiKit.Glyph(open ? "\uE70E" : "\uE70D", 12, T.TextSecondary) : null);
+        head.Margin = new Thickness(0, 4, 0, open ? 0 : 4);
+        head.CornerRadius = open && rows.Length > 0 ? new CornerRadius(r0, r0, 0, 0) : new CornerRadius(r0);
         head.MinHeight = 64;
+        if (collapsible)
+        {
+            head.Cursor = Cursors.Hand;
+            head.MouseEnter += (_, _) => head.Background = T.Hover;
+            head.MouseLeave += (_, _) => head.Background = T.Surface;
+            head.MouseLeftButtonUp += (_, _) => { _open[title] = !open; Refresh(); };
+        }
         p.Children.Add(head);
+        if (!open) return;
+        Attach(p, rows, r0, 4);
+    }
+
+    /// <summary>見出しに続けて、枠のつながった行を並べる。</summary>
+    private void Attach(StackPanel p, Border[] rows, double r0, double bottom)
+    {
         for (int i = 0; i < rows.Length; i++)
         {
             var row = rows[i];
             bool last = i == rows.Length - 1;
-            row.Margin = new Thickness(0, 0, 0, last ? 4 : 0);
+            row.Margin = new Thickness(0, 0, 0, last ? bottom : 0);
             row.BorderThickness = new Thickness(1, 0, 1, 1);
             row.CornerRadius = last ? new CornerRadius(0, 0, r0, r0) : new CornerRadius(0);
             row.Padding = new Thickness(62, 10, 16, 10);
             p.Children.Add(row);
         }
+    }
+
+    /// <summary>スイッチ付きの行の下に、それに依存する行をつなげる（親がオフなら子は薄くなる）。</summary>
+    private void Chain(StackPanel p, Border head, params Border[] kids)
+    {
+        if (_flat || kids.Length == 0) { p.Children.Add(head); foreach (var k in kids) p.Children.Add(k); return; }
+        var r0 = T.Corner(6).TopLeft;
+        head.Margin = new Thickness(0, 4, 0, 0);
+        head.CornerRadius = new CornerRadius(r0, r0, 0, 0);
+        p.Children.Add(head);
+        Attach(p, kids, r0, 4);
     }
 
     // ------------------------------------------------------------------
@@ -897,8 +1124,22 @@ public sealed class SettingsWindow : Window
         Text = text, FontSize = 12, Foreground = T.TextSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 8, 0, 0),
     };
 
-    private Border Card(FrameworkElement left, FrameworkElement? right, bool enabled = true)
+    private Border Card(FrameworkElement left, FrameworkElement? right, bool enabled = true, string icon = "")
     {
+        var tag = left.Tag;
+        if (icon.Length > 0)
+        {
+            var ic = UiKit.Glyph(icon, 18);
+            ic.Width = 24;
+            ic.VerticalAlignment = VerticalAlignment.Center;
+            ic.Margin = new Thickness(0, 0, 18, 0);
+            var dock = new DockPanel();
+            DockPanel.SetDock(ic, Dock.Left);
+            dock.Children.Add(ic);
+            left.VerticalAlignment = VerticalAlignment.Center;
+            dock.Children.Add(left);
+            left = dock;
+        }
         var g = new Grid { MinHeight = 44 };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -916,7 +1157,7 @@ public sealed class SettingsWindow : Window
             Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6),
             Padding = new Thickness(20, 12, 16, 12), Margin = new Thickness(0, 2, 0, 2), Child = g,
             IsEnabled = enabled, Opacity = enabled ? 1 : 0.45,
-            Tag = left.Tag, // 検索で使う（タイトル・説明・選択肢）
+            Tag = tag, // 検索で使う（タイトル・説明・選択肢）
         };
     }
 
@@ -936,11 +1177,11 @@ public sealed class SettingsWindow : Window
         return s;
     }
 
-    private Border ToggleRow(string title, string desc, bool value, Action<bool> set, bool enabled = true)
+    private Border ToggleRow(string title, string desc, bool value, Action<bool> set, bool enabled = true, string icon = "")
     {
         var sw = new ToggleSwitch(value);
         sw.Toggled += v => { set(v); Commit(); };
-        return Card(Texts(title, desc), sw, enabled);
+        return Card(Texts(title, desc), sw, enabled, icon);
     }
 
     /// <summary>
@@ -968,18 +1209,18 @@ public sealed class SettingsWindow : Window
     private static (string value, string label)[] AlignOptions() =>
         new[] { ("Left", L.T("左")), ("Center", L.T("中央")), ("Right", L.T("右")) };
 
-    private Border DropDownRow(string title, string desc, (string value, string label)[] options, string current, Action<string> set, bool enabled = true)
+    private Border DropDownRow(string title, string desc, (string value, string label)[] options, string current, Action<string> set, bool enabled = true, string icon = "")
     {
         var combo = new FluentComboBox(options, current, v => { set(v); Commit(); });
         var left = Texts(title, desc);
         left.Tag += " " + string.Join(" ", options.Select(o => o.label));
-        return Card(left, combo, enabled);
+        return Card(left, combo, enabled, icon);
     }
 
     /// <summary>スライダー行（0–100%）。値は離したときに保存する。</summary>
     /// <summary>数値の設定: スライダーと、直接入力の欄（単位付き）。入力した値は範囲内に丸める。「既定値」を渡すと、違うときだけ戻すボタンが出る。</summary>
     private Border NumberRow(string title, string desc, double min, double max, double value, string unit, Action<double> set,
-        bool enabled = true, double step = 1, double? def = null)
+        bool enabled = true, double step = 1, double? def = null, string icon = "")
     {
         string Fmt(double v) => step < 1 ? v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) : ((int)Math.Round(v)).ToString();
         var slider = new FluentSlider(min, max, value, 180, step);
@@ -1032,7 +1273,7 @@ public sealed class SettingsWindow : Window
             right.Children.Add(reset);
         }
         else right.Children.Add(new Border { Width = 34 }); // ほかの行と右端をそろえる
-        return Card(Texts(title, desc), right, enabled);
+        return Card(Texts(title, desc), right, enabled, icon);
     }
 
     private Border TextRow(string title, string desc, string value, Action<string> set, bool enabled = true)
@@ -1048,7 +1289,7 @@ public sealed class SettingsWindow : Window
         return Card(Texts(title, desc), box, enabled);
     }
 
-    private Border ButtonRow(string title, string desc, string buttonText, Action onClick, bool accent = false, bool enabled = true)
+    private Border ButtonRow(string title, string desc, string buttonText, Action onClick, bool accent = false, bool enabled = true, string icon = "")
     {
         // WinUI のボタン: 標準は半透明の地 + 下端の濃い枠、アクセントはアクセント色の地
         var normal = accent ? T.AccentBrush : T.ControlFill;
@@ -1063,7 +1304,7 @@ public sealed class SettingsWindow : Window
         b.MouseLeave += (_, _) => { b.Background = normal; b.BorderBrush = T.ControlBorder; b.Opacity = 1; };
         b.PreviewMouseLeftButtonDown += (_, _) => { if (!accent) b.Background = T.ControlFillPressed; else b.Opacity = 0.8; };
         b.Click += _ => onClick();
-        return Card(Texts(title, desc), b, enabled);
+        return Card(Texts(title, desc), b, enabled, icon);
     }
 
     /// <summary>説明だけのカード（グループの中や、検索結果に出したい補足）。</summary>
@@ -1152,8 +1393,39 @@ public sealed class SettingsWindow : Window
         return wrap;
     }
 
-    private static readonly SolidColorBrush Desktop = Freeze(new SolidColorBrush(Color.FromRgb(0x3A, 0x55, 0x70)));
-    private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
+    // 壁紙の見立て（透過やぼかしの違いが分かるよう、単色ではなくゆるいグラデーション）
+    private static readonly Brush Desktop = FreezeBrush(new LinearGradientBrush(Color.FromRgb(0x2F, 0x58, 0x7C), Color.FromRgb(0x5A, 0x4F, 0x9E), 35));
+    private static Brush FreezeBrush(Brush b) { b.Freeze(); return b; }
+
+    /// <summary>プレビューを載せる、地の薄い枠。</summary>
+    private FrameworkElement PreviewFrame(FrameworkElement area) => new Border
+    {
+        Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(8),
+        Padding = new Thickness(16), Margin = new Thickness(0, 0, 0, 6),
+        Child = new Border { CornerRadius = T.Corner(6), ClipToBounds = true, Child = area },
+    };
+
+    /// <summary>通知領域の説明（絵付き）。</summary>
+    private Border TrayHint()
+    {
+        string text = L.T("トレイのアイコンは、タスクバーと「^」の一覧のあいだをドラッグして、常に表示するかどうかを切り替えられます。並び順もドラッグで変えられます。");
+        Border Sq(Color c) => new() { Width = 16, Height = 16, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(c), Margin = new Thickness(6, 0, 0, 0) };
+        var mini = new Border
+        {
+            Background = T.SolidBackground, CornerRadius = T.Corner(6), Padding = new Thickness(10, 6, 10, 6), VerticalAlignment = VerticalAlignment.Center,
+            Child = UiKit.Row(UiKit.Glyph("\uE70E", 10), new Border { Width = 1, Height = 14, Background = T.AccentBrush, Margin = new Thickness(8, 0, 2, 0) }, Sq(PreviewColors[4]), Sq(PreviewColors[6])),
+        };
+        var t = UiKit.Label(text, 13, T.TextSecondary);
+        t.TextWrapping = TextWrapping.Wrap;
+        t.Margin = new Thickness(18, 0, 0, 0);
+        t.VerticalAlignment = VerticalAlignment.Center;
+        var dock = new DockPanel();
+        DockPanel.SetDock(mini, Dock.Left);
+        dock.Children.Add(mini);
+        dock.Children.Add(t);
+        dock.Tag = text;
+        return Card(dock, null);
+    }
 
     private FrameworkElement Illustration(Art art)
     {
@@ -1261,7 +1533,16 @@ public sealed class SettingsWindow : Window
                     VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(mx, my, mx, my),
                 }
                 : new Grid { Height = h, VerticalAlignment = top ? VerticalAlignment.Top : VerticalAlignment.Bottom, Margin = new Thickness(mx, my, mx, my) };
-            if (!floating) bar.Background = T.SolidBackground;
+            // バーの色: 重ねる色（テーマ/アクセント/壁紙/好きな色）と、背景の種類・不透明度に合わせる。透過・ぼかしは壁紙が透ける
+            var tintColor = SurfacePaint.TaskbarTintColor(_s) ?? T.SolidColor;
+            byte alpha = _s.TaskbarBackground == SurfaceStyle.Solid ? (byte)255 : (byte)Math.Round(Math.Clamp(_s.TaskbarOpacity, 0, 100) * 2.55);
+            Brush barBrush = new SolidColorBrush(Color.FromArgb(alpha, tintColor.R, tintColor.G, tintColor.B));
+            double pillRadius = h / 2;
+            if (!floating)
+            {
+                double bandCorner = _s.TaskbarPill ? pillRadius : (mx > 0 || my > 0 ? T.Radius * 0.7 : 0);
+                bar.Children.Add(new Border { Background = barBrush, CornerRadius = new CornerRadius(bandCorner) });
+            }
             // 並べる向きに 2 つ並べる
             FrameworkElement Stack2(FrameworkElement a, FrameworkElement b)
             {
@@ -1291,8 +1572,8 @@ public sealed class SettingsWindow : Window
                 }
                 if (floating)
                 {
-                    b.Background = T.SolidBackground;
-                    b.CornerRadius = new CornerRadius(T.Radius);
+                    b.Background = barBrush;
+                    b.CornerRadius = new CornerRadius(_s.TaskbarPill ? pillRadius : T.Radius);
                     b.BorderBrush = T.Stroke;
                     b.BorderThickness = new Thickness(1);
                 }
@@ -1345,12 +1626,7 @@ public sealed class SettingsWindow : Window
             l.HorizontalAlignment = HorizontalAlignment.Center;
             area.Children.Add(l);
         }
-        return new Border
-        {
-            Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(8),
-            Padding = new Thickness(16), Margin = new Thickness(0, 0, 0, 6),
-            Child = new Border { CornerRadius = T.Corner(6), ClipToBounds = true, Child = area },
-        };
+        return PreviewFrame(area);
     }
 
     private bool _barPickerOpen;
