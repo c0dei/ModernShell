@@ -53,12 +53,20 @@ public static class NetSpeed
         if (l.Count > Capacity) l.RemoveAt(0);
     }
 
+    /// <summary>速さ（Mbps）を、指定した単位（Kbps / Mbps / Gbps）での数字にする。2 つの値を同じ単位で並べるとき用。</summary>
+    public static string FormatIn(double mbps, string unit) => unit switch
+    {
+        "Gb/s" => (mbps / 1000).ToString("0.00"),
+        "Kb/s" => (mbps * 1000).ToString("0"),
+        _ => mbps >= 100 ? mbps.ToString("0") : mbps.ToString("0.0"),
+    };
+
     /// <summary>速さ（Mbps）を、数字と単位に分ける。1 Mbps 未満は Kbps、1000 以上は Gbps。</summary>
     public static (string value, string unit) Format(double mbps)
     {
-        if (mbps >= 1000) return ((mbps / 1000).ToString("0.00"), "Gbps");
-        if (mbps >= 100) return (mbps.ToString("0"), "Mbps");
-        if (mbps >= 1) return (mbps.ToString("0.0"), "Mbps");
-        return ((mbps * 1000).ToString("0"), "Kbps");
+        if (mbps >= 1000) return ((mbps / 1000).ToString("0.00"), "Gb/s");
+        if (mbps >= 100) return (mbps.ToString("0"), "Mb/s");
+        if (mbps >= 1) return (mbps.ToString("0.0"), "Mb/s");
+        return ((mbps * 1000).ToString("0"), "Kb/s");
     }
 }

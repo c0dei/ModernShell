@@ -114,7 +114,7 @@ public abstract class BarWidget
     // ---- 部品 ----
 
     /// <summary>円グラフ（0–100）。</summary>
-    protected sealed class Ring : Grid
+    internal sealed class Ring : Grid
     {
         private readonly Path _arc = new();
         private readonly TextBlock _label;
@@ -179,10 +179,12 @@ public sealed class SystemBarWidget : BarWidget
 
     protected override FrameworkElement BuildContent()
     {
+        _stats.CpuPercent();
+        var style = Vertical ? SystemStyle.Ring : (Settings.Current ?? new Settings()).SystemWidgetStyle;
+        if (style != SystemStyle.Ring) return BuildStyled(style);
         double size = Vertical ? 22 : 26;
         _cpu = new Ring(size, 3, T.AccentBrush, Track, T.Text, 9);
         _mem = new Ring(size, 3, MemBrush, Track, T.Text, 9);
-        _stats.CpuPercent();
         var row = new StackPanel { Orientation = Vertical ? Orientation.Vertical : Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         _mem.Margin = Vertical ? new Thickness(0, 4, 0, 0) : new Thickness(6, 0, 0, 0);
         row.Children.Add(_cpu);
@@ -196,21 +198,65 @@ public sealed class SystemBarWidget : BarWidget
     }
 
     private static readonly Brush HighBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x8A, 0x75));
+    private MetricCell? _cpuCell, _memCell;
+
+    /// <summary>リング以外の見た目。CPU とメモリのセルを 2 つ並べる（バーや行は縦に積む）。</summary>
+    private FrameworkElement BuildStyled(SystemStyle style)
+    {
+        var cpuSpec = new MetricSpec("CPU", null, (T.AccentBrush as SolidColorBrush)?.Color ?? Color.FromRgb(0x8C, 0x9E, 0xFF), true);
+        var memSpec = new MetricSpec("MEM", null, ((SolidColorBrush)MemBrush).Color, true);
+        MetricCell Make(MetricSpec sp) => style switch
+        {
+            SystemStyle.HBar => new HBarCell(sp),
+            SystemStyle.VBar => new VBarCell(sp, true),
+            SystemStyle.Underline => new UnderlineCell(sp),
+            SystemStyle.Sparkline => new SparkCell(sp, SystemHistory.Capacity),
+            SystemStyle.Segments => new SegmentCell(sp),
+            SystemStyle.Tile => new TileCell(sp),
+            _ => new TextCell(sp, true, false, true),
+        };
+        _cpuCell = Make(cpuSpec);
+        _memCell = Make(memSpec);
+        var panel = new StackPanel { Orientation = _cpuCell.Stacked ? Orientation.Vertical : Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(10, 0, 10, 0) };
+        panel.Children.Add(_cpuCell.Root);
+        _memCell.Root.Margin = _cpuCell.Stacked ? new Thickness(0) : new Thickness(style == SystemStyle.Tile ? 6 : 12, 0, 0, 0);
+        panel.Children.Add(_memCell.Root);
+        Tick(0);
+        PadOverride = new Thickness(0);
+        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = panel };
+    }
 
     public override void Tick(int count)
     {
-        if (_cpu == null || _mem == null) return;
+        if ((_cpu == null || _mem == null) && (_cpuCell == null || _memCell == null)) return;
         _cpuPct = _stats.CpuPercent();
         (_memPct, _memUsed, _memTotal) = _stats.Memory();
-        _cpu.Set(_cpuPct, $"{_cpuPct:0}");
-        _mem.Set(_memPct, $"{_memPct:0}");
-        // 使用率が高いときは、リングの色を変える（ポップアップと同じ警告色）
-        _cpu.SetColor(_cpuPct >= SystemDetailsView.HighLoad ? HighBrush : T.AccentBrush);
-        _mem.SetColor(_memPct >= SystemDetailsView.HighLoad ? HighBrush : MemBrush);
         SystemHistory.Push(_cpuPct, _memPct);
+        if (_cpuCell != null && _memCell != null)
+        {
+            _cpuCell.Set(new MetricSample { Pct = _cpuPct, Hist = SystemHistory.Cpu, Value = $"{_cpuPct:0}", Unit = "%" });
+            _memCell.Set(new MetricSample { Pct = _memPct, Hist = SystemHistory.Mem, Value = $"{_memPct:0}", Unit = "%" });
+            return;
+        }
+        _cpu!.Set(_cpuPct, $"{_cpuPct:0}");
+        _mem!.Set(_memPct, $"{_memPct:0}");
+        // 使用率が高いときは、リングの色を変える
+        _cpu.SetColor(_cpuPct >= MetricCell.WarnPct ? HighBrush : T.AccentBrush);
+        _mem.SetColor(_memPct >= MetricCell.WarnPct ? HighBrush : MemBrush);
     }
 
     public override FrameworkElement? BuildDetailsView() => new SystemDetailsView();
+
+    public override IEnumerable<MenuItemSpec> ExtraMenu() => new[]
+    {
+        WidgetSettingsMenu.Choice("", L.T("表示の形"), (Settings.Current ?? new Settings()).SystemWidgetStyle, new[]
+        {
+            (SystemStyle.Ring, L.T("リング")), (SystemStyle.HBar, L.T("横バー")), (SystemStyle.VBar, L.T("縦バー")),
+            (SystemStyle.Sparkline, L.T("スパークライン")), (SystemStyle.Tile, L.T("塗りつぶしタイル")), (SystemStyle.Text, L.T("テキストのみ")),
+            (SystemStyle.Underline, L.T("下線バー")), (SystemStyle.Segments, L.T("セグメントバー")),
+        }, (c, v) => c.SystemWidgetStyle = v),
+        MenuItemSpec.Separator,
+    };
 
     public override IEnumerable<MenuItemSpec> Details() => new[]
     {

@@ -105,7 +105,7 @@ public sealed class NetworkBarWidget : BarWidget
             string text = !s.RadioOn && s.HasWifi && !s.Connected ? L.T("Wi-Fi オフ") : s.Connected ? s.Name : L.T("未接続");
             _name.Text = text;
             _name.Foreground = s.Connected ? T.Text : dim;
-            if (Card != null) Card.ToolTip = s.Connected ? s.Name + (s.Mbps > 0 ? $"  {s.Mbps} Mbps" : "") : text;
+            if (Card != null) Card.ToolTip = s.Connected ? s.Name + (s.Mbps > 0 ? $"  {s.Mbps} Mb/s" : "") : text;
         }
         catch (Exception ex) { Log.Error("network widget", ex); }
         finally { _busy = false; }
@@ -302,7 +302,7 @@ internal sealed class NetworkDetailsView : Border
 
         var stats = new UniformGrid { Margin = new Thickness(0, 12, 0, 0) };
         var cells = new List<(string, string)>();
-        if (s.Mbps > 0) cells.Add((L.T("速度"), $"{s.Mbps} Mbps"));
+        if (s.Mbps > 0) cells.Add((L.T("速度"), $"{s.Mbps} Mb/s"));
         if (!s.Wired && s.GHz > 0) cells.Add((L.T("周波数"), NetText.Band(s.GHz)));
         if (!s.Wired) cells.Add((L.T("電波"), NetText.Strength(s.Bars)));
         if (cells.Count > 0)

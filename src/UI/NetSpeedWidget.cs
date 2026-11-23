@@ -23,28 +23,67 @@ public sealed class NetSpeedBarWidget : BarWidget
 {
     public override string Id => "netspeed";
     private Ring? _downRing, _upRing;
-    private TextBlock? _downVal, _downUnit, _upVal, _upUnit;
+
+    private MetricCell? _downCell, _upCell;
+    private TextBlock? _sharedUnit;
+
+    /// <summary>リング以外の見た目。受信・送信のセルを並べる（ダウンロードだけのスパークラインもある）。</summary>
+    private FrameworkElement BuildStyled(NetSpeedStyle style)
+    {
+        var downSpec = new MetricSpec(L.T("受信"), NetSpeedColors.DownGlyph, NetSpeedColors.Down, false);
+        var upSpec = new MetricSpec(L.T("送信"), NetSpeedColors.UpGlyph, NetSpeedColors.Up, false);
+        // 文字ラベルの形（テキスト・タイル）は、矢印を使わない。テキストは、受信だけ色を付ける
+        if (style == NetSpeedStyle.Text) { downSpec = downSpec with { Glyph = null }; upSpec = upSpec with { Glyph = null, Base = (T.Text as SolidColorBrush)?.Color ?? Colors.White }; }
+        if (style == NetSpeedStyle.Tile) { downSpec = downSpec with { Glyph = null }; upSpec = upSpec with { Glyph = null }; }
+        MetricCell Make(MetricSpec sp) => style switch
+        {
+            NetSpeedStyle.HBar => new HBarCell(sp),
+            NetSpeedStyle.Sparkline => new SparkCell(sp, NetSpeed.Capacity),
+            NetSpeedStyle.VBar => new VBarCell(sp, false),
+            NetSpeedStyle.Tile => new TileCell(sp),
+            NetSpeedStyle.Text => new LabelValueCell(sp),
+            NetSpeedStyle.Compact => new TextCell(sp, false, false, false),
+            _ => new TextCell(sp, true, true, false), // TwoLine
+        };
+        _downCell = Make(downSpec);
+        var panel = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(10, 0, 10, 0) };
+        panel.Orientation = _downCell.Stacked ? Orientation.Vertical : Orientation.Horizontal;
+        panel.Children.Add(_downCell.Root);
+        if (style != NetSpeedStyle.Sparkline) // スパークラインは受信だけ
+        {
+            _upCell = Make(upSpec);
+            _upCell.Root.Margin = _downCell.Stacked ? new Thickness(0) : new Thickness(style == NetSpeedStyle.Tile ? 6 : style == NetSpeedStyle.Text ? 8 : 12, 0, 0, 0);
+            panel.Children.Add(_upCell.Root);
+        }
+        if (style is NetSpeedStyle.Compact or NetSpeedStyle.Text)
+        {
+            _sharedUnit = UiKit.Label("Mb/s", 10, T.TextSecondary);
+            _sharedUnit.TextTrimming = TextTrimming.None;
+            _sharedUnit.Margin = new Thickness(8, 0, 0, 0);
+            panel.Children.Add(_sharedUnit);
+        }
+        panel.Loaded += (_, _) => { NetSpeed.Updated += Apply; Apply(); };
+        panel.Unloaded += (_, _) => NetSpeed.Updated -= Apply;
+        PadOverride = new Thickness(0);
+        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = panel };
+    }
 
     protected override FrameworkElement BuildContent()
     {
+        var style = Vertical ? NetSpeedStyle.Ring : (Settings.Current ?? new Settings()).NetSpeedWidgetStyle;
+        if (style != NetSpeedStyle.Ring) return BuildStyled(style);
+        // 受信・送信それぞれの円。円の中に数値（単位は、ホバーのツールチップ）
         var down = new SolidColorBrush(NetSpeedColors.Down);
         var up = new SolidColorBrush(NetSpeedColors.Up);
-        double size = Vertical ? 24 : 30;
-        _downRing = MakeRing(size, down, NetSpeedColors.DownGlyph);
-        _upRing = MakeRing(size, up, NetSpeedColors.UpGlyph);
+        double size = Vertical ? 26 : 32;
+        double font = Vertical ? 8 : 9;
+        _downRing = new Ring(size, 3, down, Track, T.Text, font);
+        _upRing = new Ring(size, 3, up, Track, T.Text, font);
 
         var row = new StackPanel { Orientation = Vertical ? Orientation.Vertical : Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-        if (Vertical)
-        {
-            _upRing.Margin = new Thickness(0, 4, 0, 0);
-            row.Children.Add(_downRing);
-            row.Children.Add(_upRing);
-        }
-        else
-        {
-            row.Children.Add(Group(_downRing, out _downVal, out _downUnit, 0));
-            row.Children.Add(Group(_upRing, out _upVal, out _upUnit, 8));
-        }
+        _upRing.Margin = Vertical ? new Thickness(0, 4, 0, 0) : new Thickness(8, 0, 0, 0);
+        row.Children.Add(_downRing);
+        row.Children.Add(_upRing);
 
         // OS の通信量は 1 秒ごとの Tick で測る。結果が出るたびに表示を更新する
         row.Loaded += (_, _) => { NetSpeed.Updated += Apply; Apply(); };
@@ -55,28 +94,6 @@ public sealed class NetSpeedBarWidget : BarWidget
         return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = row };
     }
 
-    private Ring MakeRing(double size, Brush color, string glyph)
-    {
-        var ring = new Ring(size, 3, color, Track, T.Text, 9);
-        ring.Children.Add(UiKit.Glyph(glyph, size * 0.4, color));
-        return ring;
-    }
-
-    private FrameworkElement Group(Ring ring, out TextBlock value, out TextBlock unit, double left)
-    {
-        value = UiKit.Label("0", 13, T.Text, FontWeights.SemiBold);
-        value.TextTrimming = TextTrimming.None;
-        unit = UiKit.Label("Mbps", 10, T.TextSecondary);
-        unit.TextTrimming = TextTrimming.None;
-        var col = new StackPanel { VerticalAlignment = VerticalAlignment.Center, MinWidth = 30, Margin = new Thickness(6, 0, 0, 0) };
-        col.Children.Add(value);
-        col.Children.Add(unit);
-        var g = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(left, 0, 0, 0) };
-        g.Children.Add(ring);
-        g.Children.Add(col);
-        return g;
-    }
-
     public override void Tick(int count)
     {
         if (Card != null) NetSpeed.Sample(Card.Dispatcher);
@@ -84,26 +101,40 @@ public sealed class NetSpeedBarWidget : BarWidget
 
     private void Apply()
     {
-        if (_downRing == null || _upRing == null) return;
         double d = NetSpeed.CurrentDown, u = NetSpeed.CurrentUp;
-        // 円は、直近の最大（下限 10 Mbps）に対する割合。受信と送信は同じ物差しで比べられるようにする
+        // 円・バー・塗りは、直近の最大（下限 10 Mbps）に対する割合。受信と送信は同じ物差しで比べられるようにする
         double scale = Math.Max(10, Math.Max(NetSpeed.Down.DefaultIfEmpty(0).Max(), NetSpeed.Up.DefaultIfEmpty(0).Max()));
-        _downRing.Set(d / scale * 100, "");
-        _upRing.Set(u / scale * 100, "");
-        var (dv, du) = NetSpeed.Format(d);
-        var (uv, uu) = NetSpeed.Format(u);
-        if (_downVal != null && _downUnit != null && _upVal != null && _upUnit != null)
+        if (_downCell != null)
         {
-            _downVal.Text = dv; _downUnit.Text = du;
-            _upVal.Text = uv; _upUnit.Text = uu;
+            var (dv0, du0) = NetSpeed.Format(d);
+            var (uv0, uu0) = NetSpeed.Format(u);
+            string common = _sharedUnit != null ? NetSpeed.Format(Math.Max(d, u)).unit : "";
+            if (_sharedUnit != null) { dv0 = NetSpeed.FormatIn(d, common); uv0 = NetSpeed.FormatIn(u, common); _sharedUnit.Text = common; }
+            _downCell.Set(new MetricSample { Pct = d / scale * 100, Hist = NetSpeed.Down, HistMax = Math.Max(1, NetSpeed.Down.DefaultIfEmpty(0).Max()), Value = dv0, Unit = du0 });
+            _upCell?.Set(new MetricSample { Pct = u / scale * 100, Hist = NetSpeed.Up, HistMax = Math.Max(1, NetSpeed.Up.DefaultIfEmpty(0).Max()), Value = uv0, Unit = uu0 });
+            if (Card != null) Card.ToolTip = $"↓ {dv0} {_sharedUnit?.Text ?? du0}   ↑ {uv0} {_sharedUnit?.Text ?? uu0}";
+            return;
         }
-        if (Card != null) Card.ToolTip = $"↓ {dv} {du}   ↑ {uv} {uu}";
+        if (_downRing == null || _upRing == null) return;
+        // 円の中は数字だけ。2 つの単位は大きいほうに揃える（単位は、ツールチップに出す）
+        string unit = NetSpeed.Format(Math.Max(d, u)).unit;
+        string dv = NetSpeed.FormatIn(d, unit), uv = NetSpeed.FormatIn(u, unit);
+        _downRing.Set(d / scale * 100, dv);
+        _upRing.Set(u / scale * 100, uv);
+        if (Card != null) Card.ToolTip = $"↓ {dv} {unit}   ↑ {uv} {unit}";
     }
 
     public override FrameworkElement? BuildDetailsView() => new NetSpeedDetailsView();
 
     public override IEnumerable<MenuItemSpec> ExtraMenu() => new[]
     {
+        WidgetSettingsMenu.Choice("", L.T("表示の形"), (Settings.Current ?? new Settings()).NetSpeedWidgetStyle, new[]
+        {
+            (NetSpeedStyle.Ring, L.T("リング")), (NetSpeedStyle.HBar, L.T("横バー")), (NetSpeedStyle.VBar, L.T("縦バー")),
+            (NetSpeedStyle.Sparkline, L.T("スパークライン（ダウンロード）")), (NetSpeedStyle.Tile, L.T("塗りつぶしタイル")), (NetSpeedStyle.Text, L.T("テキストのみ（受信・送信ラベル）")),
+            (NetSpeedStyle.TwoLine, L.T("矢印と数値（2段）")), (NetSpeedStyle.Compact, L.T("1行コンパクト")),
+        }, (c, v) => c.NetSpeedWidgetStyle = v),
+        MenuItemSpec.Separator,
         new MenuItemSpec("", L.T("ネットワークとインターネットの設定"), () => Launcher.Open("ms-settings:network")),
     };
 }
@@ -191,7 +222,7 @@ internal sealed class NetSpeedDetailsView : Border
             var s = await NetworkControl.GetStatusAsync();
             _linkIcon.Text = s.Connected && s.Wired ? "" : "";
             _link.Text = !s.Connected ? L.T("未接続")
-                : s.Mbps > 0 ? s.Name + " ・ " + L.F("リンク速度 {0} Mbps", s.Mbps)
+                : s.Mbps > 0 ? s.Name + " ・ " + L.F("リンク速度 {0} Mb/s", s.Mbps)
                 : s.Name;
         }
         catch (Exception ex) { Log.Error("netspeed details", ex); }
@@ -221,7 +252,7 @@ internal sealed class NetSpeedDetailsView : Border
             };
             _value = UiKit.Label("0", 34, _bright, FontWeights.SemiBold);
             _value.TextTrimming = TextTrimming.None;
-            _unit = UiKit.Label("Mbps", 16, t.TextSecondary);
+            _unit = UiKit.Label("Mb/s", 16, t.TextSecondary);
             _unit.TextTrimming = TextTrimming.None;
             _unit.Margin = new Thickness(5, 8, 0, 0);
 

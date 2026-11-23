@@ -39,7 +39,11 @@ public enum ClickOpens { Windows, App }
 public enum BarTintMode { Theme, Accent, Custom, Wallpaper }
 /// <summary>バーの「再生中の曲」の見た目。Standard = サムネイル・曲名・波形・下線の再生位置（幅 250px 固定）/ Compact = サムネイルと再生ボタンだけ。縦のバーは常に Compact。Ring は廃止（古い設定ファイルを読めるよう、値だけ残す。Compact として扱う）。</summary>
 public enum NowPlayingStyle { Standard, Compact, Ring }
-/// <summary>「再生中の曲」の再生位置の線。Wave = 波線（再生済みが波で流れ、これからは直線。一時停止中は直線）/ Line = 常に直線。</summary>
+/// <summary>CPU・メモリのウィジェットの見た目（横のバーのみ。縦のバーは常に Ring）。</summary>
+public enum SystemStyle { Ring, HBar, VBar, Underline, Sparkline, Segments, Tile, Text }
+/// <summary>通信速度のウィジェットの見た目（横のバーのみ。縦のバーは常に Ring）。</summary>
+public enum NetSpeedStyle { Ring, TwoLine, HBar, Sparkline, VBar, Compact, Text, Tile }
+/// <summary>「再生中の曲」の再生位置の線。Wave =波線（再生済みが波で流れ、これからは直線。一時停止中は直線）/ Line = 常に直線。</summary>
 public enum NowPlayingProgressStyle { Wave, Line }
 /// <summary>「再生中の曲」の波形の置き場所。Right = 曲名の右（アクセント色）/ Overlay = サムネイルに重ねる（暗い膜と白い棒。横幅の節約）。</summary>
 public enum NowPlayingWavePlacement { Right, Overlay }
@@ -181,6 +185,10 @@ public sealed class Settings
     /// <summary>音楽や動画を再生中のアプリのプレビューに、前の曲・再生/一時停止・次の曲のボタンを出す。</summary>
     public bool ShowPreviewMediaControls { get; set; } = true;
     public NowPlayingStyle NowPlayingStyle { get; set; } = NowPlayingStyle.Standard;
+    /// <summary>CPU・メモリのウィジェットの見た目。</summary>
+    public SystemStyle SystemWidgetStyle { get; set; } = SystemStyle.Ring;
+    /// <summary>通信速度のウィジェットの見た目。</summary>
+    public NetSpeedStyle NetSpeedWidgetStyle { get; set; } = NetSpeedStyle.Ring;
     /// <summary>「再生中の曲」にジャケット・動画の画像を出す（オフは音符のアイコン）。</summary>
     public bool NowPlayingThumbnail { get; set; } = true;
     /// <summary>再生中だけ動く波形（棒）を出す。</summary>

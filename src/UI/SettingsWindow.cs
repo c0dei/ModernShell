@@ -598,8 +598,8 @@ public sealed class SettingsWindow : Window
             "system" => Card(Row(Ring(26, T.AccentBrush, 23, "23"), Pad(Ring(26, green, 58, "58"), 6)), 8),
             "network" => Card(Row(UiKit.Glyph("", 18), Pad(Txt("イーサネット", 12), 8)), 10),
             "netspeed" => Card(Row(
-                Ring(30, new SolidColorBrush(NetSpeedColors.Down), 40, "", NetSpeedColors.DownGlyph), Col(6, Txt("156", 13), Txt("Kbps", 10, dim, FontWeights.Normal)),
-                Pad(Ring(30, new SolidColorBrush(NetSpeedColors.Up), 25, "", NetSpeedColors.UpGlyph), 8), Col(6, Txt("74", 13), Txt("Kbps", 10, dim, FontWeights.Normal))), 10),
+                Ring(30, new SolidColorBrush(NetSpeedColors.Down), 40, "", NetSpeedColors.DownGlyph), Col(6, Txt("156", 13), Txt("Kb/s", 10, dim, FontWeights.Normal)),
+                Pad(Ring(30, new SolidColorBrush(NetSpeedColors.Up), 25, "", NetSpeedColors.UpGlyph), 8), Col(6, Txt("74", 13), Txt("Kb/s", 10, dim, FontWeights.Normal))), 10),
             "volume" => Card(Row(UiKit.Glyph(VolumeGlyph.For(50, false), 16), VolBar(60, 6)), 10),
             "tray" => Card(Row(UiKit.Glyph("", 12), Pad(UiKit.Glyph("", 16), 10), Pad(UiKit.Glyph("", 16), 10), Pad(UiKit.Glyph("", 16), 10)), 10),
             "quicksettings" => Card(Row(UiKit.Glyph("", 17), Pad(UiKit.Glyph(VolumeGlyph.For(50, false), 17), 12), VolBar(60, 8)), 10),

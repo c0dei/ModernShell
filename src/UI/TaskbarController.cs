@@ -269,6 +269,7 @@ public sealed partial class TaskbarController : IDisposable
         _settings.ShowSearchButton, _settings.ShowTaskViewButton, _settings.ShowSeconds,
         _settings.MagnifyOnHover, _settings.MagnifyScale, _settings.MagnifyNeighbors, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
         _settings.MultiMonitorTaskbar, _settings.AutoHideTaskbar, _settings.TaskbarEdgeOffset, _settings.TaskbarPill, _settings.ShowBarDividers, _settings.ClockAlign, _settings.ClockStyle, _settings.ClockTimeFormat, _settings.ClockDateFormat, _settings.TaskbarTint, _settings.TaskbarCustomColor, string.Join(",", _settings.BarWidgets.Select(w => w + ":" + (_settings.BarWidgetZones.GetValueOrDefault(w) ?? "Tray"))), _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language,
+        _settings.SystemWidgetStyle, _settings.NetSpeedWidgetStyle,
         _settings.NowPlayingStyle, _settings.NowPlayingThumbnail, _settings.NowPlayingWave, _settings.NowPlayingWavePlacement, _settings.NowPlayingProgress, _settings.NowPlayingProgressStyle, _settings.NowPlayingTextWidth, _settings.NowPlayingScroll);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e)
     {
