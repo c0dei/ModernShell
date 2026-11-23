@@ -314,6 +314,18 @@ internal sealed class NotificationDetailsView : Border
         grid.Children.Add(close);
 
         var card = new Border { Background = _t.Hover, CornerRadius = _t.Corner(10), Padding = new Thickness(12, 10, 8, 12), Margin = new Thickness(0, 0, 0, 6), Child = grid };
+        // カードを押すと、通知元のアプリ（システム通知は設定）を開く。×は別（Tile が押下を処理する）
+        card.Cursor = System.Windows.Input.Cursors.Hand;
+        card.MouseEnter += (_, _) => card.Background = _t.Stroke;
+        card.MouseLeave += (_, _) => card.Background = _t.Hover;
+        card.MouseLeftButtonUp += (_, e) =>
+        {
+            e.Handled = true;
+            NotificationControl.Activate(n);
+            _list.Children.Remove(card);
+            _sig = "\0";
+            Reload();
+        };
         close.Click += _ =>
         {
             NotificationControl.Remove(n.Id);
