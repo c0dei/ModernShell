@@ -103,6 +103,8 @@ public sealed class Settings
     public StartButtonPosition StartButtonPosition { get; set; } = StartButtonPosition.WithApps;
     /// <summary>タスクバーに常に表示するトレイアイコン（ManagedShell の NotifyIcon.Identifier）。それ以外は「^」の中。</summary>
     public List<string> PinnedTrayIcons { get; set; } = new();
+    /// <summary>「^」の一覧の中のトレイアイコンの並び順（NotifyIcon.Identifier）。載っていないアイコンは末尾。</summary>
+    public List<string> OverflowTrayOrder { get; set; } = new();
     public TaskbarStyle TaskbarStyle { get; set; } = TaskbarStyle.Band;
     /// <summary>
     /// アイランド型の余白 (DIP)。X = 左右、Y = 上下（画面を基準にした向き。下に置くなら Y は画面の下端との距離、

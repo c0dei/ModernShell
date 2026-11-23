@@ -51,7 +51,7 @@ public sealed partial class TaskbarController
         };
         _overflowButton.Click += ShowOverflow;
         _overflowButton.RightClick += ShowOverflowMenu;
-        MakeOverflowDropTarget(_overflowButton); // 「^」の上に落としてもしまえる
+        MakeOverflowDropTarget(_overflowButton, passUnpinnedToBar: true); // 「^」の上に落としてもしまえる
         p.Children.Add(_overflowButton);
 
         _trayIcons = new StackPanel { Orientation = Flow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
@@ -255,6 +255,9 @@ public sealed partial class TaskbarController
         if (_overflowPopup?.IsOpen != true) ShowOverflow(_overflowButton);
         if (_overflowPopup != null) _overflowPopup.StaysOpen = true; // ドラッグ中に閉じないように
         _overflowButton.IsHitTestVisible = true; // 「^」自体にも落とせるように（開閉トグルのための無効化を解除）
+        // 常に表示するアイコンが 1 つもないと、バー側の落とし先が「^」しかなく狙いにくい。先頭に空きの枠を開けておく
+        if (!icon.IsPinned && _trayIcons != null && !_trayIcons.Children.OfType<FrameworkElement>().Any(x => x.Tag is ManagedShell.WindowsTray.NotifyIcon))
+            ShowTrayDropLine(0);
         try { DragDrop.DoDragDrop(source, new DataObject("ModernShell.TrayIcon", icon), DragDropEffects.Move); }
         catch (Exception ex) { Log.Error("tray drag", ex); }
         if (_overflowPopup?.IsOpen == true) _overflowPopup.StaysOpen = _trayEditMode;
@@ -374,12 +377,14 @@ public sealed partial class TaskbarController
     }
 
     /// <summary>「^」の一覧をドロップ先にする。落としたアイコンは「^」の中にしまう。</summary>
-    private void MakeOverflowDropTarget(FrameworkElement area)
+    private void MakeOverflowDropTarget(FrameworkElement area, bool passUnpinnedToBar = false)
     {
         area.AllowDrop = true;
         var normal = Brushes.Transparent;
         area.DragOver += (_, e) =>
         {
+            // 「^」ボタン: 一覧から出すアイコンは、バー側（トレイ部分）のドロップ処理に任せる（常に表示が 0 個でも落とせるように）
+            if (passUnpinnedToBar && DraggedIcon(e) is { IsPinned: false }) return;
             bool ok = DraggedIcon(e) is { IsPinned: true };
             e.Effects = ok ? DragDropEffects.Move : DragDropEffects.None;
             SetBg(area, ok ? Theme.Current.Hover : normal);
@@ -393,6 +398,86 @@ public sealed partial class TaskbarController
             icon.Unpin();
             _shell.SavePinnedTray(_settings);
             RebuildTray();
+            FillOverflow();
+            e.Handled = true;
+        };
+    }
+
+    /// <summary>「^」の中のアイコンを、保存してある並び順で返す（載っていないものは元の順のまま末尾）。</summary>
+    private List<ManagedShell.WindowsTray.NotifyIcon> OrderedUnpinned()
+    {
+        var order = _settings.OverflowTrayOrder;
+        int Rank(ManagedShell.WindowsTray.NotifyIcon i) { int k = order.IndexOf(i.Identifier); return k < 0 ? int.MaxValue : k; }
+        return Icons(_shell.Tray?.UnpinnedIcons).OrderBy(Rank).ToList(); // OrderBy は安定ソート
+    }
+
+    /// <summary>
+    /// 「^」の一覧のアイコンをドラッグして並べ替える。一覧全体を落とし先にして、アイコンの隙間に落としても受け付ける。
+    /// カーソルにいちばん近いアイコンの、カーソル側（左半分なら前、右半分なら後）に入る。
+    /// </summary>
+    private void MakeOverflowReorderPanel(Panel panel)
+    {
+        panel.AllowDrop = true;
+        panel.Background ??= Brushes.Transparent;
+        // 入る位置を示す縦線（基準のアイコンの左右どちらかの隙間）。同じ位置のときは何もしない（ちらつき防止）
+        Tile? marked = null; bool markedAfter = false; Border? line = null;
+        void Mark(Tile? t, bool after = false)
+        {
+            if (ReferenceEquals(marked, t) && markedAfter == after) return;
+            if (line != null && marked?.Child is Panel old) old.Children.Remove(line);
+            line = null; marked = t; markedAfter = after;
+            if (t?.Child is not Panel p) return;
+            line = new Border
+            {
+                Width = 2, CornerRadius = new CornerRadius(1), Background = Theme.Current.AccentBrush, IsHitTestVisible = false,
+                VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(after ? 0 : -4, 2, after ? -2 : 0, 2),
+                HorizontalAlignment = after ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+            };
+            p.Children.Add(line);
+        }
+        // カーソルにいちばん近いタイル（隙間も含む外枠で測る）と、その前後どちら側か
+        (Tile tile, bool after)? Nearest(DragEventArgs e)
+        {
+            var pt = e.GetPosition(panel);
+            Tile? best = null; double bestD = double.MaxValue; bool after = false;
+            foreach (var t in panel.Children.OfType<Tile>())
+            {
+                var r = t.TransformToAncestor(panel).TransformBounds(new Rect(-t.Margin.Left, -t.Margin.Top, t.ActualWidth + t.Margin.Left + t.Margin.Right, t.ActualHeight + t.Margin.Top + t.Margin.Bottom));
+                double dx = Math.Max(Math.Max(r.Left - pt.X, 0), pt.X - r.Right), dy = Math.Max(Math.Max(r.Top - pt.Y, 0), pt.Y - r.Bottom);
+                double d = dx * dx + dy * dy;
+                if (d < bestD) { bestD = d; best = t; after = pt.X > (r.Left + r.Right) / 2; }
+            }
+            return best == null ? null : (best, after);
+        }
+        panel.DragOver += (_, e) =>
+        {
+            if (DraggedIcon(e) is not { IsPinned: false } || Nearest(e) is not { } n) { Mark(null); return; } // 親（しまう用）の処理へ
+            e.Effects = DragDropEffects.Move;
+            // 「Aの右」と「Bの左」は同じ隙間なので、いつも「次のアイコンの左」（最後だけ「最後のアイコンの右」）で描く
+            var tiles = panel.Children.OfType<Tile>().ToList();
+            int at = tiles.IndexOf(n.tile) + (n.after ? 1 : 0);
+            if (at < tiles.Count) Mark(tiles[at], false); else Mark(tiles[^1], true);
+            e.Handled = true;
+        };
+        // 子要素の間を移るときにも DragLeave が来るので、本当に一覧の外に出たときだけ消す
+        panel.DragLeave += (_, e) =>
+        {
+            var p = e.GetPosition(panel);
+            if (p.X >= 0 && p.Y >= 0 && p.X < panel.ActualWidth && p.Y < panel.ActualHeight) return;
+            Mark(null);
+        };
+        panel.Drop += (_, e) =>
+        {
+            Mark(null);
+            if (DraggedIcon(e) is not { IsPinned: false } d || Nearest(e) is not { } n || n.tile.Tag is not ManagedShell.WindowsTray.NotifyIcon target || target == d) return;
+            var list = OrderedUnpinned();
+            if (list.IndexOf(d) < 0 || list.IndexOf(target) < 0) return;
+            list.Remove(d);
+            list.Insert(list.IndexOf(target) + (n.after ? 1 : 0), d);
+            var ids = list.Select(i => i.Identifier).ToList();
+            ids.AddRange(_settings.OverflowTrayOrder.Where(x => !ids.Contains(x))); // 今は出ていないアイコンの順も残す
+            _settings.OverflowTrayOrder = ids;
+            _settings.SaveQuiet();
             FillOverflow();
             e.Handled = true;
         };
@@ -558,7 +643,7 @@ public sealed partial class TaskbarController
             }
             if (pinnedRow.Children.Count == 0) pinnedRow.Children.Add(UiKit.Label(L.T("なし"), 12, t.TextSecondary));
             var others = Section(L.T("「^」の中に表示"));
-            foreach (var icon in Icons(_shell.Tray?.UnpinnedIcons))
+            foreach (var icon in OrderedUnpinned())
             {
                 Watch(icon);
                 others.Children.Add(Spread(TrayIconTile(icon, editable: true)));
@@ -568,11 +653,12 @@ public sealed partial class TaskbarController
         }
 
         var all = Section(null);
-        foreach (var icon in Icons(_shell.Tray?.UnpinnedIcons))
+        foreach (var icon in OrderedUnpinned())
         {
             Watch(icon);
             all.Children.Add(Spread(TrayIconTile(icon, editable: true, dragToBar: true)));
         }
+        MakeOverflowReorderPanel(all);
         if (all.Children.Count == 0)
             all.Children.Add(new TextBlock { Text = L.T("アイコンはありません"), Margin = new Thickness(8), Foreground = t.TextSecondary });
     }
