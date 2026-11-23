@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using Microsoft.Win32;
 
 namespace ModernShell.Core;
@@ -29,7 +30,10 @@ public static class Everything
     private static string? Locate()
     {
         // 登録されている場所（App Paths）→ よくあるインストール先 → 起動中のプロセス
-        foreach (var hive in new[] { Registry.LocalMachine, Registry.CurrentUser })
+        // 管理者として動いているときは、ユーザーが書き換えられる場所（HKCU・LocalAppData・動いているプロセスの場所）の exe は信用しない
+        // （そこに置かれた偽物を、管理者の権限で見つけて起動してしまわないように）
+        bool trustUserLocations = !Launcher.IsElevated;
+        foreach (var hive in trustUserLocations ? new[] { Registry.LocalMachine, Registry.CurrentUser } : new[] { Registry.LocalMachine })
         {
             foreach (var name in new[] { "Everything.exe", "Everything64.exe" })
             {
@@ -45,8 +49,9 @@ public static class Everything
         {
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs"),
         };
+        if (trustUserLocations)
+            roots = roots.Append(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs")).ToArray();
         foreach (var root in roots)
         {
             if (string.IsNullOrEmpty(root)) continue;
@@ -56,6 +61,7 @@ public static class Everything
                 if (File.Exists(p)) return p;
             }
         }
+        if (!trustUserLocations) return null;
         try
         {
             foreach (var name in new[] { "Everything", "Everything64", "Everything1.5a" })
@@ -76,7 +82,7 @@ public static class Everything
         if (exe == null) return false;
         try
         {
-            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe) ?? "" });
+            Launcher.Open(exe, null, Path.GetDirectoryName(exe)); // 普通の権限で起動する（管理者のまま起動しない）
             return true;
         }
         catch (Exception ex) { Log.Error("everything", ex); return false; }
@@ -96,7 +102,7 @@ public static class Everything
                 foreach (var p in procs) p.Dispose();
                 if (running) return true;
             }
-            Process.Start(new ProcessStartInfo(exe, "-startup") { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe) ?? "" });
+            Launcher.Open(exe, "-startup", Path.GetDirectoryName(exe));
             return true;
         }
         catch (Exception ex) { Log.Error("everything start", ex); return false; }
@@ -109,10 +115,7 @@ public static class Everything
         if (exe == null) return false;
         try
         {
-            var psi = new ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe) ?? "" };
-            psi.ArgumentList.Add("-search");
-            psi.ArgumentList.Add(query);
-            Process.Start(psi);
+            Launcher.Open(exe, "-search \"" + query.Replace("\"", "\\\"") + "\"", Path.GetDirectoryName(exe));
             return true;
         }
         catch (Exception ex) { Log.Error("everything", ex); return false; }
