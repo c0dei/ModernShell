@@ -101,7 +101,13 @@ public sealed class DesktopsFlyout
             if (d.Wallpaper is { } wall)
                 Task.Run(() => PackageInfo.LoadImage(wall, 320)).ContinueWith(r => { if (r.Result != null) img.Dispatcher.BeginInvoke(() => img.Source = r.Result); }, TaskScheduler.Default);
             // 壁紙の上に、そのデスクトップのウィンドウの描画先を重ねる（DWM が開いたあとここへ縮小して描く）
-            var canvas = new Canvas { Width = FrameW, Height = frameH };
+            // DWM のサムネイルは角丸に切り抜けないので、四隅が枠からはみ出さないよう、ウィンドウの層だけ 2px 内側に縮める
+            var canvas = new Canvas
+            {
+                Width = FrameW, Height = frameH,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                RenderTransform = new ScaleTransform((FrameW - 4) / FrameW, (frameH - 4) / frameH),
+            };
             foreach (var w in Enumerable.Reverse(windows.Where(x => x.DesktopId == d.Id || (desktops.Count <= 1))))
             {
                 // 画面の外にはみ出した分（最大化の余白など）は切る
@@ -113,11 +119,19 @@ public sealed class DesktopsFlyout
                 canvas.Children.Add(box);
                 session.Slots.Add(new Slot(w.Handle, box, l - w.Left, tp - w.Top, r - w.Left, b - w.Top));
             }
+            // 中身（壁紙）の四角い角が、丸い枠線から飛び出さないよう、内側の角丸で切り抜く
+            double outer = t.Corner(6).TopLeft, inner = Math.Max(0, outer - 2);
+            var content = new Grid
+            {
+                Width = FrameW, Height = frameH, Children = { img, canvas },
+                Clip = new RectangleGeometry(new Rect(0, 0, FrameW, frameH), inner, inner),
+            };
             var frame = new Border
             {
-                Width = FrameW, Height = frameH, CornerRadius = t.Corner(6), ClipToBounds = true, Background = t.Surface,
+                // 枠線（2px）の内側がちょうど FrameW × frameH になるよう、外寸は枠の分だけ大きくする（中身が枠に被って線が欠けないように）
+                Width = FrameW + 4, Height = frameH + 4, CornerRadius = new CornerRadius(outer), Background = t.Surface,
                 BorderThickness = new Thickness(2), BorderBrush = d.IsCurrent ? t.AccentBrush : Brushes.Transparent,
-                Child = new Grid { Children = { img, canvas } },
+                Child = content,
             };
             var label = UiKit.Label(d.Name, 12, t.Text, d.IsCurrent ? FontWeights.SemiBold : FontWeights.Normal);
             label.HorizontalAlignment = HorizontalAlignment.Center;
@@ -160,7 +174,7 @@ public sealed class DesktopsFlyout
         // 新しいデスクトップ
         var plusFrame = new Border
         {
-            Width = FrameW, Height = frameH, CornerRadius = t.Corner(6), Background = t.ControlFill,
+            Width = FrameW + 4, Height = frameH + 4, CornerRadius = t.Corner(6), Background = t.ControlFill,
             BorderBrush = t.Stroke, BorderThickness = new Thickness(1), Child = UiKit.Glyph("", 20),
         };
         var plusLabel = UiKit.Label(L.T("新しいデスクトップ"), 12);

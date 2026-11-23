@@ -557,9 +557,7 @@ public sealed class SettingsWindow : Window
                 _s.ShowThumbnailPreview, v => _s.ShowThumbnailPreview = v, on),
             ToggleRow(L.T("プレビューにメディア操作を表示"), L.T("音楽や動画を再生中のアプリのプレビューに、前の曲・再生/一時停止・次の曲のボタンを出します"),
                 _s.ShowPreviewMediaControls, v => _s.ShowPreviewMediaControls = v, on && _s.ShowThumbnailPreview),
-            ToggleRow(L.T("タスク ビューで仮想デスクトップを表示"), L.T("タスク ビューのウィジェットにカーソルを置くとデスクトップの一覧を表示し、クリックで切り替え、＋ で追加します"),
-                _s.ShowDesktopsOnTaskView, v => _s.ShowDesktopsOnTaskView = v, on && _s.BarWidgets.Contains("taskview")),
-            NumberRow(L.T("表示までの待ち時間"), "", 0, 2000, _s.PreviewDelayMs, "ms", v => _s.PreviewDelayMs = (int)v, on && (_s.ShowThumbnailPreview || _s.ShowDesktopsOnTaskView), step: 50, def: 400),
+            NumberRow(L.T("表示までの待ち時間"), L.T("タスク ビューのウィジェットの仮想デスクトップ一覧にも使います"), 0, 2000, _s.PreviewDelayMs, "ms", v => _s.PreviewDelayMs = (int)v, on && (_s.ShowThumbnailPreview || _s.ShowDesktopsOnTaskView), step: 50, def: 400),
             DropDownRow(L.T("プレビューの大きさ"), "",
                 new[] { ("Small", L.T("小")), ("Medium", L.T("中（標準）")), ("Large", L.T("大")) },
                 _s.PreviewSize, v => _s.PreviewSize = v, on && _s.ShowThumbnailPreview));

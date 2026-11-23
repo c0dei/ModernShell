@@ -119,6 +119,7 @@ public static partial class L
         ["実行中のアプリのボタンに置くと、ウィンドウの中身を縮小表示します。クリックで切り替え、× で閉じます。複数ウィンドウのボタンをクリックしたときもプレビューを出します（オフのときは、ウィンドウ名のリストを出します）"] = "Hover a running app to see its windows. Click to switch, × to close Clicking a button with several windows also shows the preview (when off, a list of window names is shown instead).",
         ["カーソルを置くとデスクトップの一覧を表示し、クリックで切り替え、＋ で追加します"] = "Hover to list desktops. Click to switch, + to add",
         ["表示までの待ち時間"] = "Delay before showing",
+        ["タスク ビューのウィジェットの仮想デスクトップ一覧にも使います"] = "Also used for the virtual desktop list on the Task View widget",
         ["すぐ"] = "Immediately",
         ["0.2 秒"] = "0.2 s",
         ["0.4 秒（標準）"] = "0.4 s (default)",

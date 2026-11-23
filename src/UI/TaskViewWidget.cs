@@ -105,6 +105,7 @@ public sealed class TaskViewBarWidget : BarWidget
     {
         WidgetSettingsMenu.Choice("", L.T("表示の形"), (Settings.Current ?? new Settings()).TaskViewWidgetStyle,
             Enum.GetValues<TaskViewStyle>().Select(s => (s, TaskViewLook.StyleName(s))), (c, v) => c.TaskViewWidgetStyle = v),
+        WidgetSettingsMenu.Toggle(L.T("タスク ビューで仮想デスクトップを表示"), (Settings.Current ?? new Settings()).ShowDesktopsOnTaskView, (c, v) => c.ShowDesktopsOnTaskView = v),
         MenuItemSpec.Separator,
     };
 }
