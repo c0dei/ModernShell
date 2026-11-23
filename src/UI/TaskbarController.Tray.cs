@@ -488,7 +488,7 @@ public sealed partial class TaskbarController
         _overflowPanel = new StackPanel { Margin = new Thickness(6, 6, 6, 0) };
         _overflowHint = UiKit.Label("", 11, t.TextSecondary);
         _overflowHint.TextWrapping = TextWrapping.Wrap;
-        _overflowHint.MaxWidth = 6 * 34;
+        _overflowHint.MaxWidth = 6 * 38;
         _overflowHint.Margin = new Thickness(8, 0, 8, 4);
 
         _updateOverflowHint = () =>
@@ -525,6 +525,10 @@ public sealed partial class TaskbarController
         if (_overflowPanel == null) return;
         _overflowPanel.Children.Clear();
         var t = Theme.Current;
+        // ポップアップ内はバーより間隔を広げる（アイコンがくっついて見えないように）
+        const double gap = 3;
+        double tileW = Vertical ? Math.Min(36, TileH - 4) : 32;
+        Tile Spread(Tile tile) { tile.Margin = new Thickness(gap); return tile; }
 
         WrapPanel Section(string? title)
         {
@@ -534,7 +538,7 @@ public sealed partial class TaskbarController
                 h.Margin = new Thickness(4, _overflowPanel!.Children.Count == 0 ? 0 : 8, 0, 4);
                 _overflowPanel!.Children.Add(h);
             }
-            var w = new WrapPanel { MaxWidth = 6 * 34 }; // Windows と同じく数個ごとに折り返す
+            var w = new WrapPanel { MaxWidth = 6 * (tileW + 2 * gap) }; // Windows と同じく数個ごとに折り返す
             _overflowPanel!.Children.Add(w);
             return w;
         }
@@ -550,14 +554,14 @@ public sealed partial class TaskbarController
             foreach (var icon in pinnedIcons)
             {
                 Watch(icon);
-                pinnedRow.Children.Add(TrayIconTile(icon, editable: true, reorder));
+                pinnedRow.Children.Add(Spread(TrayIconTile(icon, editable: true, reorder)));
             }
             if (pinnedRow.Children.Count == 0) pinnedRow.Children.Add(UiKit.Label(L.T("なし"), 12, t.TextSecondary));
             var others = Section(L.T("「^」の中に表示"));
             foreach (var icon in Icons(_shell.Tray?.UnpinnedIcons))
             {
                 Watch(icon);
-                others.Children.Add(TrayIconTile(icon, editable: true));
+                others.Children.Add(Spread(TrayIconTile(icon, editable: true)));
             }
             if (others.Children.Count == 0) others.Children.Add(UiKit.Label(L.T("なし"), 12, t.TextSecondary));
             return;
@@ -567,7 +571,7 @@ public sealed partial class TaskbarController
         foreach (var icon in Icons(_shell.Tray?.UnpinnedIcons))
         {
             Watch(icon);
-            all.Children.Add(TrayIconTile(icon, editable: true, dragToBar: true));
+            all.Children.Add(Spread(TrayIconTile(icon, editable: true, dragToBar: true)));
         }
         if (all.Children.Count == 0)
             all.Children.Add(new TextBlock { Text = L.T("アイコンはありません"), Margin = new Thickness(8), Foreground = t.TextSecondary });
