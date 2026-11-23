@@ -30,10 +30,10 @@ public sealed class NowPlayingBarWidget : BarWidget
     private Canvas? _waveHost, _waveClip, _accHost;
     private System.Windows.Shapes.Ellipse? _dot;
     private double _waveMid;
-    private const double WaveAmp = 1.8, DotSize = 6;
+    private const double WaveStroke = 1.8, DotSize = 6;
     private System.Windows.Shapes.Path? _waveDim, _waveAcc;
     private TranslateTransform? _tWave;
-    private const double WavePeriod = 20; // 波 1 つの長さ（px）。長いほどゆるやか
+    private const double WavePeriod = 14; // 波 1 つの長さ（px）。長いほどゆるやか
     private double _waveBuiltFor;
     private Marquee? _title, _artist;
     private WMC.GlobalSystemMediaTransportControlsSession? _session;
@@ -126,7 +126,8 @@ public sealed class NowPlayingBarWidget : BarWidget
         // バーの高さに合わせる。低いバーでは、下線の分の余白をとり、サムネイルを小さくし、曲名とアーティストを 1 行にする
         bool underline = !Vertical && _showProgress;
         double lineH = TileH < 40 ? 2 : 3;                  // 直線の太さ
-        double waveH = 6;                                   // 波線の高さ
+        // 波線の高さ: サムネイルの下に残る余白（中身は下に 3px 空けて縦中央に置く）いっぱいまで。8px を上限、6px を下限にする
+        double waveH = Math.Clamp(Math.Floor((TileH - 3 - Math.Clamp(Math.Round(TileH * 0.67), 18, 32)) / 2 + 3), 6, 8);
         double reserve = underline ? waveH + 3 : 0;         // 下線のために、中身の下に空ける高さ
         double room = Vertical ? 0 : TileH - reserve;       // 中身に使える高さ
         _singleLine = !Vertical && TileH < 32;              // デザインの 32px 以上（バー高さの設定 38px 以上）は 2 行。それより低いと 1 行
@@ -236,8 +237,8 @@ public sealed class NowPlayingBarWidget : BarWidget
             {
             // 波線: 薄い直線（全体）の上に、再生済みの長さだけアクセント色の波を重ねる。波は左へ流れ、再生済みの境目は動かない
             _tWave = new TranslateTransform();
-            _waveDim = new System.Windows.Shapes.Path { Stroke = track, StrokeThickness = 1.6, StrokeLineJoin = PenLineJoin.Round, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, RenderTransform = _tWave };
-            _waveAcc = new System.Windows.Shapes.Path { Stroke = T.AccentBrush, StrokeThickness = 1.6, StrokeLineJoin = PenLineJoin.Round, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, RenderTransform = _tWave };
+            _waveDim = new System.Windows.Shapes.Path { Stroke = track, StrokeThickness = WaveStroke, StrokeLineJoin = PenLineJoin.Round, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, RenderTransform = _tWave };
+            _waveAcc = new System.Windows.Shapes.Path { Stroke = T.AccentBrush, StrokeThickness = WaveStroke, StrokeLineJoin = PenLineJoin.Round, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, RenderTransform = _tWave };
             // Canvas に入れる: Canvas は中身の大きさを自分の大きさに含めない。Grid に入れると、波の図形（幅 + 1 周期）の分だけ枠が広がり、
             // 枠が広がると波を作り直して、さらに広がる…と際限なく伸びる（CPU も使い続ける）
             _accHost = new Canvas { HorizontalAlignment = HorizontalAlignment.Left, Width = 0, Height = waveH, ClipToBounds = true };
@@ -246,7 +247,7 @@ public sealed class NowPlayingBarWidget : BarWidget
             _waveClip = new Canvas { Height = waveH, ClipToBounds = true };
             _waveClip.Children.Add(_waveDim);
             _waveClip.Children.Add(_accHost);
-            _dot = new System.Windows.Shapes.Ellipse { Width = DotSize, Height = DotSize, Fill = T.AccentBrush };
+            _dot = new System.Windows.Shapes.Ellipse { Width = DotSize, Height = DotSize, Fill = T.Text }; // 文字色（ダークは白、ライトは黒系）
             _waveMid = waveH / 2; // 波を作り直す前でも、丸が正しい高さに出る
             _waveHost = new Canvas { Height = waveH, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 0), Visibility = Visibility.Collapsed };
             _waveHost.Children.Add(_waveClip);
@@ -421,6 +422,8 @@ public sealed class NowPlayingBarWidget : BarWidget
         if (_session == null || MediaControl.HasNoDuration(_start, _end)) return null;
         var pos = _pos0;
         if (_playing && _posAt.Year > 2000) pos += DateTimeOffset.Now - _posAt;
+        // 再生中に終わりを過ぎたら、ループ再生（YouTube ショートなど）とみなして最初に戻す。ループしても、ブラウザーが新しい位置を報告しないことがある
+        if (_playing && pos > _end && _end > _start) pos = _start + TimeSpan.FromTicks((pos - _start).Ticks % (_end - _start).Ticks);
         if (pos < _start) pos = _start;
         if (pos > _end) pos = _end;
         return (pos - _start).TotalSeconds / (_end - _start).TotalSeconds;
@@ -456,18 +459,19 @@ public sealed class NowPlayingBarWidget : BarWidget
         if (Math.Abs(width - _waveBuiltFor) < 1) return; // 幅が変わっていなければ作り直さない
         _waveBuiltFor = width;
         width = Math.Min(width, 800);                    // 異常に広いときの保険（点の数を抑える）
-        double amp = WaveAmp, mid = height / 2;
+        double mid = height / 2, amp = mid - WaveStroke / 2 - 0.2; // 枠の高さいっぱいまで振らせる（線の太さの分だけ内側）
         _waveMid = mid;
         var g = new StreamGeometry();
         using (var c = g.Open())
         {
-            c.BeginFigure(new Point(0, mid), false, false);
-            for (double x = 1; x <= width + WavePeriod; x += 1)
+            // 右へ流すので、左に 1 周期ぶん余分に作る（ずらしても左端に隙間が出ない）
+            c.BeginFigure(new Point(-WavePeriod, mid), false, false);
+            for (double x = -WavePeriod + 1; x <= width; x += 1)
                 c.LineTo(new Point(x, mid + amp * Math.Sin(2 * Math.PI * x / WavePeriod)), true, true);
         }
         g.Freeze();
         _waveAcc.Data = g;                                  // 再生済みは波線
-        _waveDim.Data = new LineGeometry(new Point(0, mid), new Point(width + WavePeriod, mid)); // これから再生するところは直線
+        _waveDim.Data = new LineGeometry(new Point(-WavePeriod, mid), new Point(width + WavePeriod, mid)); // これから再生するところは直線
         _waveDim.Data.Freeze();
         if (_accHost != null && _waveHost != null && Fraction() is { } f) _accHost.Width = width * f;
         PlaceDot();
@@ -508,7 +512,7 @@ public sealed class NowPlayingBarWidget : BarWidget
         if (_bars != null)
             for (int i = 0; i < _bars.Length; i++)
                 ((ScaleTransform)_bars[i].RenderTransform).ScaleY = 0.35 + 0.65 * (0.5 + 0.5 * Math.Sin(_phase * Freq[i] + Offs[i]));
-        if (_tWave != null) _tWave.X = -((_phase * 1.6) % WavePeriod); // 1 秒に約 8px 左へ流す。1 周期ずらすと元の形に戻る
+        if (_tWave != null) _tWave.X = (_phase * 1.6) % WavePeriod; // 1 秒に約 8px 右（再生の進む向き）へ流す。1 周期ずらすと元の形に戻る
     }
 
     /// <summary>クリックで、ジャケット・シークバー・操作ボタンのポップアップを開く（再生/一時停止はそこと右クリックのメニューで）。</summary>
