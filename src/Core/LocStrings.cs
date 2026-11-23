@@ -747,5 +747,25 @@ public static partial class L
         ["あ行から"] = "From A",
         ["アプリ、設定、ドキュメントを検索"] = "Search apps, settings and documents",
         ["プレビュー"] = "Preview",
+        // タスクバーのフォルダー
+        ["フォルダーを追加"] = "Add folder",
+        ["フォルダーに入れる"] = "Move to folder",
+        ["フォルダー {0}"] = "Folder {0}",
+        ["編集"] = "Edit",
+        ["アプリを追加"] = "Add apps",
+        ["タスクバーのアプリ"] = "Apps on the taskbar",
+        ["追加できるアプリがありません"] = "No apps to add",
+        ["フォルダーの名前"] = "Folder name",
+        ["{0} 個のアプリ ・ 実行中 {1}"] = "{0} apps · {1} running",
+        ["アプリがありません。「編集」で追加できます"] = "No apps yet. Use Edit to add some",
+        ["アプリをドラッグして並べ替え。バーの外へドラッグすると、フォルダーから出せます"] = "Drag apps to reorder. Drag one off the folder to take it out",
+        ["クリックでアプリを起動・右クリックで「フォルダーから出す」など・下線は実行中のアプリ"] = "Click to launch · right-click for \"Take out of folder\" and more · underline = running",
+        ["フォルダーの見た目"] = "Folder style",
+        ["グリッド"] = "Grid",
+        ["重ね"] = "Stack",
+        ["中のアプリのアイコンを、2×2 のミニ アイコンで並べる"] = "Show the apps inside as a 2×2 grid of mini icons",
+        ["中のアプリのアイコンを、少しずらして重ねる"] = "Show the apps inside as overlapping icons",
+        ["フォルダーは、タスクバーの空いている場所を右クリック →「フォルダーを追加」で作ります。フォルダーのボタンをクリックして開き、「編集」で名前・アプリの追加と削除・並べ替えができます。"] =
+            "Create a folder by right-clicking an empty spot on the taskbar and choosing \"Add folder\". Click a folder to open it, then use Edit to rename it and add, remove or reorder apps.",
     };
 }

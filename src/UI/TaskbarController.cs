@@ -283,6 +283,7 @@ public sealed partial class TaskbarController : IDisposable
     {
         StallDetector.Phase = "taskbar: rebuild";
         _layoutKey = LayoutKey();
+        CloseOpenFolder();
         SyncWallpaperWatch();
         StopAutoHide();
         foreach (var s in _surfaces) s.Close();
@@ -504,6 +505,7 @@ public sealed partial class TaskbarController : IDisposable
             {
                 new MenuItemSpec("\uE9D9", L.T("タスク マネージャー"), SystemActions.OpenTaskManager),
                 new MenuItemSpec("", L.T("ウィジェットを追加"), () => { }) { Children = WidgetToggleMenu },
+                new MenuItemSpec("", L.T("フォルダーを追加"), AddFolder),
                 MenuItemSpec.Separator,
                 new MenuItemSpec("\uE713", L.T("タスクバーの設定"), () => OpenSettingsRequested?.Invoke()),
             }, FlyoutPlacement);
@@ -747,6 +749,7 @@ public sealed partial class TaskbarController : IDisposable
         if (_overflowPopup != null) _overflowPopup.IsOpen = false;
         _preview.Cancel();
         _desktops.Cancel();
+        CloseOpenFolder();
         foreach (var s in _surfaces) s.Close();
         _surfaces.Clear();
         _reservation.Dispose();

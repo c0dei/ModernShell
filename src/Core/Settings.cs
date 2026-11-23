@@ -53,7 +53,9 @@ public enum NetSpeedStyle { Ring, TwoLine, HBar, Sparkline, VBar, Compact, Text,
 public enum NowPlayingProgressStyle { Wave, Line }
 /// <summary>「再生中の曲」の波形の置き場所。Right = 曲名の右（アクセント色）/ Overlay = サムネイルに重ねる（暗い膜と白い棒。横幅の節約）。</summary>
 public enum NowPlayingWavePlacement { Right, Overlay }
-/// <summary>スタートのピン留めのフォルダー（Items はアプリの ID）。</summary>
+/// <summary>タスクバーのフォルダーの見た目。Grid: 2×2 のグリッド（中身のアイコンを 4 つまで並べる）/ Stack: 重ね（アイコンを少しずらして重ねる）。</summary>
+public enum TaskbarFolderStyle { Grid, Stack }
+/// <summary>スタート・タスクバーのピン留めのフォルダー（Items はアプリの ID）。</summary>
 public sealed class PinnedFolder
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
@@ -221,6 +223,13 @@ public sealed class Settings
     public TaskbarPinSource TaskbarPinSource { get; set; } = TaskbarPinSource.Windows;
     /// <summary>「Windows と共有」のとき、Windows のピン留めの後ろに ModernShell 側で追加したピン留め。</summary>
     public List<string> PinnedTaskbarExtra { get; set; } = new();
+    /// <summary>
+    /// タスクバーのフォルダー。バーの上の位置は、ピン留めの一覧（<see cref="PinnedTaskbar"/> / <see cref="PinnedTaskbarExtra"/>）の中に
+    /// "folder:&lt;Id&gt;" の形で並ぶ。中に入れたアプリはバーには単独で出さず、フォルダーのボタンにまとめる。
+    /// </summary>
+    public List<PinnedFolder> TaskbarFolders { get; set; } = new();
+    /// <summary>タスクバーのフォルダーのボタンの見た目。</summary>
+    public TaskbarFolderStyle TaskbarFolderStyle { get; set; } = TaskbarFolderStyle.Grid;
     /// <summary>タスクバーのアプリごとのアイコンの差し替え（アプリ ID → "ファイルパス|番号"）。</summary>
     public Dictionary<string, string> CustomIcons { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 

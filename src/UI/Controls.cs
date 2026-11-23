@@ -207,10 +207,11 @@ public static class Flyout
     /// メニューを開く。開いている間は呼び出し元のボタンをクリック不可にしておくことで、
     /// ボタンをもう一度押したとき「外側クリックで閉じる」だけが起きて再オープンされない（開閉トグルになる）。
     /// </summary>
-    public static Popup Show(UIElement target, IEnumerable<MenuItemSpec> items, PlacementMode placement = PlacementMode.MousePoint) =>
-        Show(target, items, placement, parent: null);
+    /// <param name="taskbarLook">タスクバーと同じ背景にする（タスクバーのポップアップの中から開くとき。バーのウィンドウから直接開くときは自動でそうなる）。</param>
+    public static Popup Show(UIElement target, IEnumerable<MenuItemSpec> items, PlacementMode placement = PlacementMode.MousePoint, bool taskbarLook = false) =>
+        Show(target, items, placement, parent: null, taskbarLook);
 
-    private static Popup Show(UIElement target, IEnumerable<MenuItemSpec> items, PlacementMode placement, Popup? parent)
+    private static Popup Show(UIElement target, IEnumerable<MenuItemSpec> items, PlacementMode placement, Popup? parent, bool taskbarLook = false)
     {
         var t = Theme.Current;
         var panel = new StackPanel { Margin = new Thickness(4) };
@@ -218,7 +219,7 @@ public static class Flyout
         popup.Tag = parent;
         // タスクバーから開いたメニュー（スタートボタン・アプリ・空いている場所の右クリック、そのサブメニュー）は
         // タスクバーと同じ背景にする。スタートメニューなどから開いたものはこれまでどおり
-        if (parent != null ? FluentSurface.HasTaskbarLook(parent) : Window.GetWindow(target) is BarSurface)
+        if (parent != null ? FluentSurface.HasTaskbarLook(parent) : taskbarLook || Window.GetWindow(target) is BarSurface)
             FluentSurface.UseTaskbarLook(popup);
 
         foreach (var spec in items)

@@ -124,34 +124,85 @@ public sealed partial class TaskbarController
 
         foreach (var g in groups.Where(x => x.Pinned == null && !_order.Contains(x.Key))) _order.Add(g.Key);
         _order.RemoveAll(k => groups.All(g => g.Key != k));
-        var ordered = groups.Where(g => g.Pinned != null)
-            .Concat(groups.Where(g => g.Pinned == null).OrderBy(g => _order.IndexOf(g.Key)));
+        EnsureFolderSlots();
+        var slots = PinSlots(groups);
+        var live = TaskWindows().ToList();
+        var running = groups.Where(g => g.Pinned == null).OrderBy(g => _order.IndexOf(g.Key)).ToList();
 
         _apps.Children.Clear();
         _buttonFor.Clear();
+        _folderTiles.Clear();
         var pinnedIds = new List<string>();
         LiveReorder? reorder = null;
         if (!PinsFromWindows)
             reorder = new LiveReorder(_apps, Flow, (from, to) => CommitPinnedOrder(pinnedIds, from, to));
         _magnify?.Dispose();
         _currentMag = _magnify = NewMagnify(_apps);
-        foreach (var g in ordered)
+        // ピン留め（と、フォルダー）→ 起動中のそれ以外
+        foreach (var (g, folder) in slots)
+        {
+            Tile tile;
+            string slotId;
+            if (folder != null)
+            {
+                var members = FolderMembers(folder, live);
+                tile = FolderButton(folder, members);
+                _folderTiles[folder.Id] = tile;
+                foreach (var w in members.SelectMany(m => m.Group.Windows)) _buttonFor.TryAdd(w.Handle, tile); // 単独のボタンがあればそちらが優先
+                slotId = FolderPrefix + folder.Id;
+            }
+            else
+            {
+                tile = AppButton(g!);
+                foreach (var w in g!.Windows) _buttonFor[w.Handle] = tile;
+                slotId = g.Pinned!.Id;
+            }
+            _apps.Children.Add(tile);
+            // ピン留めボタン（フォルダーも）はドラッグで並べ替え（つかむとカーソルに付いてきて、他のボタンがよける）
+            if (reorder != null)
+            {
+                pinnedIds.Add(slotId);
+                reorder.Add(tile);
+            }
+        }
+        foreach (var g in running)
         {
             var tile = AppButton(g);
             foreach (var w in g.Windows) _buttonFor[w.Handle] = tile;
             _apps.Children.Add(tile);
-            // ピン留めボタンはドラッグで並べ替え（つかむとカーソルに付いてきて、他のボタンがよける）
-            if (reorder != null && g.Pinned != null)
-            {
-                pinnedIds.Add(g.Pinned.Id);
-                reorder.Add(tile);
-            }
         }
         _apps.Visibility = _apps.Children.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         _currentMag = null;
         RebuildSecondaryApps();
         PruneWatched();
-        LogGroups(ordered);
+        LogGroups(slots.Where(s => s.Group != null).Select(s => s.Group!).Concat(running));
+        OpenPendingFolder();
+    }
+
+    /// <summary>
+    /// ピン留め（とフォルダー）の並び。Windows と共有のときは Windows のピン留め → ModernShell で追加した分、ModernShell で管理のときはその一覧の順。
+    /// フォルダーに入っているアプリは単独では出さない。
+    /// </summary>
+    private List<(Group? Group, PinnedFolder? Folder)> PinSlots(List<Group> groups)
+    {
+        var slots = new List<(Group?, PinnedFolder?)>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void AddApp(AppEntry app)
+        {
+            if (!seen.Add(app.Id)) return;
+            var g = groups.FirstOrDefault(x => x.Key == "pin:" + app.Id);
+            if (g != null) slots.Add((g, null));
+        }
+        if (PinsFromWindows) foreach (var a in _windowsPins.Apps) AddApp(a);
+        foreach (var id in EditablePins)
+        {
+            if (id.StartsWith(FolderPrefix, StringComparison.Ordinal))
+            {
+                if (FindFolder(id) is { } f && seen.Add(id)) slots.Add((null, f));
+            }
+            else if (ResolvePinned(id) is { } app) AddApp(app);
+        }
+        return slots;
     }
 
     private string _lastGroupDump = "";
@@ -220,37 +271,7 @@ public sealed partial class TaskbarController
         content.Children.Add(main);
         if (running && _settings.ShowTaskbarBadges) AddBadges(content, g, t);
 
-        if (running)
-        {
-            var indicator = flashing ? new SolidColorBrush(Color.FromRgb(0xF7, 0xA4, 0x00)) : active ? t.AccentBrush : t.TextSecondary;
-            // ウィンドウが複数あるときは、その数（最大 3）だけ並べる。1 つめは前面（または点滅）なら長い線、ほかは短い点
-            int count = _settings.ShowWindowCountDots ? Math.Clamp(g.Windows.Count, 1, 3) : 1;
-            bool lit = active || flashing;
-            var marks = new StackPanel { Orientation = Vertical ? Orientation.Vertical : Orientation.Horizontal };
-            for (int i = 0; i < count; i++)
-            {
-                double len = i > 0 ? 4 : lit ? (count > 1 ? 12 : 16) : (count > 1 ? 4 : 6);
-                marks.Children.Add(new Border
-                {
-                    Width = Vertical ? 3 : len, Height = Vertical ? len : 3, CornerRadius = new CornerRadius(1.5), Background = indicator,
-                    Margin = i == 0 ? new Thickness(0) : Vertical ? new Thickness(0, 3, 0, 0) : new Thickness(3, 0, 0, 0),
-                });
-            }
-            // 実行中の印は、バーのある画面の端の側に付ける（横のバーなら下/上の辺、縦のバーなら左/右の辺）
-            if (Vertical)
-            {
-                marks.HorizontalAlignment = Edge == TaskbarEdge.Left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
-                marks.VerticalAlignment = VerticalAlignment.Center;
-                marks.Margin = new Thickness(2, 0, 2, 0);
-            }
-            else
-            {
-                marks.VerticalAlignment = IsTop ? VerticalAlignment.Top : VerticalAlignment.Bottom;
-                marks.HorizontalAlignment = HorizontalAlignment.Center;
-                marks.Margin = new Thickness(0, 2, 0, 2);
-            }
-            content.Children.Add(marks);
-        }
+        if (running) content.Children.Add(RunIndicator(t, g.Windows.Count, active, flashing));
 
         var tile = new Tile
         {
@@ -283,6 +304,40 @@ public sealed partial class TaskbarController
         tile.MiddleClick += x => { TakeForeground(x); (g.Pinned ?? FindApp(g.Windows.FirstOrDefault()))?.Launch(); };
         tile.RightClick += x => ShowIconMenu(x, GroupMenu(g));
         return tile;
+    }
+
+    /// <summary>
+    /// 実行中の印（ボタンの端の線）。ウィンドウが複数あるときは、その数（最大 3）だけ並べる。1 つめは前面（または点滅）なら長い線、ほかは短い点。
+    /// バーのある画面の端の側に付ける（横のバーなら下/上の辺、縦のバーなら左/右の辺）。
+    /// </summary>
+    private StackPanel RunIndicator(Theme t, int windowCount, bool active, bool flashing)
+    {
+        var indicator = flashing ? new SolidColorBrush(Color.FromRgb(0xF7, 0xA4, 0x00)) : active ? t.AccentBrush : t.TextSecondary;
+        int count = _settings.ShowWindowCountDots ? Math.Clamp(windowCount, 1, 3) : 1;
+        bool lit = active || flashing;
+        var marks = new StackPanel { Orientation = Vertical ? Orientation.Vertical : Orientation.Horizontal };
+        for (int i = 0; i < count; i++)
+        {
+            double len = i > 0 ? 4 : lit ? (count > 1 ? 12 : 16) : (count > 1 ? 4 : 6);
+            marks.Children.Add(new Border
+            {
+                Width = Vertical ? 3 : len, Height = Vertical ? len : 3, CornerRadius = new CornerRadius(1.5), Background = indicator,
+                Margin = i == 0 ? new Thickness(0) : Vertical ? new Thickness(0, 3, 0, 0) : new Thickness(3, 0, 0, 0),
+            });
+        }
+        if (Vertical)
+        {
+            marks.HorizontalAlignment = Edge == TaskbarEdge.Left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+            marks.VerticalAlignment = VerticalAlignment.Center;
+            marks.Margin = new Thickness(2, 0, 2, 0);
+        }
+        else
+        {
+            marks.VerticalAlignment = IsTop ? VerticalAlignment.Top : VerticalAlignment.Bottom;
+            marks.HorizontalAlignment = HorizontalAlignment.Center;
+            marks.Margin = new Thickness(0, 2, 0, 2);
+        }
+        return marks;
     }
 
     /// <summary>
@@ -437,7 +492,7 @@ public sealed partial class TaskbarController
             : null;
 
     /// <summary>ホバー拡大（Mac のドック風）に、このボタンのアイコンを登録する。</summary>
-    private void AddMagnify(Tile tile, Image icon)
+    private void AddMagnify(Tile tile, FrameworkElement icon)
     {
         // 画面の端の側を支点にして、中央側へ向かって大きくなる
         var origin = Edge switch
@@ -467,7 +522,8 @@ public sealed partial class TaskbarController
             new MenuItemSpec("", Truncate(w.Title ?? "", 48), () => { TakeForeground(target); w.BringToFront(); })), _settings.WindowListAlign);
     }
 
-    private IEnumerable<MenuItemSpec> GroupMenu(Group g)
+    /// <param name="inFolder">フォルダーの中から開いたとき、そのフォルダー（「フォルダーから出す」を足す。ピン留めとは無関係）。</param>
+    private IEnumerable<MenuItemSpec> GroupMenu(Group g, PinnedFolder? inFolder = null)
     {
         var app = g.Pinned ?? FindApp(g.Windows.FirstOrDefault());
         var items = new List<MenuItemSpec>();
@@ -509,6 +565,8 @@ public sealed partial class TaskbarController
         if (app != null)
         {
             items.Add(new MenuItemSpec("", app.Name, () => app.Launch()) { Icon = CustomIcon(g) ?? ButtonIcon(g) ?? w0?.Icon, SubMenu = () => AppItemMenu(app) });
+            if (inFolder != null)
+                items.Add(new MenuItemSpec("", L.T("フォルダーから出す"), () => EjectFromFolder(inFolder, app.Id)));
             if (IsWindowsPin(app))
             {
                 // Windows のピン留めはアプリから変更できない（Windows が API を提供していない）
@@ -522,6 +580,12 @@ public sealed partial class TaskbarController
                     ? new MenuItemSpec("\uE77A", L.T("タスクバーからピン留めを外す"), () => { pins.RemoveAll(x => x.Equals(app.Id, StringComparison.OrdinalIgnoreCase)); _settings.Save(); })
                     : new MenuItemSpec("\uE718", L.T("タスクバーにピン留めする"), () => { pins.Add(app.Id); _settings.Save(); }));
             }
+            // フォルダーに入れる（フォルダーがあるとき）
+            if (_settings.TaskbarFolders.Any(f => !f.Items.Contains(app.Id, StringComparer.OrdinalIgnoreCase)))
+                items.Add(new MenuItemSpec("", L.T("フォルダーに入れる"), () => { })
+                {
+                    Children = () => _settings.TaskbarFolders.Where(f => !f.Items.Contains(app.Id, StringComparer.OrdinalIgnoreCase)).Select(f => new MenuItemSpec("", f.Name, () => MoveToFolder(f, app.Id))).ToList(),
+                });
         }
         // アイコンの差し替え（ピン留め・実行中どちらのボタンにも効く）
         var iconKey = IconKey(g);

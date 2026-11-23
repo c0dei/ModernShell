@@ -593,6 +593,16 @@ public sealed class SettingsWindow : Window
             p.Children.Add(Note(L.T("Windows はアプリからピン留めを変更する手段を提供していないため、共有は「Windows → ModernShell」の一方向です。") +
                                 L.T("ModernShell のタスクバーで右クリックしてピン留めしたものは、Windows のピン留めの後ろに追加で並びます。")));
 
+        p.Children.Add(Section(L.T("フォルダー")));
+        p.Children.Add(ChoiceCards(L.T("フォルダーの見た目"), new[]
+        {
+            (L.T("グリッド"), L.T("中のアプリのアイコンを、2×2 のミニ アイコンで並べる"),
+                _s.TaskbarFolderStyle == TaskbarFolderStyle.Grid, (Action)(() => _s.TaskbarFolderStyle = TaskbarFolderStyle.Grid), Art.FolderGrid),
+            (L.T("重ね"), L.T("中のアプリのアイコンを、少しずらして重ねる"),
+                _s.TaskbarFolderStyle == TaskbarFolderStyle.Stack, () => _s.TaskbarFolderStyle = TaskbarFolderStyle.Stack, Art.FolderStack),
+        }, on));
+        p.Children.Add(Note(L.T("フォルダーは、タスクバーの空いている場所を右クリック →「フォルダーを追加」で作ります。フォルダーのボタンをクリックして開き、「編集」で名前・アプリの追加と削除・並べ替えができます。")));
+
         p.Children.Add(Section(L.T("アイコン")));
         int custom = _s.CustomIcons.Count;
         p.Children.Add(ButtonRow(L.T("変更したアイコンを元に戻す"),
@@ -1345,7 +1355,7 @@ public sealed class SettingsWindow : Window
         };
     }
 
-    private enum Art { Band, Island, WithApps, LeftEdge, ThemeSystem, ThemeLight, ThemeDark, PinsWindows, PinsOwn }
+    private enum Art { Band, Island, WithApps, LeftEdge, ThemeSystem, ThemeLight, ThemeDark, PinsWindows, PinsOwn, FolderGrid, FolderStack }
 
     /// <summary>図付きの選択カード（ラジオボタン相当）。</summary>
     private FrameworkElement ChoiceCards(string name, (string title, string desc, bool selected, Action select, Art art)[] items, bool enabled)
@@ -1475,6 +1485,40 @@ public sealed class SettingsWindow : Window
                         });
                     row.Children.Add(Spaced(UiKit.Glyph("\uE7C2", 16, Brushes.White), 8));
                 }
+                area.Children.Add(row);
+                break;
+            }
+            case Art.FolderGrid:
+            case Art.FolderStack:
+            {
+                var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                Brush Fill(int c) => new SolidColorBrush(Color.FromRgb((byte)(c >> 16), (byte)(c >> 8), (byte)c));
+                int[] cols = { 0x2F80ED, 0x27AE60, 0xF2C94C, 0x9B51E0 };
+                foreach (var c in new[] { 0x2F80ED, 0xF2C94C })
+                    row.Children.Add(new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(5), Margin = new Thickness(5, 0, 5, 0), Background = Fill(c) });
+                var inner = new Grid();
+                if (art == Art.FolderGrid)
+                {
+                    var g = new UniformGrid { Rows = 2, Columns = 2, Margin = new Thickness(4) };
+                    foreach (var c in cols) g.Children.Add(new Border { Width = 11, Height = 11, CornerRadius = new CornerRadius(3), Margin = new Thickness(1), Background = Fill(c) });
+                    inner.Children.Add(g);
+                }
+                else
+                {
+                    var layers = new (int color, double dx, double dy, double angle)[] { (0x27AE60, 5, -4, 9), (0xF2C94C, -6, -6, -9), (0x2F80ED, -2, 3, 0) };
+                    foreach (var l in layers)
+                        inner.Children.Add(new Border
+                        {
+                            Width = 16, Height = 16, CornerRadius = new CornerRadius(4), Background = Fill(l.color),
+                            RenderTransformOrigin = new Point(0.5, 0.5),
+                            RenderTransform = new TransformGroup { Children = { new RotateTransform(l.angle), new TranslateTransform(l.dx, l.dy) } },
+                        });
+                }
+                row.Children.Add(new Border
+                {
+                    Width = 32, Height = 32, CornerRadius = new CornerRadius(8), Margin = new Thickness(5, 0, 5, 0),
+                    Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), Child = inner,
+                });
                 area.Children.Add(row);
                 break;
             }
