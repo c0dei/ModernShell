@@ -21,11 +21,15 @@ public sealed partial class TaskbarController
     private DispatcherTimer? _imeFlyoutTimer;
     private DateTime _imeFlyoutUntil;
     private bool _imeFlyoutLogged;
+    /// <summary>Win+Space を押した時点で見えていたウィンドウ。ここに無いものが「新しく出てきたポップアップ」。</summary>
+    private HashSet<IntPtr> _imeFlyoutBaseline = new();
 
     /// <summary>Win+Space が押された。ポップアップが出るまで少し待ちながら探し、見つけたら IME 表示の上へ動かす。</summary>
     public void MoveImeSwitcher()
     {
         if (ImeAnchor == null || _disposed) return;
+        _imeFlyoutBaseline = SnapshotVisibleWindows();
+        _imeFlyoutLogged = false;
         _imeFlyoutUntil = DateTime.Now.AddMilliseconds(1200);
         _imeFlyoutTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(30), DispatcherPriority.Normal, (_, _) => ImeFlyoutTick(), _dispatcher);
         if (!_imeFlyoutTimer.IsEnabled) _imeFlyoutTimer.Start();
@@ -81,36 +85,54 @@ public sealed partial class TaskbarController
         return true;
     }
 
+    private static bool IsShownWindow(IntPtr h) =>
+        Win32.IsWindowVisible(h) && !(DwmGetWindowAttribute(h, 14 /*DWMWA_CLOAKED*/, out var cloaked, 4) == 0 && cloaked != 0);
+
+    private static HashSet<IntPtr> SnapshotVisibleWindows()
+    {
+        var set = new HashSet<IntPtr>();
+        Win32.EnumWindows((h, _) => { if (IsShownWindow(h)) set.Add(h); return true; }, IntPtr.Zero);
+        return set;
+    }
+
     /// <summary>
-    /// 入力方式の切り替えポップアップのウィンドウ。Windows のバージョンで作りが違うので、入力・シェル系のプロセスが持つ
-    /// 表示中の小さなウィンドウを探す。最初に見つけたとき、候補を記録する（見つからない・動かない場合の調査用）。
+    /// 入力方式の切り替えポップアップのウィンドウ。Windows のバージョンで作り（プロセス・クラス）が違うので、プロセスでは決め打たず、
+    /// Win+Space を押す前には無かった小さな最前面級ウィンドウ（= 新しく出たもの）を探す。連打でポップアップが出たままのときは
+    /// 差分が取れないので、入力・シェル系のプロセスが持つ小さなウィンドウにフォールバックする。候補は押すたびに最初の 1 回記録する。
     /// </summary>
     private IntPtr FindImeFlyout()
     {
-        IntPtr found = IntPtr.Zero;
+        IntPtr fresh = IntPtr.Zero, known = IntPtr.Zero;
+        int selfPid = Environment.ProcessId;
         var seen = new List<string>();
         Win32.EnumWindows((h, _) =>
         {
-            if (!Win32.IsWindowVisible(h)) return true;
-            if (DwmGetWindowAttribute(h, 14 /*DWMWA_CLOAKED*/, out var cloaked, 4) == 0 && cloaked != 0) return true;
-            Win32.GetWindowThreadProcessId(h, out var pid);
-            string proc;
-            try { proc = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName; } catch { return true; }
-            if (!proc.Equals("TextInputHost", StringComparison.OrdinalIgnoreCase)
-                && !proc.Equals("ShellExperienceHost", StringComparison.OrdinalIgnoreCase)
-                && !proc.Equals("explorer", StringComparison.OrdinalIgnoreCase)) return true;
-            var sb = new StringBuilder(128); Win32.GetClassName(h, sb, sb.Capacity);
-            var cls = sb.ToString();
+            if (!IsShownWindow(h)) return true;
             if (!Win32.GetWindowRect(h, out var r)) return true;
             int w = r.Right - r.Left, ht = r.Bottom - r.Top;
             // 画面いっぱいのウィンドウ（デスクトップ・バー）は除く。切り替えポップアップは小さい
             if (w < 80 || ht < 40 || w > 700 || ht > 700) return true;
-            if (proc.Equals("explorer", StringComparison.OrdinalIgnoreCase) && cls is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd" or "Progman" or "WorkerW") return true;
-            seen.Add($"{proc}/{cls} {w}x{ht}");
-            if (found == IntPtr.Zero && (cls.Contains("CoreWindow", StringComparison.OrdinalIgnoreCase) || cls.Contains("Xaml", StringComparison.OrdinalIgnoreCase)
-                || proc.Equals("TextInputHost", StringComparison.OrdinalIgnoreCase))) found = h;
+            Win32.GetWindowThreadProcessId(h, out var pid);
+            if ((int)pid == selfPid) return true;
+            var sb = new StringBuilder(128); Win32.GetClassName(h, sb, sb.Capacity);
+            var cls = sb.ToString();
+            if (cls is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd" or "Progman" or "WorkerW" or "tooltips_class32") return true;
+            string proc;
+            try { proc = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName; } catch { return true; }
+            bool isNew = !_imeFlyoutBaseline.Contains(h);
+            bool shellProc = proc.Equals("TextInputHost", StringComparison.OrdinalIgnoreCase)
+                || proc.Equals("ShellExperienceHost", StringComparison.OrdinalIgnoreCase)
+                || proc.Equals("explorer", StringComparison.OrdinalIgnoreCase)
+                || proc.Equals("InputSwitch", StringComparison.OrdinalIgnoreCase);
+            if (!_imeFlyoutLogged) seen.Add($"{(isNew ? "new " : "")}{proc}/{cls} {w}x{ht} @{r.Left},{r.Top}");
+            // 新しく出たもの: シェル系を優先（なければ、新しく出た小さな窓なら何でも）
+            if (isNew && (fresh == IntPtr.Zero || shellProc)) fresh = h;
+            if (!isNew && shellProc && known == IntPtr.Zero
+                && (cls.Contains("CoreWindow", StringComparison.OrdinalIgnoreCase) || cls.Contains("Xaml", StringComparison.OrdinalIgnoreCase)
+                    || proc.Equals("TextInputHost", StringComparison.OrdinalIgnoreCase))) known = h;
             return true;
         }, IntPtr.Zero);
+        var found = fresh != IntPtr.Zero ? fresh : known;
         if (found != IntPtr.Zero && !_imeFlyoutLogged)
         {
             _imeFlyoutLogged = true;
