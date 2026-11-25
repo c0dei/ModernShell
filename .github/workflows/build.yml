@@ -74,6 +74,7 @@ jobs:
         with:
           name: ModernShell-${{ matrix.rid }}
           path: dist/ModernShell-${{ steps.ver.outputs.version }}-${{ matrix.rid }}/
+          retention-days: 7
 
       # 持ち運び用: 1 ファイルで動く単一 exe（メモリは多め）。圧縮すると起動時に展開する分さらに増えるので圧縮しない
       # - name: Publish (single exe)
