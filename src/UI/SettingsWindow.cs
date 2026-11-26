@@ -883,7 +883,7 @@ public sealed class SettingsWindow : Window
             FontRow(),
             NumberRow(L.T("角の丸み"), "", 0, 24, _s.CornerRadius, "px", v => _s.CornerRadius = v, def: 8),
             NumberRow(L.T("スタート メニューの文字サイズ"), L.T("アプリ名・見出し・検索欄・ウィジェットなど、スタート メニューの文字すべて"), 80, 200, _s.StartMenuTextScale, "%", v => _s.StartMenuTextScale = (int)v, step: 5, def: 100),
-            NumberRow(L.T("メニューの文字サイズ"), "", 10, 20, _s.MenuFontSize, "px", v => _s.MenuFontSize = (int)v, def: 14));
+            NumberRow(L.T("メニューの文字サイズ"), L.T("右クリック メニューと、タスクバーのポップアップ（音量・CPU などの詳細、フォルダー）の大きさ"), 10, 20,_s.MenuFontSize, "px", v => _s.MenuFontSize = (int)v, def: 14));
 
         if (!_flat)
             p.Children.Add(InfoBar(L.T("ぼかしについて"),

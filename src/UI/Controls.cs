@@ -127,6 +127,19 @@ public static class UiKit
         VerticalAlignment = VerticalAlignment.Center,
     };
 
+    /// <summary>
+    /// ポップアップ（ウィジェットの詳細・フォルダーなど）の倍率。設定の「メニューの文字サイズ」÷ 標準の 14px。
+    /// 各ポップアップの文字の大きさは、標準の 14px に合わせて書いてある。
+    /// </summary>
+    public static double PopupScale => Math.Clamp(Settings.Current?.MenuFontSize ?? 14, 10, 20) / 14.0;
+
+    /// <summary>ポップアップの中身を、文字・アイコン・余白ごと <see cref="PopupScale"/> 倍にする。</summary>
+    public static void ScalePopup(FrameworkElement content)
+    {
+        double s = PopupScale;
+        content.LayoutTransform = new ScaleTransform(s, s);
+    }
+
     public static Image Icon(ImageSource? src, double size)
     {
         var img = new Image { Source = src, Width = size, Height = size, Stretch = Stretch.Uniform, SnapsToDevicePixels = true };

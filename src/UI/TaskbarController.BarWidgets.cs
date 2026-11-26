@@ -268,6 +268,7 @@ public sealed partial class TaskbarController
 
     private System.Windows.Controls.Primitives.Popup ShowBarPopup(FrameworkElement anchor, FrameworkElement content)
     {
+        UiKit.ScalePopup(content);
         var popup = FluentSurface.Create(content, anchor, System.Windows.Controls.Primitives.PlacementMode.Custom);
         popup.StaysOpen = false;
         FluentSurface.UseTaskbarLook(popup);

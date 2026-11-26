@@ -571,7 +571,8 @@ public sealed partial class TaskbarController
         if (_overflowPopup?.IsOpen == true) { _overflowPopup.IsOpen = false; return; } // 編集中（固定表示）に「^」で閉じる
         var t = Theme.Current;
         _overflowPanel = new StackPanel { Margin = new Thickness(6, 6, 6, 0) };
-        _overflowHint = UiKit.Label("", 11, t.TextSecondary);
+        // アイコンはぼやけないよう大きさを変えず、文字だけを「メニューの文字サイズ」に合わせる
+        _overflowHint = UiKit.Label("", 11 * UiKit.PopupScale, t.TextSecondary);
         _overflowHint.TextWrapping = TextWrapping.Wrap;
         _overflowHint.MaxWidth = 6 * 38;
         _overflowHint.Margin = new Thickness(8, 0, 8, 4);
@@ -619,7 +620,7 @@ public sealed partial class TaskbarController
         {
             if (title != null)
             {
-                var h = UiKit.Label(title, 11, t.TextSecondary, FontWeights.SemiBold);
+                var h = UiKit.Label(title, 11 * UiKit.PopupScale, t.TextSecondary, FontWeights.SemiBold);
                 h.Margin = new Thickness(4, _overflowPanel!.Children.Count == 0 ? 0 : 8, 0, 4);
                 _overflowPanel!.Children.Add(h);
             }
@@ -641,14 +642,14 @@ public sealed partial class TaskbarController
                 Watch(icon);
                 pinnedRow.Children.Add(Spread(TrayIconTile(icon, editable: true, reorder)));
             }
-            if (pinnedRow.Children.Count == 0) pinnedRow.Children.Add(UiKit.Label(L.T("なし"), 12, t.TextSecondary));
+            if (pinnedRow.Children.Count == 0) pinnedRow.Children.Add(UiKit.Label(L.T("なし"), 12 * UiKit.PopupScale, t.TextSecondary));
             var others = Section(L.T("「^」の中に表示"));
             foreach (var icon in OrderedUnpinned())
             {
                 Watch(icon);
                 others.Children.Add(Spread(TrayIconTile(icon, editable: true)));
             }
-            if (others.Children.Count == 0) others.Children.Add(UiKit.Label(L.T("なし"), 12, t.TextSecondary));
+            if (others.Children.Count == 0) others.Children.Add(UiKit.Label(L.T("なし"), 12 * UiKit.PopupScale, t.TextSecondary));
             return;
         }
 
@@ -660,7 +661,7 @@ public sealed partial class TaskbarController
         }
         MakeOverflowReorderPanel(all);
         if (all.Children.Count == 0)
-            all.Children.Add(new TextBlock { Text = L.T("アイコンはありません"), Margin = new Thickness(8), Foreground = t.TextSecondary });
+            all.Children.Add(new TextBlock { Text = L.T("アイコンはありません"), FontSize = 12 * UiKit.PopupScale, Margin = new Thickness(8), Foreground = t.TextSecondary });
     }
 
     private static FrameworkElement Spaced(FrameworkElement e) { e.Margin = new Thickness(8, 0, 0, 0); return e; }

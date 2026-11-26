@@ -275,6 +275,7 @@ public sealed partial class TaskbarController
         var v = new FolderView { F = f, Anchor = anchor, Edit = edit };
         v.Host = new Border { Padding = new Thickness(16), Width = FolderColumns * (CellW + CellGap) + 32 };
         RenderFolder(v);
+        UiKit.ScalePopup(v.Host);
         var popup = FluentSurface.Create(v.Host, anchor, PlacementMode.Custom);
         v.Popup = popup;
         popup.StaysOpen = false;
@@ -588,7 +589,8 @@ public sealed partial class TaskbarController
     private static void LoadAppIcon(Image img, AppEntry app, int size)
     {
         bool light = !Theme.Current.IsDark;
-        int px = (int)Math.Ceiling(size * Math.Max(1.0, Win32.GetDpiForSystem() / 96.0));
+        // ポップアップを拡大して表示するときは、その分大きい絵を読み込む（ぼやけないように）
+        int px = (int)Math.Ceiling(size * Math.Max(1.0, UiKit.PopupScale) * Math.Max(1.0, Win32.GetDpiForSystem() / 96.0));
         IconThread.Run(() => IconHelper.ForApp(app, px, light)).ContinueWith(r =>
         {
             if (r.Result != null) img.Dispatcher.BeginInvoke(() => img.Source = r.Result);

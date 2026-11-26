@@ -187,6 +187,7 @@ public sealed class DesktopsFlyout
         plus.Click += _ => { Cancel(); VirtualDesktops.Create(); };
         row.Children.Add(plus);
 
+        UiKit.ScalePopup(row);
         _popup = FluentSurface.Create(row, anchor, PlacementMode.Custom);
         _popup.StaysOpen = true;
         FluentSurface.PlaceAligned(_popup, anchor, edge, _settings.DesktopsAlign);

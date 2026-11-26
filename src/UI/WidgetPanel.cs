@@ -355,7 +355,9 @@ public sealed class WidgetPanel : ScrollViewer
         {
             for (var d = e.OriginalSource as DependencyObject; d != null; d = d is Visual or System.Windows.Media.Media3D.Visual3D ? System.Windows.Media.VisualTreeHelper.GetParent(d) : null)
                 if (ReferenceEquals(d, refreshBtn)) return;
-            var popup = FluentSurface.Create(new WeatherDetailsView(city, Weather.Cached(city)), card, System.Windows.Controls.Primitives.PlacementMode.Left);
+            var view = new WeatherDetailsView(city, Weather.Cached(city));
+            UiKit.ScalePopup(view); // バーから開く天気と同じ大きさ
+            var popup = FluentSurface.Create(view, card, System.Windows.Controls.Primitives.PlacementMode.Left);
             popup.StaysOpen = false;
             popup.IsOpen = true;
         };

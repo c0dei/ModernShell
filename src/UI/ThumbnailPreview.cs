@@ -117,7 +117,8 @@ public sealed class ThumbnailPreview
         foreach (var w in windows.Take(8))
         {
             // 見出し（アイコン・ウィンドウ名・閉じる）
-            var title = UiKit.Label(w.Title ?? "", 12);
+            // プレビューの絵の大きさは「プレビューの大きさ」の設定で決まるので、文字だけを合わせる
+            var title = UiKit.Label(w.Title ?? "", 12 * UiKit.PopupScale);
             title.MaxWidth = maxW - 56;
             var icon = UiKit.Icon(w.Icon, 16);
             icon.Margin = new Thickness(0, 0, 8, 0);
@@ -176,7 +177,7 @@ public sealed class ThumbnailPreview
         {
             var session = MediaControl.FindFor(string.IsNullOrEmpty(w.AppUserModelID) ? ProcessAumid.Get(w.Handle) : w.AppUserModelID, w.WinFileName);
             if (session == null) return null;
-            var name = UiKit.Label("", 11, t.TextSecondary);
+            var name = UiKit.Label("", 11 * UiKit.PopupScale, t.TextSecondary);
             name.MaxWidth = maxW;
             name.TextTrimming = TextTrimming.CharacterEllipsis;
             name.HorizontalAlignment = HorizontalAlignment.Center;

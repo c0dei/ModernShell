@@ -470,6 +470,7 @@ public static partial class L
         ["なし"] = "None",
         ["標準"] = "Default",
         ["メニューの文字サイズ"] = "Menu text size",
+        ["右クリック メニューと、タスクバーのポップアップ（音量・CPU などの詳細、フォルダー）の大きさ"] = "Size of context menus and taskbar pop-ups (volume, CPU and other details, folders)",
         ["右クリックメニュー・ジャンプリスト・サブメニュー共通"] = "For context menus, jump lists and submenus",
         ["12 px（小）"] = "12 px (small)",
         ["14 px（標準）"] = "14 px (default)",
