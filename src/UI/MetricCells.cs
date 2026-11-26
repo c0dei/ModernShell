@@ -138,9 +138,20 @@ internal sealed class VBarCell : MetricCell
         var valRow = new StackPanel { Orientation = Orientation.Horizontal };
         valRow.Children.Add(_val);
         valRow.Children.Add(_unit);
+        var value = new Grid { Children = { valRow } };
+        if (showUnit)
+        {
+            // 桁数（5% と 55% と 100%）でウィジェットの幅が変わらないよう、3 桁分の幅を見えない行で確保する
+            var widest = new StackPanel { Orientation = Orientation.Horizontal, Visibility = Visibility.Hidden };
+            widest.Children.Add(Txt("000", 13, T.Text, FontWeights.SemiBold));
+            var unit = Txt("%", 10);
+            unit.Margin = _unit.Margin;
+            widest.Children.Add(unit);
+            value.Children.Add(widest);
+        }
         var col = new StackPanel { Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         col.Children.Add(NameLabel(10));
-        col.Children.Add(valRow);
+        col.Children.Add(value);
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(bar);
         row.Children.Add(col);
