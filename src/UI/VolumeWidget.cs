@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using ModernShell.Core;
 
@@ -99,8 +100,14 @@ public sealed class VolumeBarWidget : BarWidget
 internal sealed class VolumeDetailsView : Border
 {
     private readonly Theme _t = Theme.Current;
-    private readonly TextBlock _devName, _devSub, _chevron, _masterGlyph, _masterValue;
-    private readonly StackPanel _devList = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 4, 0, 0) };
+    private readonly TextBlock _devName, _devSub, _masterGlyph, _masterValue;
+    // 全体の画面と、出力デバイスを選ぶ子画面。横にスライドして切り替える（ポップアップの高さは変えない）
+    private const double ViewWidth = 380;
+    private readonly Grid _pages = new() { ClipToBounds = true };
+    private readonly StackPanel _main = new() { Margin = new Thickness(14, 12, 14, 10), RenderTransform = new TranslateTransform() };
+    private readonly DockPanel _devicePage = new() { Margin = new Thickness(14, 12, 14, 10), Visibility = Visibility.Collapsed, RenderTransform = new TranslateTransform(ViewWidth, 0) };
+    private readonly StackPanel _devList = new();
+    private bool _devicesShown;
     private readonly FluentSlider _master;
     private readonly StackPanel _apps = new();
     private readonly TextBlock _appsHeader;
@@ -122,11 +129,12 @@ internal sealed class VolumeDetailsView : Border
 
     public VolumeDetailsView()
     {
-        Width = 380;
-        Padding = new Thickness(14, 12, 14, 10);
+        Width = ViewWidth;
         System.Windows.Documents.TextElement.SetForeground(this, _t.Text);
-        var body = new StackPanel();
-        Child = body;
+        var body = _main;
+        _pages.Children.Add(_main);
+        _pages.Children.Add(_devicePage);
+        Child = _pages;
 
         body.Children.Add(Pad(UiKit.Label(L.T("音量"), 13, _t.TextSecondary, FontWeights.SemiBold), new Thickness(4, 2, 4, 8)));
 
@@ -144,13 +152,13 @@ internal sealed class VolumeDetailsView : Border
         names.Children.Add(_devSub);
         Grid.SetColumn(names, 1);
         dg.Children.Add(names);
-        _chevron = UiKit.Glyph("", 12, _t.TextSecondary);
-        Grid.SetColumn(_chevron, 2);
-        dg.Children.Add(_chevron);
+        var toDevices = UiKit.Glyph("", 12, _t.TextSecondary);
+        Grid.SetColumn(toDevices, 2);
+        dg.Children.Add(toDevices);
         devTile.Child = dg;
-        devTile.Click += _ => ToggleDevices();
+        devTile.Click += _ => ShowDevices(true);
         body.Children.Add(devTile);
-        body.Children.Add(_devList);
+        BuildDevicePage();
 
         // 全体の音量
         var mg = new Grid();
@@ -306,14 +314,27 @@ internal sealed class VolumeDetailsView : Border
         return g;
     }
 
-    private void ToggleDevices()
+    private void BuildDevicePage()
     {
-        if (_devList.Visibility == Visibility.Visible)
+        var back = new Tile { Width = 32, Height = 32, Child = UiKit.Glyph("", 14, _t.Text), ToolTip = L.T("戻る") };
+        back.Click += _ => ShowDevices(false);
+        var title = UiKit.Label(L.T("出力デバイス"), 13, _t.TextSecondary, FontWeights.SemiBold);
+        title.Margin = new Thickness(8, 0, 0, 0);
+        var header = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+        DockPanel.SetDock(back, Dock.Left);
+        header.Children.Add(back);
+        header.Children.Add(title);
+        DockPanel.SetDock(header, Dock.Top);
+        _devicePage.Children.Add(header);
+        _devicePage.Children.Add(new ScrollViewer
         {
-            _devList.Visibility = Visibility.Collapsed;
-            _chevron.Text = "";
-            return;
-        }
+            Content = _devList, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false,
+        });
+    }
+
+    private void FillDevices()
+    {
         _devList.Children.Clear();
         foreach (var d in AudioControl.Devices())
         {
@@ -324,19 +345,50 @@ internal sealed class VolumeDetailsView : Border
             var label = UiKit.Label(d.Name + (d.Sub == "" ? "" : " (" + d.Sub + ")"), 13);
             Grid.SetColumn(label, 1);
             row.Children.Add(label);
-            var tile = new Tile { Padding = new Thickness(10, 8, 10, 8), Child = row, Margin = new Thickness(0, 1, 0, 1) };
+            var tile = new Tile { Padding = new Thickness(10, 10, 10, 10), Child = row, Margin = new Thickness(0, 1, 0, 1), ToolTip = label.Text };
             var id = d.Id;
             tile.Click += _ =>
             {
                 AudioControl.SetDefault(id);
-                _devList.Visibility = Visibility.Collapsed;
-                _chevron.Text = "";
                 _appsSig = "\0";
                 Refresh();
+                ShowDevices(false);
             };
             _devList.Children.Add(tile);
         }
-        _devList.Visibility = Visibility.Visible;
-        _chevron.Text = "";
+    }
+
+    /// <summary>出力デバイスの子画面を、右から滑り込ませる／戻す。子画面の間は高さを固定し、一覧が長いときは中をスクロールする。</summary>
+    private void ShowDevices(bool show)
+    {
+        if (show)
+        {
+            FillDevices();
+            _pages.Height = _pages.ActualHeight;
+        }
+        _devicesShown = show;
+        _main.Visibility = _devicePage.Visibility = Visibility.Visible;
+        Slide(_main, show ? -ViewWidth : 0);
+        Slide(_devicePage, show ? 0 : ViewWidth, () =>
+        {
+            if (_devicesShown) _main.Visibility = Visibility.Hidden;
+            else
+            {
+                _devicePage.Visibility = Visibility.Collapsed;
+                _pages.Height = double.NaN;
+            }
+        });
+    }
+
+    private static void Slide(FrameworkElement page, double to, Action? done = null)
+    {
+        var move = (TranslateTransform)page.RenderTransform;
+        double from = move.X;
+        move.BeginAnimation(TranslateTransform.XProperty, null);
+        move.X = to;
+        if (Settings.Current?.AnimateMenus == false) { done?.Invoke(); return; }
+        var a = new DoubleAnimation(from, to, Anim.Ms(220)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }, FillBehavior = FillBehavior.Stop };
+        if (done != null) a.Completed += (_, _) => done();
+        move.BeginAnimation(TranslateTransform.XProperty, a);
     }
 }
