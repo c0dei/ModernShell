@@ -55,6 +55,8 @@ public enum NowPlayingProgressStyle { Wave, Line }
 public enum NowPlayingWavePlacement { Right, Overlay }
 /// <summary>タスクバーのフォルダーの見た目。Grid: 2×2 のグリッド（中身のアイコンを 4 つまで並べる）/ Stack: 重ね（アイコンを少しずらして重ねる）。</summary>
 public enum TaskbarFolderStyle { Grid, Stack }
+/// <summary>ウィンドウが複数あるときのプレビューの並べ方。Row: 横並び / Stack: 1 つを手前に出して重ね、切り替えて見る。</summary>
+public enum PreviewLayout { Row, Stack }
 /// <summary>スタート・タスクバーのピン留めのフォルダー（Items はアプリの ID）。</summary>
 public sealed class PinnedFolder
 {
@@ -221,6 +223,7 @@ public sealed class Settings
     public int PreviewDelayMs { get; set; } = 400;
     /// <summary>プレビューの大きさ（Small / Medium / Large）。</summary>
     public string PreviewSize { get; set; } = "Medium";
+    public PreviewLayout PreviewLayout { get; set; } = PreviewLayout.Row;
     public List<string> PinnedTaskbar { get; set; } = new();
     public TaskbarPinSource TaskbarPinSource { get; set; } = TaskbarPinSource.Windows;
     /// <summary>「Windows と共有」のとき、Windows のピン留めの後ろに ModernShell 側で追加したピン留め。</summary>

@@ -17,9 +17,9 @@ namespace ModernShell.UI;
 /// <summary>
 /// タスクバーのボタンにカーソルを置いたときのウィンドウのプレビュー。
 /// DWM サムネイル（DwmRegisterThumbnail）で、他のウィンドウの中身をライブで縮小表示する（Windows のタスクバーと同じ仕組み）。
-/// 複数ウィンドウは横に並べ、クリックで切り替え、「×」で閉じる。
+/// 複数ウィンドウは横に並べる（設定で重ねる「スタック」にもできる）。クリックで切り替え、「×」で閉じる。
 /// </summary>
-public sealed class ThumbnailPreview
+public sealed partial class ThumbnailPreview
 {
     [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
     [StructLayout(LayoutKind.Sequential)] private struct SIZE { public int cx, cy; }
@@ -33,7 +33,7 @@ public sealed class ThumbnailPreview
         public int fVisible, fSourceClientAreaOnly;
     }
 
-    private const uint DWM_TNP_RECTDESTINATION = 0x1, DWM_TNP_OPACITY = 0x4, DWM_TNP_VISIBLE = 0x8, DWM_TNP_SOURCECLIENTAREAONLY = 0x10;
+    private const uint DWM_TNP_RECTDESTINATION = 0x1, DWM_TNP_RECTSOURCE = 0x2, DWM_TNP_OPACITY = 0x4, DWM_TNP_VISIBLE = 0x8, DWM_TNP_SOURCECLIENTAREAONLY = 0x10;
 
     [DllImport("dwmapi.dll")] private static extern int DwmRegisterThumbnail(IntPtr dest, IntPtr src, out IntPtr thumb);
     [DllImport("dwmapi.dll")] private static extern int DwmUnregisterThumbnail(IntPtr thumb);
@@ -56,6 +56,8 @@ public sealed class ThumbnailPreview
         public EventHandler? LayoutHandler;
         public DispatcherTimer? Retry;
         public bool Closed;
+        /// <summary>「スタック」表示のとき。横並びのときは null。</summary>
+        public StackView? Stack;
     }
 
     public bool IsOpen => _popup?.IsOpen == true;
@@ -74,23 +76,24 @@ public sealed class ThumbnailPreview
     };
 
     /// <summary>ボタンにカーソルが入った。待ち時間のあと表示（すでに別のプレビューが出ていればすぐ切り替え）。</summary>
-    public void Hover(FrameworkElement anchor, Func<IReadOnlyList<ApplicationWindow>> windows, TaskbarEdge edge)
+    /// <param name="appName">アプリ名（「スタック」表示の見出し）。</param>
+    public void Hover(FrameworkElement anchor, Func<IReadOnlyList<ApplicationWindow>> windows, TaskbarEdge edge, Func<string> appName)
     {
         if (!_settings.ShowThumbnailPreview) return;
         if (IsOpen)
         {
             _gate.KeepOpen();
-            if (!ReferenceEquals(_anchor, anchor)) Show(anchor, windows(), edge);
+            if (!ReferenceEquals(_anchor, anchor)) Show(anchor, windows(), edge, appName);
             return;
         }
-        _gate.ShowAfter(_settings.PreviewDelayMs, () => Show(anchor, windows(), edge));
+        _gate.ShowAfter(_settings.PreviewDelayMs, () => Show(anchor, windows(), edge, appName));
     }
 
     /// <summary>クリックで、待たずにすぐ表示する（Windows 11 と同じく、複数ウィンドウのボタンをクリックしたとき）。</summary>
-    public void ShowNow(FrameworkElement anchor, IReadOnlyList<ApplicationWindow> windows, TaskbarEdge edge)
+    public void ShowNow(FrameworkElement anchor, IReadOnlyList<ApplicationWindow> windows, TaskbarEdge edge, Func<string> appName)
     {
         _gate.Stop();
-        Show(anchor, windows, edge);
+        Show(anchor, windows, edge, appName);
     }
 
     /// <summary>ボタンからカーソルが出た。プレビューの上に移らなければ少し後に閉じる。</summary>
@@ -103,12 +106,55 @@ public sealed class ThumbnailPreview
         Close();
     }
 
-    private void Show(FrameworkElement anchor, IReadOnlyList<ApplicationWindow> windows, TaskbarEdge edge)
+    /// <param name="start">「スタック」表示で最初に手前にする番号。指定がなければ前面のウィンドウ（なければ先頭）。</param>
+    private void Show(FrameworkElement anchor, IReadOnlyList<ApplicationWindow> windows, TaskbarEdge edge, Func<string> appName, int? start = null)
     {
         StallDetector.Phase = "preview: show";
         Close();
         if (windows.Count == 0 || !anchor.IsLoaded) return;
         _anchor = anchor;
+        var session = new Session();
+        FrameworkElement content;
+        if (_settings.PreviewLayout == PreviewLayout.Stack && windows.Count > 1)
+        {
+            session.Stack = BuildStack(anchor, windows.ToList(), edge, appName, start);
+            content = session.Stack.Content;
+        }
+        else content = BuildRow(anchor, windows, edge, appName);
+
+        _popup = FluentSurface.Create(content, anchor, PlacementMode.Custom);
+        _popup.StaysOpen = true; // ホバーで開閉するので、マウスを捕まえない
+        FluentSurface.PlaceAligned(_popup, anchor, edge, _settings.PreviewAlign);
+        _gate.Attach(content);
+        if (_settings.AnimatePreviews) FluentSurface.SlideIn(_popup, edge);
+        _popup.Opened += (_, _) => RegisterThumbnails(content, session);
+        _popup.Closed += (_, _) => Unregister(session);
+        _popup.IsOpen = true;
+    }
+
+    private StackView BuildStack(FrameworkElement anchor, IReadOnlyList<ApplicationWindow> windows, TaskbarEdge edge, Func<string> appName, int? start)
+    {
+        var t = Theme.Current;
+        var (maxW, maxH) = MaxSize;
+        int active = windows.ToList().FindIndex(w => w.State == ApplicationWindow.WindowState.Active);
+        FrameworkElement? media = null;
+        foreach (var w in windows)
+            if ((media = MediaStrip(w, maxW, t)) != null) break;
+        return new StackView(windows, start ?? Math.Max(0, active), appName(), maxW, maxH, _settings.AnimatePreviews,
+            win => { Cancel(); win.BringToFront(); },
+            (win, at) =>
+            {
+                win.Close();
+                // 閉じたウィンドウのカードを消して、同じ番号の位置を手前にする（最後の 1 枚なら全体を閉じる）
+                var rest = windows.Where(x => !ReferenceEquals(x, win)).ToList();
+                if (rest.Count == 0) Cancel(); else Show(anchor, rest, edge, appName, Math.Min(at, rest.Count - 1));
+            },
+            media);
+    }
+
+    /// <summary>ウィンドウを横に並べた中身。</summary>
+    private StackPanel BuildRow(FrameworkElement anchor, IReadOnlyList<ApplicationWindow> windows, TaskbarEdge edge, Func<string> appName)
+    {
         var t = Theme.Current;
         var (maxW, maxH) = MaxSize;
 
@@ -148,21 +194,12 @@ public sealed class ThumbnailPreview
                 win.Close();
                 // 閉じたウィンドウのカードを消す（最後の 1 枚なら全体を閉じる）
                 var rest = windows.Where(x => !ReferenceEquals(x, win)).ToList();
-                if (rest.Count == 0) Cancel(); else Show(anchor, rest, edge);
+                if (rest.Count == 0) Cancel(); else Show(anchor, rest, edge, appName);
             };
             slot.Tag = win.Handle;
             row.Children.Add(card);
         }
-
-        _popup = FluentSurface.Create(row, anchor, PlacementMode.Custom);
-        _popup.StaysOpen = true; // ホバーで開閉するので、マウスを捕まえない
-        FluentSurface.PlaceAligned(_popup, anchor, edge, _settings.PreviewAlign);
-        _gate.Attach(row);
-        var session = new Session();
-        if (_settings.AnimatePreviews) FluentSurface.SlideIn(_popup, edge);
-        _popup.Opened += (_, _) => RegisterThumbnails(row, session);
-        _popup.Closed += (_, _) => Unregister(session);
-        _popup.IsOpen = true;
+        return row;
     }
 
     /// <summary>
@@ -204,11 +241,31 @@ public sealed class ThumbnailPreview
     }
 
     /// <summary>ポップアップが開いたら、各カードの位置に DWM サムネイルを登録する。</summary>
-    private void RegisterThumbnails(StackPanel row, Session session)
+    private void RegisterThumbnails(FrameworkElement content, Session session)
     {
         StallDetector.Phase = "preview: register thumbnails";
-        if (session.Closed || PresentationSource.FromVisual(row) is not HwndSource src) return;
+        if (session.Closed || PresentationSource.FromVisual(content) is not HwndSource src) return;
         session.Source = src;
+        if (session.Stack is { } stack) stack.Register(src.Handle);
+        else RegisterRow((StackPanel)content, src, session);
+
+        // 描画位置の設定: 枠の大きさが決まって配置し直されるたびに更新する。
+        // 準備が整う前に 1 回きりで終わると描かれないままになるので、念のため少しの間は繰り返し設定する
+        session.LayoutOwner = content;
+        session.LayoutHandler = (_, _) => UpdateRects(session);
+        content.LayoutUpdated += session.LayoutHandler;
+        int tries = 0;
+        session.Retry = new DispatcherTimer(TimeSpan.FromMilliseconds(50), DispatcherPriority.Background, (_, _) =>
+        {
+            UpdateRects(session);
+            if (++tries >= 10) session.Retry?.Stop();
+        }, content.Dispatcher);
+        session.Retry.Start();
+        content.Dispatcher.BeginInvoke(() => UpdateRects(session), DispatcherPriority.Loaded);
+    }
+
+    private void RegisterRow(StackPanel row, HwndSource src, Session session)
+    {
         var (maxW, maxH) = MaxSize;
         foreach (var card in row.Children.OfType<Tile>())
         {
@@ -227,26 +284,13 @@ public sealed class ThumbnailPreview
             }
             session.Thumbs.Add((thumb, slot));
         }
-
-        // 描画位置の設定: 枠の大きさが決まって配置し直されるたびに更新する。
-        // 準備が整う前に 1 回きりで終わると描かれないままになるので、念のため少しの間は繰り返し設定する
-        session.LayoutOwner = row;
-        session.LayoutHandler = (_, _) => UpdateRects(session);
-        row.LayoutUpdated += session.LayoutHandler;
-        int tries = 0;
-        session.Retry = new DispatcherTimer(TimeSpan.FromMilliseconds(50), DispatcherPriority.Background, (_, _) =>
-        {
-            UpdateRects(session);
-            if (++tries >= 10) session.Retry?.Stop();
-        }, row.Dispatcher);
-        session.Retry.Start();
-        row.Dispatcher.BeginInvoke(() => UpdateRects(session), DispatcherPriority.Loaded);
     }
 
     private static void UpdateRects(Session session)
     {
         var src = session.Source;
         if (session.Closed || src == null || src.IsDisposed || src.RootVisual == null || src.CompositionTarget == null) return;
+        if (session.Stack is { } stack) { stack.UpdateThumbnails(src); return; }
         var m = src.CompositionTarget.TransformToDevice;
         foreach (var (thumb, slot) in session.Thumbs)
         {
@@ -278,6 +322,7 @@ public sealed class ThumbnailPreview
         if (session.LayoutOwner != null && session.LayoutHandler != null) session.LayoutOwner.LayoutUpdated -= session.LayoutHandler;
         foreach (var (thumb, _) in session.Thumbs) DwmUnregisterThumbnail(thumb);
         session.Thumbs.Clear();
+        session.Stack?.Dispose();
     }
 
     private void Close()

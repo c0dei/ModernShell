@@ -289,7 +289,7 @@ public sealed partial class TaskbarController
         // カーソルを置くとウィンドウのプレビュー（実行中のときだけ）。クリック・右クリック・ドラッグで閉じる
         if (running)
         {
-            tile.MouseEnter += (_, _) => _preview.Hover(tile, () => g.Windows, Edge);
+            tile.MouseEnter += (_, _) => _preview.Hover(tile, () => g.Windows, Edge, () => AppName(g));
             tile.MouseLeave += (_, _) => _preview.Leave();
         }
         tile.PreviewMouseDown += (_, _) => _preview.Cancel();
@@ -298,13 +298,16 @@ public sealed partial class TaskbarController
         {
             if (g.Windows.Count == 0) { TakeForeground(x); g.Pinned?.Launch(); }
             else if (g.Windows.Count == 1) ToggleWindow(g.Windows[0], x);
-            else if (_settings.ShowThumbnailPreview) _preview.ShowNow(tile, g.Windows, Edge);
+            else if (_settings.ShowThumbnailPreview) _preview.ShowNow(tile, g.Windows, Edge, () => AppName(g));
             else WindowList(x, g);
         };
         tile.MiddleClick += x => { TakeForeground(x); (g.Pinned ?? FindApp(g.Windows.FirstOrDefault()))?.Launch(); };
         tile.RightClick += x => ShowIconMenu(x, GroupMenu(g));
         return tile;
     }
+
+    /// <summary>プレビューの見出しに出すアプリ名（分からなければ、最初のウィンドウ名）。</summary>
+    private string AppName(Group g) => (g.Pinned ?? FindApp(g.Windows.FirstOrDefault()))?.Name ?? g.Windows.FirstOrDefault()?.Title ?? "";
 
     /// <summary>
     /// 実行中の印（ボタンの端の線）。ウィンドウが複数あるときは、その数（最大 3）だけ並べる。1 つめは前面（または点滅）なら長い線、ほかは短い点。

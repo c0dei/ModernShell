@@ -566,6 +566,15 @@ public sealed class SettingsWindow : Window
             DropDownRow(L.T("ウィンドウ名のリスト"), L.T("プレビューをオフにしたときに出るリスト"), AlignOptions(), _s.WindowListAlign.ToString(), v => _s.WindowListAlign = Enum.Parse<MenuAlign>(v), on),
             DropDownRow(L.T("仮想デスクトップの一覧"), "", AlignOptions(), _s.DesktopsAlign.ToString(), v => _s.DesktopsAlign = Enum.Parse<MenuAlign>(v), on),
             DropDownRow(L.T("隠れているトレイアイコンの一覧"), L.T("「^」ボタンで開く一覧"), AlignOptions(), _s.TrayOverflowAlign.ToString(), v => _s.TrayOverflowAlign = Enum.Parse<MenuAlign>(v), on));
+
+        p.Children.Add(Section(L.T("プレビューの表示形式")));
+        p.Children.Add(ChoiceCards(L.T("プレビューの表示形式"), new[]
+        {
+            (L.T("横並び"), L.T("同じアプリのウィンドウを、すべて並べて表示"), _s.PreviewLayout == PreviewLayout.Row,
+                (Action)(() => _s.PreviewLayout = PreviewLayout.Row), Art.PreviewRow),
+            (L.T("スタック"), L.T("1 つを手前に出して重ね、矢印かマウスホイールで切り替え"), _s.PreviewLayout == PreviewLayout.Stack,
+                () => _s.PreviewLayout = PreviewLayout.Stack, Art.PreviewStack),
+        }, on && _s.ShowThumbnailPreview));
     }
 
     private void PinsPage(StackPanel p)
@@ -1355,7 +1364,7 @@ public sealed class SettingsWindow : Window
         };
     }
 
-    private enum Art { Band, Island, WithApps, LeftEdge, ThemeSystem, ThemeLight, ThemeDark, PinsWindows, PinsOwn, FolderGrid, FolderStack }
+    private enum Art { Band, Island, WithApps, LeftEdge, ThemeSystem, ThemeLight, ThemeDark, PinsWindows, PinsOwn, FolderGrid, FolderStack, PreviewRow, PreviewStack }
 
     /// <summary>図付きの選択カード（ラジオボタン相当）。</summary>
     private FrameworkElement ChoiceCards(string name, (string title, string desc, bool selected, Action select, Art art)[] items, bool enabled)
@@ -1520,6 +1529,26 @@ public sealed class SettingsWindow : Window
                     Background = T.Surface, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), Child = inner,
                 });
                 area.Children.Add(row);
+                break;
+            }
+            case Art.PreviewRow:
+            case Art.PreviewStack:
+            {
+                // ウィンドウに見立てた小さなカード
+                Border Win(double w, double h, double x, double opacity = 1) => new()
+                {
+                    Width = w, Height = h, CornerRadius = new CornerRadius(4), Background = bar, BorderBrush = T.Stroke, BorderThickness = new Thickness(1),
+                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, RenderTransform = new TranslateTransform(x, 0),
+                    Child = new Border { Margin = new Thickness(5, 11, 5, 5), CornerRadius = new CornerRadius(2), Background = T.AccentBrush, Opacity = opacity },
+                };
+                if (art == Art.PreviewRow)
+                    foreach (var x in new[] { -62, 0, 62 }) area.Children.Add(Win(56, 46, x));
+                else
+                {
+                    area.Children.Add(Win(66, 50, -34, 0.45));
+                    area.Children.Add(Win(66, 50, 34, 0.45));
+                    area.Children.Add(Win(86, 66, 0));
+                }
                 break;
             }
             case Art.LeftEdge:
