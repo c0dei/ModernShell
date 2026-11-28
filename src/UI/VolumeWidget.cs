@@ -55,7 +55,7 @@ public sealed class VolumeBarWidget : BarWidget
         if (Vertical) return row;
         row.Margin = new Thickness(10, 0, 10, 0);
         PadOverride = new Thickness(0);
-        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = row };
+        return Frame(row);
     }
 
     private void OnWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)

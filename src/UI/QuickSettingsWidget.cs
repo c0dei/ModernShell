@@ -78,7 +78,7 @@ public sealed class QuickSettingsBarWidget : BarWidget
         if (Vertical) return row;
         row.Margin = new Thickness(12, 0, 12, 0);
         PadOverride = new Thickness(0);
-        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = row };
+        return Frame(row);
     }
 
     private void OnOsEvent()

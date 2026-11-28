@@ -73,7 +73,7 @@ public sealed class TaskViewBarWidget : BarWidget
         _host = new Border { VerticalAlignment = VerticalAlignment.Stretch };
         Refresh(true);
         PadOverride = new Thickness(0);
-        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = _host };
+        return Frame(_host);
     }
 
     public override void Tick(int count) => Refresh(false);

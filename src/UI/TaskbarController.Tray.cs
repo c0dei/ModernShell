@@ -62,11 +62,15 @@ public sealed partial class TaskbarController
         var t = Theme.Current;
         var card = new Border
         {
-            Background = t.Hover, BorderBrush = t.Stroke, BorderThickness = new Thickness(1), CornerRadius = t.Corner(6), Child = p,
+            BorderThickness = new Thickness(1), CornerRadius = t.Corner(6), Child = p,
             Padding = Vertical ? new Thickness(0, 2, 0, 2) : new Thickness(2, 0, 2, 0),
         };
         if (Vertical) card.Width = TileH; else card.Height = TileH;
-        _trayWidgetTile = new Tile { Child = card, Margin = Gap, Padding = new Thickness(0), Tag = "tray" };
+        BarWidget.PaintFrame(card, _settings.HasWidgetBackground("tray"));
+        var tile = new Tile { Child = card, Margin = Gap, Padding = new Thickness(0), Tag = "tray" };
+        // アイコンの上の右クリックはアプリへ送るので、ここに来るのは余白の右クリック
+        tile.RightClick += x => Highlight(x, ShowIconMenuPopup(x, BarWidgetMenu("tray", hasBackground: true).ToList()));
+        _trayWidgetTile = tile;
         return _trayWidgetTile;
     }
 
@@ -549,13 +553,13 @@ public sealed partial class TaskbarController
     /// <summary>「^」の右クリックメニュー。表示するアイコンの編集を始める／終える。</summary>
     private void ShowOverflowMenu(Tile anchor)
     {
-        Flyout.Show(anchor, new[]
+        Flyout.Show(anchor, new List<MenuItemSpec>
         {
             _trayEditMode
                 ? new MenuItemSpec("", L.T("完了"), () => SetTrayEdit(anchor, false))
                 : new MenuItemSpec("", L.T("表示するアイコンを選ぶ"), () => SetTrayEdit(anchor, true)),
-            new MenuItemSpec("", L.T("バーから外す"), () => { _settings.BarWidgets.Remove("tray"); _settings.BarWidgetZones.Remove("tray"); _settings.Save(); }),
-        }, FlyoutPlacement);
+            MenuItemSpec.Separator,
+        }.Concat(BarWidgetMenu("tray", hasBackground: true)), FlyoutPlacement);
     }
 
     private void SetTrayEdit(Tile anchor, bool on)

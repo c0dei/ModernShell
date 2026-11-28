@@ -58,7 +58,7 @@ public sealed class ImeBarWidget : BarWidget
         // 他のウィジェットと同じ、薄い地と縁のある角丸のカード
         _badge.Margin = new Thickness(8, 0, 8, 0);
         PadOverride = new Thickness(0);
-        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = _badge };
+        return Frame(_badge);
     }
 
     public override void Tick(int count) => Refresh();

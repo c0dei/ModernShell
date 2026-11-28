@@ -159,6 +159,14 @@ public sealed class Settings
     public bool TrayWidgetAdded { get; set; } = true;
     /// <summary>ウィジェットごとの表示位置（"Left" = スタートボタンの隣 / "Apps" = アプリの右隣 / "End" = バーの右端（時計の右）/ 既定 "Tray" = トレイの手前）。</summary>
     public Dictionary<string, string> BarWidgetZones { get; set; } = new();
+    /// <summary>半透明の背景（カードの地と縁）を出さないウィジェットの ID。</summary>
+    public List<string> BarWidgetsNoBackground { get; set; } = new();
+    public bool HasWidgetBackground(string id) => !BarWidgetsNoBackground.Contains(id);
+    public void SetWidgetBackground(string id, bool on)
+    {
+        BarWidgetsNoBackground.Remove(id);
+        if (!on) BarWidgetsNoBackground.Add(id);
+    }
     /// <summary>バーの角をピル型にする（高さの半分まで丸める）。</summary>
     public bool TaskbarPill { get; set; } = false;
     /// <summary>スタート・アプリ・ウィジェット・トレイのあいだに、細い区切り線を引く。</summary>

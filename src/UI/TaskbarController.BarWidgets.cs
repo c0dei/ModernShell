@@ -64,7 +64,13 @@ public sealed partial class TaskbarController
                         if (details.Count > 0) Highlight(t, ShowIconMenuPopup(x, details));
                     };
                     if (w is TaskViewBarWidget) HookDesktops(t); // カーソルを置くと仮想デスクトップの一覧
-                    t.RightClick += x => Highlight(t, ShowIconMenuPopup(x, w.ExtraMenu().Concat(BarWidgetMenu(id)).ToList()));
+                    t.RightClick += x =>
+                    {
+                        var menu = w.ExtraMenu().ToList();
+                        if (menu.Count > 0 && !menu[^1].IsSeparator) menu.Add(MenuItemSpec.Separator);
+                        menu.AddRange(BarWidgetMenu(id, w.HasFrame));
+                        Highlight(t, ShowIconMenuPopup(x, menu));
+                    };
                 }
                 string zone = ZoneOf(id);
                 if (!_barHosts.TryGetValue(zone, out var host))
@@ -296,13 +302,55 @@ public sealed partial class TaskbarController
         }
     }
 
-    /// <summary>ウィジェットの右クリック: 位置・並べ替え・バーから外す。</summary>
-    private IEnumerable<MenuItemSpec> BarWidgetMenu(string id)
+    /// <summary>ウィジェットの右クリック: 背景・前後の区切り線と余白・バーから外す。パーツ（区切り線・余白）は外すだけ。</summary>
+    private IEnumerable<MenuItemSpec> BarWidgetMenu(string id, bool hasBackground)
     {
         var list = _settings.BarWidgets;
         var items = new List<MenuItemSpec>();
+        if (!BarWidgetCatalog.IsPart(id))
+        {
+            if (hasBackground)
+                items.Add(WidgetSettingsMenu.Toggle(L.T("背景を表示"), _settings.HasWidgetBackground(id), (c, v) => c.SetWidgetBackground(id, v)));
+            items.Add(new MenuItemSpec("\uE784", L.T("区切り線と余白"), () => { }) { Children = () => PartMenu(id) });
+            items.Add(MenuItemSpec.Separator);
+        }
         items.Add(new("\uE74D", L.T("バーから外す"), () => { list.Remove(id); _settings.BarWidgetZones.Remove(id); _settings.Save(); }));
         return items;
+    }
+
+    /// <summary>ウィジェットの前後に区切り線・余白を入れる項目。入っているものにはチェックが付き、もう一度選ぶと外す。</summary>
+    private IEnumerable<MenuItemSpec> PartMenu(string id) => new[]
+    {
+        PartToggle(id, "divider", after: false, L.T("前に区切り線")),
+        PartToggle(id, "divider", after: true, L.T("後ろに区切り線")),
+        MenuItemSpec.Separator,
+        PartToggle(id, "spacer", after: false, L.T("前に余白")),
+        PartToggle(id, "spacer", after: true, L.T("後ろに余白")),
+    };
+
+    private MenuItemSpec PartToggle(string id, string kind, bool after, string title)
+    {
+        string zone = ZoneOf(id);
+        var inZone = _settings.BarWidgets.Where(x => ZoneOf(x) == zone).ToList();
+        // 同じ位置で、このウィジェットの前（後ろ）に続いているパーツの中から探す
+        string? found = null;
+        int step = after ? 1 : -1;
+        for (int i = inZone.IndexOf(id) + step; i >= 0 && i < inZone.Count && BarWidgetCatalog.IsPart(inZone[i]); i += step)
+            if (inZone[i].StartsWith(kind + ":", StringComparison.Ordinal)) { found = inZone[i]; break; }
+        return new MenuItemSpec(found != null ? "\uE73E" : "", title, () =>
+        {
+            var list = _settings.BarWidgets;
+            if (found != null) { list.Remove(found); _settings.BarWidgetZones.Remove(found); }
+            else
+            {
+                int at = list.IndexOf(id);
+                if (at < 0) return;
+                var part = BarWidgetCatalog.NewPartId(kind);
+                list.Insert(after ? at + 1 : at, part);
+                if (zone != "Tray") _settings.BarWidgetZones[part] = zone;
+            }
+            _settings.Save();
+        });
     }
 
     private void UpdateBarWidgets()

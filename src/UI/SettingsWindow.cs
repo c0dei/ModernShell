@@ -684,7 +684,7 @@ public sealed class SettingsWindow : Window
         return Card(Texts(title, desc), right, enabled);
     }
 
-    /// <summary>タスクバーに並べるウィジェットと、区切り線・スペース（「ウィジェット」ページの後半）。</summary>
+    /// <summary>タスクバーに並べるウィジェット（「ウィジェット」ページの後半）。</summary>
     private void BarWidgetsSection(StackPanel p)
     {
         bool on = _s.UseCustomTaskbar;
@@ -695,19 +695,6 @@ public sealed class SettingsWindow : Window
         var wrap = new WrapPanel { Margin = new Thickness(-4, 4, -4, 0), IsEnabled = on, Opacity = on ? 1 : 0.45 };
         foreach (var w in BarWidgetCatalog.All.Where(w => w.Id != "everything" || Everything.IsInstalled || _s.BarWidgets.Contains("everything"))) wrap.Children.Add(WidgetPreviewCard(w));
         p.Children.Add(wrap);
-
-        // 区切り線とスペース: 何個でも足せる
-        var partRows = new List<Border>();
-        foreach (var pid in _s.BarWidgets.Where(BarWidgetCatalog.IsPart).ToList())
-        {
-            var info = BarWidgetCatalog.Find(pid);
-            if (info == null) continue;
-            string id = pid;
-            partRows.Add(ButtonRow(L.T(info.Title), L.T(info.Description), L.T("削除"), () => { _s.BarWidgets.Remove(id); _s.BarWidgetZones.Remove(id); Commit(); }, enabled: on));
-        }
-        partRows.Add(ButtonRow(L.T("区切り線を追加"), L.T("グループのあいだに細い線を入れます"), L.T("追加"), () => { _s.BarWidgets.Add(BarWidgetCatalog.NewPartId("divider")); Commit(); }, enabled: on));
-        partRows.Add(ButtonRow(L.T("スペースを追加"), L.T("ウィジェットやボタンのあいだに空きを入れます"), L.T("追加"), () => { _s.BarWidgets.Add(BarWidgetCatalog.NewPartId("spacer")); Commit(); }, enabled: on));
-        Group(p, "", L.T("バーのパーツ"), L.T("区切り線とスペースを足して、並びを整えられます"), partRows.ToArray());
     }
 
     /// <summary>ウィジェットの見た目を表す静的な絵（サンプルの値）。実物のウィジェットと同じ寸法・配色にそろえてある。</summary>
@@ -744,7 +731,13 @@ public sealed class SettingsWindow : Window
             return sp;
         }
         // 他のウィジェットと同じ、薄い地と縁のある角丸のカード
-        Border Card(FrameworkElement child, double padX) { child.Margin = new Thickness(padX, 0, padX, 0); return new Border { Height = 38, Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = child }; }
+        Border Card(FrameworkElement child, double padX)
+        {
+            child.Margin = new Thickness(padX, 0, padX, 0);
+            var card = new Border { Height = 38, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = child };
+            BarWidget.PaintFrame(card, _s.HasWidgetBackground(id));
+            return card;
+        }
         FrameworkElement VolBar(double pct, double left)
         {
             var fill = new Border { CornerRadius = new CornerRadius(3), Background = T.AccentBrush, VerticalAlignment = VerticalAlignment.Bottom, Height = 22 * pct / 100 };
@@ -787,6 +780,7 @@ public sealed class SettingsWindow : Window
     {
         var card = (Border)SearchLook.Card(new SearchBarWidget(), T, false, "", kind, style, null, out _);
         card.Height = 38;
+        BarWidget.PaintFrame(card, _s.HasWidgetBackground(kind == SearchLook.Kind.Everything ? "everything" : "search"));
         return card;
     }
 
@@ -801,7 +795,9 @@ public sealed class SettingsWindow : Window
         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 0, 6, 3), HorizontalAlignment = HorizontalAlignment.Left, Children = { cover, text, play } };
         var line = new Border { Height = 2, Background = track, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(6, 0, 6, 3), CornerRadius = new CornerRadius(1) };
         line.Child = new Border { Width = 40, Height = 2, HorizontalAlignment = HorizontalAlignment.Left, Background = T.AccentBrush, CornerRadius = new CornerRadius(1) };
-        return new Border { Height = 38, Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = new Grid { Children = { row, line } } };
+        var card = new Border { Height = 38, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = new Grid { Children = { row, line } } };
+        BarWidget.PaintFrame(card, _s.HasWidgetBackground("nowplaying"));
+        return card;
     }
 
     /// <summary>ウィジェットの絵を載せた、クリックで追加／削除するカード。</summary>

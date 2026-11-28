@@ -268,7 +268,7 @@ public sealed partial class TaskbarController : IDisposable
         _settings.ShowSeconds,
         _settings.MagnifyOnHover, _settings.MagnifyScale, _settings.MagnifyNeighbors, _settings.ShowTaskbarLabels, _settings.GroupTaskbarButtons, _settings.TaskbarPinSource, _settings.CornerRadius,
         _settings.MultiMonitorTaskbar, _settings.AutoHideTaskbar, _settings.TaskbarEdgeOffset, _settings.TaskbarPill, _settings.ShowBarDividers, _settings.ClockAlign, _settings.ClockStyle, _settings.ClockTimeFormat, _settings.ClockDateFormat, _settings.TaskbarTint, _settings.TaskbarCustomColor, string.Join(",", _settings.BarWidgets.Select(w => w + ":" + (_settings.BarWidgetZones.GetValueOrDefault(w) ?? "Tray"))), _settings.TaskbarOpacity, _settings.TaskbarBackground, _settings.BandMarginX, _settings.BandMarginY, _settings.Language,
-        _settings.SystemWidgetStyle, _settings.NetSpeedWidgetStyle, _settings.TaskViewWidgetStyle, _settings.SearchWidgetStyle, _settings.EverythingWidgetStyle,
+        _settings.SystemWidgetStyle, _settings.NetSpeedWidgetStyle, _settings.TaskViewWidgetStyle, _settings.SearchWidgetStyle, _settings.EverythingWidgetStyle, string.Join(",", _settings.BarWidgetsNoBackground),
         _settings.NowPlayingStyle, _settings.NowPlayingThumbnail, _settings.NowPlayingWave, _settings.NowPlayingWavePlacement, _settings.NowPlayingProgress, _settings.NowPlayingProgressStyle, _settings.NowPlayingTextWidth, _settings.NowPlayingScroll);
     private void OnNetworkChanged(object? s, NetworkAvailabilityEventArgs e)
     {
@@ -467,8 +467,8 @@ public sealed partial class TaskbarController : IDisposable
 
     /// <summary>グループのあいだの細い区切り線（設定でオンのとき）。</summary>
     private UIElement? Divider() => !_settings.ShowBarDividers ? null : Vertical
-        ? new Border { Height = 1, Width = TileH * 0.6, Background = Theme.Current.Stroke, Margin = new Thickness(0, 4, 0, 4), HorizontalAlignment = HorizontalAlignment.Center }
-        : new Border { Width = 1, Height = TileH * 0.55, Background = Theme.Current.Stroke, Margin = new Thickness(4, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center };
+        ? new Border { Height = 1, Width = TileH * 0.6, Background = Theme.Current.Divider, Margin = new Thickness(0, 4, 0, 4), HorizontalAlignment = HorizontalAlignment.Center }
+        : new Border { Width = 1, Height = TileH * 0.55, Background = Theme.Current.Divider, Margin = new Thickness(4, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center };
 
     /// <summary>（左端のウィジェット）｜スタート｜アプリ の並び。</summary>
     private StackPanel StartAndApps(FrameworkElement? edge, FrameworkElement startGroup, FrameworkElement appsArea) =>

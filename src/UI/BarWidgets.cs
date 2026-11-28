@@ -88,6 +88,24 @@ public abstract class BarWidget
     }
 
     public FrameworkElement? Card { get; private set; }
+    /// <summary>半透明の背景のカード（<see cref="Frame"/>）を使っているか。使っていれば、右クリックで背景をオン/オフできる。</summary>
+    public bool HasFrame { get; private set; }
+
+    /// <summary>薄い地と縁のある角丸のカード。背景をオフにしたウィジェットは、地も縁も透明にする（大きさは変えない）。</summary>
+    internal Border Frame(UIElement child)
+    {
+        HasFrame = true;
+        var frame = new Border { BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = child };
+        PaintFrame(frame, Settings.Current?.HasWidgetBackground(Id) != false);
+        return frame;
+    }
+
+    internal static void PaintFrame(Border frame, bool background)
+    {
+        frame.Background = background ? Theme.Current.Hover : Brushes.Transparent;
+        frame.BorderBrush = background ? Theme.Current.Stroke : Brushes.Transparent;
+    }
+
     /// <summary>バーに置いたときの外側のボタン（隠すときは、余白ごと隠す）。</summary>
     public FrameworkElement? Outer { get; set; }
 
@@ -200,7 +218,7 @@ public sealed class SystemBarWidget : BarWidget
         // 音楽・天気ウィジェットと同じ、薄い地と縁のある角丸のカード
         row.Margin = new Thickness(8, 0, 8, 0);
         PadOverride = new Thickness(0);
-        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = row };
+        return Frame(row);
     }
 
     private static readonly Brush HighBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x8A, 0x75));
@@ -229,7 +247,7 @@ public sealed class SystemBarWidget : BarWidget
         panel.Children.Add(_memCell.Root);
         Tick(0);
         PadOverride = new Thickness(0);
-        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = panel };
+        return Frame(panel);
     }
 
     public override void Tick(int count)
@@ -427,7 +445,7 @@ public sealed class WeatherBarWidget : BarWidget
         // 音楽ウィジェットと同じ、薄い地と縁のある角丸のカード
         row.Margin = new Thickness(8, 0, 8, 0);
         PadOverride = new Thickness(0);
-        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = row };
+        return Frame(row);
     }
 
     private void Apply(Weather.Report w)
@@ -484,8 +502,8 @@ public sealed class DividerBarPart : BarWidget
     public override string Id => "divider";
     protected override bool IsPart => true;
     protected override FrameworkElement BuildContent() => Vertical
-        ? new Border { Height = 1, Width = TileH * 0.6, Background = T.Stroke, Margin = new Thickness(0, 4, 0, 4), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
-        : new Border { Width = 1, Height = TileH * 0.55, Background = T.Stroke, Margin = new Thickness(4, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        ? new Border { Height = 1, Width = TileH * 0.6, Background = T.Divider, Margin = new Thickness(0, 4, 0, 4), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+        : new Border { Width = 1, Height = TileH * 0.55, Background = T.Divider, Margin = new Thickness(4, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
 }
 
 /// <summary>スペース（ただの空き）。</summary>

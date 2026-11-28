@@ -22,6 +22,8 @@ public sealed class Theme
     public Brush Hover { get; init; } = Brushes.Transparent;
     public Brush Pressed { get; init; } = Brushes.Transparent;
     public Brush Stroke { get; init; } = Brushes.Transparent;
+    /// <summary>バーの区切り線。枠の色（<see cref="Stroke"/>）は 1px の線を単独で置くと見えないので、濃くしてある。</summary>
+    public Brush Divider { get; init; } = Brushes.Transparent;
     public Brush FooterBand { get; init; } = Brushes.Transparent;
     /// <summary>背景効果が使えないとき（Solid / ポップアップ）の不透明背景。</summary>
     public Brush SolidBackground { get; init; } = Brushes.Black;
@@ -110,7 +112,7 @@ public sealed class Theme
                 IsDark = true, Accent = accent, AccentBrush = C(accent), OnAccent = lum > 0.6 ? Brushes.Black : Brushes.White,
                 Text = B(255, 255, 255, 255), TextSecondary = B(255, 0xC5, 0xC5, 0xC5),
                 Surface = B(0x14, 255, 255, 255), Hover = B(0x15, 255, 255, 255), Pressed = B(0x0B, 255, 255, 255),
-                Stroke = B(0x18, 255, 255, 255), FooterBand = B(0x30, 0, 0, 0),
+                Stroke = B(0x18, 255, 255, 255), Divider = B(0x4D, 255, 255, 255), FooterBand = B(0x30, 0, 0, 0),
                 SolidBackground = C(solid), SolidColor = solid, Radius = s.CornerRadius, UiFont = UiFontOf(s),
             }
             : new Theme
@@ -118,7 +120,7 @@ public sealed class Theme
                 IsDark = false, Accent = accent, AccentBrush = C(accent), OnAccent = lum > 0.6 ? Brushes.Black : Brushes.White,
                 Text = B(255, 0x1A, 0x1A, 0x1A), TextSecondary = B(255, 0x5D, 0x5D, 0x5D),
                 Surface = B(0xB0, 255, 255, 255), Hover = B(0x0F, 0, 0, 0), Pressed = B(0x08, 0, 0, 0),
-                Stroke = B(0x14, 0, 0, 0), FooterBand = B(0x0A, 0, 0, 0),
+                Stroke = B(0x14, 0, 0, 0), Divider = B(0x40, 0, 0, 0), FooterBand = B(0x0A, 0, 0, 0),
                 SolidBackground = C(solid), SolidColor = solid, Radius = s.CornerRadius, UiFont = UiFontOf(s),
             };
     }

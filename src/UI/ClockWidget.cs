@@ -151,7 +151,7 @@ public sealed class ClockBarWidget : BarWidget
         stack = new StackPanel { Children = { content }, VerticalAlignment = VerticalAlignment.Center };
         stack.Margin = new Thickness(style == ClockStyle.DateTile ? 6 : 12, 0, 12, 0);
         PadOverride = new Thickness(0);
-        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = stack };
+        return Frame(stack);
     }
 
     /// <summary>バーの地の色に対して、コントラストが高いほうの文字色（白 / 黒）。</summary>

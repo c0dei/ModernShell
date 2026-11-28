@@ -76,7 +76,7 @@ public sealed class NotificationBarWidget : BarWidget
         // 他のウィジェットと同じ、薄い地と縁のある角丸のカード
         holder.Margin = new Thickness(9, 0, 13, 0);
         PadOverride = new Thickness(0);
-        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = holder };
+        return Frame(holder);
     }
 
     private void OnChanged()

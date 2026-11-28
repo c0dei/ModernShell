@@ -272,7 +272,10 @@ public sealed class NowPlayingBarWidget : BarWidget
         {
             var radius = T.Corner(6).TopLeft;
             root.SizeChanged += (_, e) => root.Clip = new RectangleGeometry(new Rect(0, 0, e.NewSize.Width, e.NewSize.Height), radius, radius);
-            result = new Border { Width = compact ? double.NaN : FixedWidth, HorizontalAlignment = HorizontalAlignment.Center, Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = root };
+            var frame = Frame(root);
+            frame.Width = compact ? double.NaN : FixedWidth;
+            frame.HorizontalAlignment = HorizontalAlignment.Center;
+            result = frame;
             PadOverride = new Thickness(0);
         }
 

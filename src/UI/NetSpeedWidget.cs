@@ -65,7 +65,7 @@ public sealed class NetSpeedBarWidget : BarWidget
         panel.Loaded += (_, _) => { NetSpeed.Updated += Apply; Apply(); };
         panel.Unloaded += (_, _) => NetSpeed.Updated -= Apply;
         PadOverride = new Thickness(0);
-        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = panel };
+        return Frame(panel);
     }
 
     protected override FrameworkElement BuildContent()
@@ -91,7 +91,7 @@ public sealed class NetSpeedBarWidget : BarWidget
         if (Vertical) return row;
         row.Margin = new Thickness(10, 0, 10, 0);
         PadOverride = new Thickness(0);
-        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = row };
+        return Frame(row);
     }
 
     public override void Tick(int count)

@@ -182,7 +182,9 @@ internal static class SearchLook
             content = row;
         }
         else icon.Margin = vertical ? new Thickness(0, 6, 0, 6) : new Thickness(11, 0, 11, 0);
-        return new Border { Background = t.Hover, BorderBrush = t.Stroke, BorderThickness = new Thickness(1), CornerRadius = t.Corner(6), Child = content, ToolTip = tip };
+        var frame = w.Frame(content);
+        frame.ToolTip = tip;
+        return frame;
     }
 
     /// <summary>

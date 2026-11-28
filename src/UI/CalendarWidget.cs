@@ -63,7 +63,7 @@ public sealed class CalendarBarWidget : BarWidget
         row.Children.Add(icon);
         row.Children.Add(text);
         PadOverride = new Thickness(0);
-        return new Border { Background = T.Hover, BorderBrush = T.Stroke, BorderThickness = new Thickness(1), CornerRadius = T.Corner(6), Child = row };
+        return Frame(row);
     }
 
     public override void Tick(int count)
